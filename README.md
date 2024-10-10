@@ -5,8 +5,6 @@ This repository contains all the necessary code and files to recreate the result
 ## Table of Contents
 - [Installation](#installation)
 - [Usage](#usage)
-- [Features](#features)
-- [Contributing](#contributing)
 - [License](#license)
 - [Contact](#contact)
 
@@ -28,6 +26,8 @@ conda activate switchtfi_val
 
 
 ## Usage
+All scripts are documented with inline comments explaining the individual steps.
+Functions used in the workflow are documented with docstring comments providing further information.
 To reproduce the results follow the workflow:
 
 ### Data Preprocessing
@@ -40,6 +40,8 @@ conda activate preprocessing
 python 00_data_preprocessing.py
 ```
 ### GRN Inference
+The auxiliary files required by Scenic can be downloaded from [https://resources.aertslab.org/cistarget/](https://resources.aertslab.org/cistarget/) (10.10.24).
+They must be stored in the correct subdirectory of *switchtfi_val/data/scenic_aux_data*. For some information on the auxiliary data see *switchtfi_val/data/scenic_aux_data/meta_data.txt*
 ```bash
 # Create conda environment for GRN Inference with PyScenic, this may take a while
 conda env create -f grn_inf/psc.yml
@@ -72,24 +74,20 @@ conda activate switchtfi_val
 # Run scripts to produce the plots
 python 03_switchtfi_model_fitting.py
 ```
-
-
-
-## Features
-
-- Bullet points of the key features
-- Feature 1
-- Feature 2
-- Feature 3
+**Note:**
+- SwitchTFI provides the preprocessed data read to load. To skip the preprocessing step comment in this option in the scripts for the later steps.
+- The GRNs used to produce the results are provided in *switchtfi_val/results/01_grn_inf*. The GRN inference step can be omitted.
+- The results of the SwitchTFI analyses are provided in *switchtfi_val/results/02_switchtfi*.
+- The results of the validation procedures are provided in *switchtfi_val/results/02_validation*.
+- The plots are provided in *switchtfi_val/results/03_plots*.
 
 
 ## License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the MIT License - see the [GNU General Public License v3.0](LICENSE) file for details.
 
 ## Contact
 
-Your Name - [@your_twitter_handle](https://twitter.com/your_twitter_handle) - email@example.com
+Paul Martini - paul.martini@fau.de
 
-Project Link: [https://github.com/username/repository-name](https://github.com/username/repository-name)
-
+Project Link: [https://github.com/bionetslab/SwitchTFI-validation](https://github.com/bionetslab/SwitchTFI-validation)
