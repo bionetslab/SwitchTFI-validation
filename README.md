@@ -74,6 +74,7 @@ python 03_switchtfi_model_fitting.py
 ```
 
 
+
 ## Features
 
 - Bullet points of the key features
@@ -81,21 +82,6 @@ python 03_switchtfi_model_fitting.py
 - Feature 2
 - Feature 3
 
-## Contributing
-
-If you'd like to contribute, please fork the repository and use a feature branch. Pull requests are warmly welcome.
-
-```bash
-# Fork the repository and clone your fork
-git clone https://github.com/your-username/repository-name.git
-
-# Create a feature branch
-git checkout -b feature-name
-
-# Commit your changes and push them
-git commit -m "Add some feature"
-git push origin feature-name
-```
 
 ## License
 
