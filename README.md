@@ -16,36 +16,63 @@ Instructions on how to install and set up the project locally.
 
 ```bash
 # Clone the repository
-git clone https://github.com/username/repository-name.git
+git clone git@github.com:bionetslab/SwitchTFI-validation.git
 
 # Navigate to the project directory
-cd repository-name
+cd SwitchTFI-validation
 
 # Create and activate the Conda environment from the .yml file
-conda env create -f environment.yml
-conda activate your-environment-name
+conda env create -f switchtfi_val.yml
+conda activate switchtfi_val
 ```
 
 
 ## Usage
+To reproduce the results follow the workflow:
 
-Examples of how to use the project, possibly with code snippets or command-line examples.
-
+### Data Preprocessing
 ```bash
-# Start the application
-npm start
+# Create conda environment for preprocessing
+conda env create -f preprocessing/prepr.yml
+conda activate preprocessing
 
-# Or, if using a different framework, e.g., Django
-python manage.py runserver
+# Run preprocessing scripts
+python 00_data_preprocessing.py
+```
+### GRN Inference
+```bash
+# Create conda environment for GRN Inference with PyScenic, this may take a while
+conda env create -f grn_inf/psc.yml
+conda activate psc
+
+# Run preprocessing scripts
+python 01_grn_inference.py
 ```
 
-You may also want to describe specific configuration or usage options:
-
-
+### SwitchTFI Analyses
 ```bash
-# Run the program with custom settings
-python app.py --config custom_config.json
+# Activate main environment
+conda activate switchtfi_val
+# Run SwitchTFI analyses with the preprocessed scRNA-seq data and the inferred GRN as an input
+python 02_switchtfi_model_fitting.py
 ```
+
+### Validation
+```bash
+# Activate main environment
+conda activate switchtfi_val
+# Run scripts with necessary computations for the validation of SwitchTFI
+python 03_switchtfi_model_fitting.py
+```
+
+### Plotting
+```bash
+# Activate main environment
+conda activate switchtfi_val
+# Run scripts to produce the plots
+python 03_switchtfi_model_fitting.py
+```
+
 
 ## Features
 
