@@ -1,0 +1,72 @@
+# Human databases:
+    # Genome assembly: hg19, hg38
+    # A genome assembly is a computational representation of a genome sequence. Because we are not able
+    # to sequence along the complete length of a chromosome, each chromosome assembly is made up of short stretches of
+    # sequenced DNA pasted together. This always creates some gaps and errors. Some assemblies are made up of sequences
+    # from multiple individuals (such as human), while some from a single individual (such as cat), however each section
+    # of sequence comes from one individual. This means that any region may contain alleles that are rare or even
+    # private to that individual.
+
+    # Genome annotation: refseq_r45, refseq_r80
+    # In molecular biology and genetics, DNA annotation or genome annotation is the process of describing the structure
+    # and function of the components of a genome,[2] by analyzing and interpreting them in order to extract their
+    # biological significance and understand the biological processes in which they participate. Among other things, it
+    # identifies the locations of genes and all the coding regions in a genome and determines what those genes do.
+
+    # Motif database:
+    # hg19/refseq_r45/ (old)
+    # mc9nr: cisTarget databases generated using the 2017 cisTarget motif collection.
+    # tc_v1: cisTarget databases generated using ENCODE ChIP-seq tracks (3,040 tracks).
+    # gh38/refseq_r80/ (new)
+    # mc9nr (DEPRECATED): cisTarget databases generated using the 2017 cisTarget motif collection.
+    # mc_v10_clust (RECOMMENDED): cisTarget databases generated using the 2022 SCENIC+ motif collection.
+    # tc_v1: cisTarget databases generated using ENCODE ChIP-seq tracks (2,993 tracks).
+
+# Mouse databases:
+    # Genome assembly: mm9, mm10
+
+    # Genome annotation:
+    # mm9/
+    # refseq_r45: Gene-based databases based on RefSeq 80 genes. To be used with (py)SCENIC and motif enrichment in
+    #             gene sets.
+    # refseq_r70: Region-based databases based on RefSeq 70 regions. To be used with pycisTarger/SCENIC+ and motif
+    #             enrichment in region sets.
+    # mm10/
+    # refseq_r80: Gene-based databases based on RefSeq 80 genes. To be used with (py)SCENIC and motif enrichment in
+    #             gene sets.
+
+
+    # Motif database:
+    # mm9/refseq_r45/
+    # mc9nr: cisTarget databases generated using the 2017 cisTarget motif collection.
+    # mm9/refseq_r70/
+    # mc9nr: cisTarget databases generated using the 2017 cisTarget motif collection.
+    # mm10/refseq_r80/
+    # mc9nr (DEPRECATED): cisTarget databases generated using the 2017 cisTarget motif collection.
+    # mc_v10_clust (RECOMMENDED): cisTarget databases generated using the 2022 SCENIC+ motif collection.
+        # scores: Matrix containing motifs as rows and genes as columns and cluster-buster CRM scores as values.
+        #         To be used with DEM.
+        # rankings: Matrix containing motifs as rows and genes as columns and ranking position for each gene and motif
+        #           (based on CRM scores) as values. To be used with cisTarget (R).
+
+
+# Motif annotations:
+    # v9: Annotations based on the 2017 cisTarget motif collection.
+    #     Use these files if you are using the mc9nr databases.
+    # v10: Annotations based on the 2022 SCENIC+ motif collection.
+    #      Use these files if you are using the mc_v10_clust databases.
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
