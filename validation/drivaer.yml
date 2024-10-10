@@ -200,4 +200,3 @@ dependencies:
       - werkzeug==2.0.3
       - wrapt==1.12.1
       - xlrd==1.2.0
-prefix: /data/bionets/ac07izid/miniconda3/envs/drivaer

@@ -529,4 +529,3 @@ dependencies:
       - scprep==1.2.3
       - tasklogger==1.2.0
       - wrapt==1.16.0
-prefix: /data/bionets/ac07izid/miniconda3/envs/prepr

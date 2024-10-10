@@ -185,4 +185,3 @@ dependencies:
       - widgetsnbextension==4.0.3
       - wrapt==1.14.1
       - zipp==3.8.1
-prefix: /data/bionets/ac07izid/miniconda3/envs/spjc
