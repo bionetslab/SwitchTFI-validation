@@ -1,0 +1,13 @@
+Term,Library,p-value,q-value,z-score,combined score
+regulation of transcription by RNA polymerase II (GO:0006357),GO_Biological_Process_2021,2.6167e-10,3.4623e-8,177940,3926000
+"regulation of transcription, DNA-templated (GO:0006355)",GO_Biological_Process_2021,3.1052e-10,3.4623e-8,177560,3887000
+decreased erythroid progenitor cell number MP:0008973,MGI_Mammalian_Phenotype_Level_4_2021,5.5615e-9,0.0000015961,309.3,5878
+"negative regulation of transcription, DNA-templated (GO:0045892)",GO_Biological_Process_2021,5.5671e-8,0.0000041382,47.23,789
+abnormal megakaryocyte progenitor cell morphology MP:0002413,MGI_Mammalian_Phenotype_Level_4_2021,7.3153e-8,0.000010212,570.7,9377
+pale yolk sac MP:0001722,MGI_Mammalian_Phenotype_Level_4_2021,1.0675e-7,0.000010212,142.6,2290
+"positive regulation of transcription, DNA-templated (GO:0045893)",GO_Biological_Process_2021,2.5513e-7,0.000014224,37.33,566.7
+small liver MP:0000601,MGI_Mammalian_Phenotype_Level_4_2021,2.7796e-7,0.000015624,111.3,1680
+abnormal megakaryocyte morphology MP:0002417,MGI_Mammalian_Phenotype_Level_4_2021,3.2664e-7,0.000015624,329.1,4915
+abnormal embryonic erythropoiesis MP:0004229,MGI_Mammalian_Phenotype_Level_4_2021,3.2664e-7,0.000015624,329.1,4915
+positive regulation of transcription by RNA polymerase II (GO:0045944),GO_Biological_Process_2021,0.0000015461,0.000068955,31.74,424.7
+positive regulation of nucleic acid-templated transcription (GO:1903508),GO_Biological_Process_2021,0.0000024198,0.000089937,38.51,498

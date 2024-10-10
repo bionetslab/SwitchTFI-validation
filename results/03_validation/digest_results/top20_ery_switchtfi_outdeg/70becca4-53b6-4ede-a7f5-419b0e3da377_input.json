@@ -1,0 +1,1 @@
+{"target": ["Mbd2", "Gata2", "Myc", "Foxo1", "Fli1", "Gata1", "Cux1", "Myb", "Elk3", "Ikzf2", "Sox4", "Rara", "Ybx1", "Irf1", "Nfe2", "Nfia", "Tcf3", "Ets1", "Etv6", "Tal1"], "target_id": "symbol", "runs": 1000, "replace": 100, "distance": "jaccard", "background_model": "complete", "type": "gene", "sigCont": false}

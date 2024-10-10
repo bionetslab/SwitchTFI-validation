@@ -1,0 +1,1 @@
+{"target": ["Ins1", "Ins2", "Sytl4", "Ppp1r1a", "Arhgap36", "Nnat", "Slc2a2", "Ero1lb", "Calr", "Iapp", "Gip", "G6pc2", "Sec24d", "Pdia5", "Pdia6", "Hsp90b1", "Papss2", "Ttc28", "Fkbp2", "Itpkb"], "target_id": "symbol", "runs": 1000, "replace": 100, "distance": "jaccard", "background_model": "complete", "type": "gene", "sigCont": false}
