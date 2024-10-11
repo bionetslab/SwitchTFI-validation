@@ -43,11 +43,11 @@ python 00_data_preprocessing.py
 The auxiliary files required by Scenic can be downloaded from [https://resources.aertslab.org/cistarget/](https://resources.aertslab.org/cistarget/) (10.10.24).
 They must be stored in the correct subdirectory of *switchtfi_val/data/scenic_aux_data*. For some information on the auxiliary data see *switchtfi_val/data/scenic_aux_data/meta_data.txt*
 ```bash
-# Create conda environment for GRN Inference with PyScenic, this may take a while
+# Create conda environment for GRN Inference with PyScenic
 conda env create -f grn_inf/psc.yml
 conda activate psc
 
-# Run preprocessing scripts
+# Run GRN inference scripts, this may take a while
 python 01_grn_inference.py
 ```
 
@@ -55,6 +55,7 @@ python 01_grn_inference.py
 ```bash
 # Activate main environment
 conda activate switchtfi_val
+
 # Run SwitchTFI analyses with the preprocessed scRNA-seq data and the inferred GRN as an input
 python 02_switchtfi_model_fitting.py
 ```
@@ -63,6 +64,7 @@ python 02_switchtfi_model_fitting.py
 ```bash
 # Activate main environment
 conda activate switchtfi_val
+
 # Run scripts with necessary computations for the validation of SwitchTFI
 python 03_switchtfi_model_fitting.py
 ```
@@ -71,11 +73,12 @@ python 03_switchtfi_model_fitting.py
 ```bash
 # Activate main environment
 conda activate switchtfi_val
+
 # Run scripts to produce the plots
 python 03_switchtfi_model_fitting.py
 ```
 **Note:**
-- SwitchTFI provides the preprocessed data read to load. To skip the preprocessing step comment in this option in the scripts for the later steps.
+- SwitchTFI provides the preprocessed data via the functions *switchtfi.data.preendocrine_alpha()/preendocrine_beta()/erythrocytes()*. To skip the preprocessing step comment in this option in the scripts for the later steps.
 - The GRNs used to produce the results are provided in *switchtfi_val/results/01_grn_inf*. The GRN inference step can be omitted.
 - The results of the SwitchTFI analyses are provided in *switchtfi_val/results/02_switchtfi*.
 - The results of the validation procedures are provided in *switchtfi_val/results/02_validation*.
