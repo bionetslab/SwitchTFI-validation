@@ -26,7 +26,7 @@ conda activate switchtfi_val
 
 
 ## Usage
-All scripts are documented with inline comments explaining the individual steps.
+All main scripts are documented with inline comments explaining the individual steps.
 Functions used in the workflow are documented with docstring comments providing further information.
 To reproduce the results follow the workflow:
 
@@ -41,7 +41,7 @@ python 00_data_preprocessing.py
 ```
 ### GRN Inference
 The auxiliary files required by Scenic can be downloaded from [https://resources.aertslab.org/cistarget/](https://resources.aertslab.org/cistarget/) (10.10.24).
-They must be stored in the correct subdirectory of *switchtfi_val/data/scenic_aux_data*. For some information on the auxiliary data see *switchtfi_val/data/scenic_aux_data/meta_data.txt*
+They must be stored in the correct subdirectory of *switchtfi_val/data/scenic_aux_data*. For information on the auxiliary data see *switchtfi_val/data/scenic_aux_data/meta_data.txt*
 ```bash
 # Create conda environment for GRN Inference with PyScenic
 conda env create -f grn_inf/psc.yml
@@ -66,7 +66,26 @@ python 02_switchtfi_model_fitting.py
 conda activate switchtfi_val
 
 # Run scripts with necessary computations for the validation of SwitchTFI
-python 03_switchtfi_model_fitting.py
+python 03_validation.py
+```
+To reproduce the results for the competitor methods, again there are separate conda environments provided. 
+Set the flags in the script such that only the respective parts are run. 
+For DrivAER this is a little more complicated, detailed instructions can be found in the inline comments
+```bash
+# Create conda environment for inferring driver TFs with spliceJAC
+conda env create -f validation/spjc.yml
+conda activate spjc
+
+# Run script
+python 03_validation.py
+```
+```bash
+# Create conda environment for inferring driver TFs with DrivAER
+conda env create -f validation/drivaer.yml
+conda activate drivaer
+
+# Run script
+python 03_validation.py
 ```
 
 ### Plotting
@@ -75,7 +94,7 @@ python 03_switchtfi_model_fitting.py
 conda activate switchtfi_val
 
 # Run scripts to produce the plots
-python 03_switchtfi_model_fitting.py
+python 04_plotting.py
 ```
 **Note:**
 - SwitchTFI provides the preprocessed data via the functions *switchtfi.data.preendocrine_alpha()/preendocrine_beta()/erythrocytes()*. To skip the preprocessing step comment in this option in the scripts for the later steps.
