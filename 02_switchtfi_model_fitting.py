@@ -82,11 +82,11 @@ def main_compute_outdegree_tf_rankings():
 
 if __name__ == '__main__':
 
-    # main_endocrine()
+    main_endocrine()
 
-    # main_hematopoiesis()
+    main_hematopoiesis()
 
-    # main_compute_outdegree_tf_rankings()
+    main_compute_outdegree_tf_rankings()
 
     print('done')
 

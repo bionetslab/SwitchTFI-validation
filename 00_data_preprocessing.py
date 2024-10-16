@@ -126,9 +126,9 @@ def main_hematopoiesis():
 
 if __name__ == '__main__':
 
-    # main_endocrine()
+    main_endocrine()
 
-    # main_hematopoiesis()
+    main_hematopoiesis()
 
     print('done')
 

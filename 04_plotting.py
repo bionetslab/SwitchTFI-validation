@@ -736,21 +736,21 @@ def plot_grns():
 
 if __name__ == '__main__':
 
-    # plot_step_fct_and_trends()
+    plot_step_fct_and_trends()
 
-    # plot_quantitative_analyses()
+    plot_quantitative_analyses()
 
-    # plot_qualitative_analysis()
+    plot_qualitative_analysis()
 
-    # plot_regulon()
+    plot_regulon()
 
-    # plot_method_comparison()
+    plot_method_comparison()
 
-    # plot_alpha_res_appendix()
+    plot_alpha_res_appendix()
 
-    # plot_ery_res_appendix()
+    plot_ery_res_appendix()
 
-    # plot_grns()
+    plot_grns()
 
     print('done')
 

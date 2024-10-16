@@ -284,7 +284,12 @@ def main_save_drivaer_driver_genes():
     # Since DrivAER relies on an outdated version of AnnData,
     # it is not compatible with the previously saved AnnData objects from preprocessing.
     # We save the data matrices as numpy arrays and reconstruct the original AnnnData object
-    # using the deprecated version.
+    # using the deprecated version. Therefore do:
+    #
+    # 1) Set flag 'save_new_to_np' to True, 'load_np_save_old' and 'drivaer_analysis' to False
+    #    Run with main environment (switchtfi_val.yml)
+    # 2) Set flag 'save_new_to_np' to False, 'load_np_save_old' and 'drivaer_analysis' to True
+    #    Run with drivaer environment (drivaer.yml)
 
     def save_new_anndata_as_np(ad: sc.AnnData,
                                layer: Union[str, None] = None,
@@ -1052,21 +1057,28 @@ def main_get_targets():
 
 if __name__ == '__main__':
 
-    # main_pseudotime_inference()
+    validation = True
+    if validation:
+        main_sig_thresh_selection()
 
-    # main_switchde_analysis()
+        main_robustness_analysis()
 
-    # main_trend_calculation()
+        main_pseudotime_inference()
 
-    # main_save_cellrank_driver_genes()
+        main_switchde_analysis()
 
-    # main_save_splicejac_driver_genes()
+        main_trend_calculation()
 
-    # main_save_drivaer_driver_genes()
+        main_save_cellrank_driver_genes()
 
-    # main_sig_thresh_selection()
+    spliceJAC = False
+    if spliceJAC:
+        main_save_splicejac_driver_genes()
 
-    # main_robustness_analysis()
+    DrivAER = False
+    if DrivAER:
+        main_save_drivaer_driver_genes()
+
 
     # ### Miscellaneous scripts, generally uninteresting to reader
     # main_save_topk_genesets()
