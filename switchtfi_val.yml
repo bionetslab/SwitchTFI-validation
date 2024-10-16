@@ -1,4 +1,4 @@
-name: switchtfi
+name: switchtfi_val
 channels:
   - conda-forge
   - bioconda
@@ -656,3 +656,4 @@ dependencies:
       - shapely==2.0.4
       - tasklogger==1.2.0
       - wordcloud==1.9.3
+prefix: /data/bionets/ac07izid/miniconda3/envs/switchtfi_val
