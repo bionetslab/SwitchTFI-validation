@@ -20,12 +20,12 @@ def main_pseudotime_inference():
     from switchtfi.utils import csr_to_numpy
     # ### Load the previously preprocessed scRNA-seq data stored as an AnnData object
     # (also available via the SwitchTFI functions)
-    adata = sc.read_h5ad('./data/anndata/pre-endocrine_alpha.h5ad')
-    bdata = sc.read_h5ad('./data/anndata/pre-endocrine_beta.h5ad')
-    cdata = sc.read_h5ad('./data/anndata/erythrocytes.h5ad')
-    # adata = preendocrine_alpha()
-    # bdata = preendocrine_beta()
-    # cdata = erythrocytes()
+    # adata = sc.read_h5ad('./data/anndata/pre-endocrine_alpha.h5ad')
+    # bdata = sc.read_h5ad('./data/anndata/pre-endocrine_beta.h5ad')
+    # cdata = sc.read_h5ad('./data/anndata/erythrocytes.h5ad')
+    adata = preendocrine_alpha()
+    bdata = preendocrine_beta()
+    erydata = erythrocytes()
 
     # ### Determine the root cells for pseudotime inference by the expression of well known marker genes
     # - Pre-endocrine alpha cell transition data: high expression of Fev
@@ -38,8 +38,8 @@ def main_pseudotime_inference():
         sc.pl.umap(adata, color='clusters')
         sc.pl.umap(bdata, color='Fev')
         sc.pl.umap(bdata, color='clusters')
-        sc.pl.umap(cdata, color='Gata1')
-        sc.pl.umap(cdata, color='paul15_clusters')
+        sc.pl.umap(erydata, color='Gata1')
+        sc.pl.umap(erydata, color='paul15_clusters')
 
     afev_expression = csr_to_numpy(adata[:, 'Fev'].X).flatten()
     apreend_bool = (adata.obs['clusters'].to_numpy() == 'Pre-endocrine')
@@ -51,8 +51,8 @@ def main_pseudotime_inference():
     bpreend_fev_expression = np.ma.masked_equal(bfev_expression, bpreend_bool)
     broot = int(np.argmax(bpreend_fev_expression))
 
-    gata1_expression = cdata[:, 'Gata1'].X.flatten()
-    mep_bool = (cdata.obs['paul15_clusters'].to_numpy() == '7MEP')
+    gata1_expression = csr_to_numpy(erydata[:, 'Gata1'].X).flatten()
+    mep_bool = (erydata.obs['paul15_clusters'].to_numpy() == '7MEP')
     mep_gata1_expression = np.ma.masked_equal(gata1_expression, mep_bool)
     eryroot = int(np.argmin(mep_gata1_expression))
 
@@ -61,13 +61,13 @@ def main_pseudotime_inference():
                                   cluster_obs_key='clusters', plot=plot)
     bdata = calculate_palantir_pt(adata=bdata, root=broot, layer_key='log1p_norm',
                                   cluster_obs_key='clusters', plot=plot)
-    cdata = calculate_palantir_pt(adata=cdata, root=eryroot, layer_key='log1p_norm',
+    erydata = calculate_palantir_pt(adata=erydata, root=eryroot, layer_key='log1p_norm',
                                   cluster_obs_key='prog_off', plot=plot)
 
     # ### Save results
     adata.write_h5ad(filename=Path('./results/03_validation/anndata/pt_pre-endocrine_alpha.h5ad'))
     bdata.write_h5ad(filename=Path('./results/03_validation/anndata/pt_pre-endocrine_beta.h5ad'))
-    cdata.write_h5ad(filename=Path('./results/03_validation/anndata/pt_erythrocytes.h5ad'))
+    erydata.write_h5ad(filename=Path('./results/03_validation/anndata/pt_erythrocytes.h5ad'))
 
 
 def main_switchde_analysis():
@@ -537,21 +537,26 @@ def main_sig_thresh_selection():
 def main_robustness_analysis():
 
     # ### Script for investigating the robustness of SwitchTFI's results w.r.t. the input GRN
+    from switchtfi.data import preendocrine_alpha, preendocrine_beta, erythrocytes
     from switchtfi.fit import fit_model
     from switchtfi.tf_ranking import rank_tfs
     from validation.val_utils import compare_grns, compare_gene_sets
 
     # ### Run SwitchTFI analyses on the individual GRNs inferred with Scenic
-    switchtfi_inference = False
+    switchtfi_inference = True
     if switchtfi_inference:
-        adata = sc.read_h5ad('./data/anndata/pre-endocrine_alpha.h5ad')
-        bdata = sc.read_h5ad('./data/anndata/pre-endocrine_beta.h5ad')
-        erydata = sc.read_h5ad('./data/anndata/erythrocytes.h5ad')
+        # adata = sc.read_h5ad('./data/anndata/pre-endocrine_alpha.h5ad')
+        # bdata = sc.read_h5ad('./data/anndata/pre-endocrine_beta.h5ad')
+        # erydata = sc.read_h5ad('./data/anndata/erythrocytes.h5ad')
+        adata = preendocrine_alpha()
+        bdata = preendocrine_beta()
+        erydata = erythrocytes()
 
         def helper(ad: sc.AnnData,
                    grn_p: str,
                    res_p: str,
                    clustering_obs_key: str):
+            # Loads all GRNs that were inferred with Scenic and performs SwitchTFI analysis with each
             grn_list = []
             # Get list of paths to csv files
             csv_files = glob.glob(grn_p + '/*_pruned_grn.csv')
@@ -589,14 +594,16 @@ def main_robustness_analysis():
     # ### Compare the similarity of the resulting transition GRNs and TF rankings
     # against the similarity of the input GRNs
     def comparison_helper(base_grn_p: str,
-                          switchtfi_res_p: str):
-        # Load base GRNs
+                          switchtfi_res_p: str,
+                          result_folder: Union[str, None] = None,
+                          fn_prefix: Union[str, None] = None):
+        # Load input GRNs
         base_grn_list = []
         csv_files = glob.glob(base_grn_p + '/*_pruned_grn.csv')
         for csv_file in csv_files:
             base_grn_list.append(pd.read_csv(csv_file, index_col=[0]))
 
-        # Load core GRNs
+        # Load transition GRNs
         grn_list = []
         grn_csv_files = glob.glob(switchtfi_res_p + '/*grn.csv')
         for csv_file in grn_csv_files:
@@ -608,7 +615,7 @@ def main_robustness_analysis():
         for csv_file in res_csv_files:
             res_list.append(pd.read_csv(csv_file, index_col=[0]))
 
-        # Load result dataframes ranked by outdegree
+        # Load result dataframes with TFs ranked by outdegree
         outdeg_res_list = []
         outdeg_res_csv_files = glob.glob(switchtfi_res_p + '/*outdeg_ranked_tfs.csv')
         for csv_file in outdeg_res_csv_files:
@@ -628,15 +635,32 @@ def main_robustness_analysis():
         print('###### Top k outdegree ranked TFs')
         print(f'### top 10: {outdeg_res_res[0]}')
 
+        res_df = pd.DataFrame(
+            columns=['vert_inp', 'vert_trans', 'top10tfs_pr', 'top10tfs_outdeg', 'edge_inp', 'edge_outp'])
+        res_df.loc['avgpairwJI'] = [
+            base_grn_res[0], grn_res[0], base_grn_res[2], grn_res[2], base_grn_res[1], grn_res[1]]
+        print(res_df)
+
+        if result_folder is not None:
+            res_df.to_csv(os.path.join(result_folder,
+                                       f'{fn_prefix if fn_prefix is not None else ""}robustness_results.csv'))
+
+    res_p = os.path.join(os.getcwd(), 'results/03_validation/robustness')
+
     print('# ### Alpha')
     comparison_helper(base_grn_p='./results/01_grn_inf/endocrine/alpha',
-                      switchtfi_res_p='./results/03_validation/robustness/alpha')
+                      switchtfi_res_p='./results/03_validation/robustness/alpha',
+                      result_folder=res_p, fn_prefix='alpha_')
+    print('\n')
     print('# ### Beta')
     comparison_helper(base_grn_p='./results/01_grn_inf/endocrine/beta',
-                      switchtfi_res_p='./results/03_validation/robustness/beta')
+                      switchtfi_res_p='./results/03_validation/robustness/beta',
+                      result_folder=res_p, fn_prefix='beta_')
+    print('\n')
     print('# ### Erythrocytes')
     comparison_helper(base_grn_p='./results/01_grn_inf/hematopoiesis',
-                      switchtfi_res_p='./results/03_validation/robustness/erythrocytes')
+                      switchtfi_res_p='./results/03_validation/robustness/erythrocytes',
+                      result_folder=res_p, fn_prefix='ery_')
 
 
 # Misc #################################################################################################################
@@ -1099,13 +1123,13 @@ if __name__ == '__main__':
 
         np.random.seed(1725149318)
 
-        main_sig_thresh_selection()
+        # main_sig_thresh_selection()
 
         # main_robustness_analysis()
 
         # main_pseudotime_inference()
 
-        # main_switchde_analysis()
+        main_switchde_analysis()
 
         # main_trend_calculation()
 
