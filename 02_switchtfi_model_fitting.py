@@ -1,7 +1,9 @@
 
 import scanpy as sc
 import pandas as pd
-from switchtfi.data import preendocrine_alpha, preendocrine_beta, erythrocytes
+import numpy as np
+from switchtfi.data import (preendocrine_alpha, preendocrine_beta, erythrocytes,
+                            preendocrine_alpha_grn, preendocrine_beta_grn, erythrocytes_grn)
 from switchtfi.fit import fit_model
 from switchtfi.tf_ranking import rank_tfs
 
@@ -9,16 +11,18 @@ from switchtfi.tf_ranking import rank_tfs
 def main_endocrine():
     # ### Load the previously preprocessed scRNA-seq data stored as an AnnData object
     # (also available via the SwitchTFI functions)
-    adata = sc.read_h5ad('./data/anndata/pre-endocrine_alpha.h5ad')
-    bdata = sc.read_h5ad('./data/anndata/pre-endocrine_beta.h5ad')
-    # adata = preendocrine_alpha()
-    # bdata = preendocrine_beta()
+    # adata = sc.read_h5ad('./data/anndata/pre-endocrine_alpha.h5ad')
+    # bdata = sc.read_h5ad('./data/anndata/pre-endocrine_beta.h5ad')
+    adata = preendocrine_alpha()
+    bdata = preendocrine_beta()
 
     # ### Load the previously inferred GRNs
-    agrn = pd.read_csv('./results/01_grn_inf/endocrine/alpha/ngrnthresh9_alpha_pyscenic_combined_grn.csv',
-                       index_col=0)
-    bgrn = pd.read_csv('./results/01_grn_inf/endocrine/beta/ngrnthresh9_beta_pyscenic_combined_grn.csv',
-                       index_col=0)
+    # agrn = pd.read_csv('./results/01_grn_inf/endocrine/alpha/ngrnthresh9_alpha_pyscenic_combined_grn.csv',
+    #                    index_col=0)
+    # bgrn = pd.read_csv('./results/01_grn_inf/endocrine/beta/ngrnthresh9_beta_pyscenic_combined_grn.csv',
+    #                    index_col=0)
+    agrn = preendocrine_alpha_grn()
+    bgrn = preendocrine_beta_grn()
 
     # ### Perform SwitchTFI analyses
     # - Compute weights and empirical corrected p-values for each edge in the input GRN
@@ -26,7 +30,7 @@ def main_endocrine():
     # - Rank transcription factors according to centrality in transition GRN
     agrn, aranked_tfs = fit_model(adata=adata,
                                   grn=agrn,
-                                  result_folder='./results2/02_switchtfi/endocrine/alpha',
+                                  result_folder='./results/02_switchtfi/endocrine/alpha',
                                   verbosity=0,
                                   plot=True,
                                   save_intermediate=True)
@@ -42,12 +46,13 @@ def main_endocrine():
 def main_hematopoiesis():
     # ### Load the previously preprocessed scRNA-seq data stored as an AnnData object
     # (also available via the SwitchTFI functions)
-    adata = sc.read_h5ad('./data/anndata/erythrocytes.h5ad')
-    # adata = erythrocytes()
+    # adata = sc.read_h5ad('./data/anndata/erythrocytes.h5ad')
+    adata = erythrocytes()
 
     # ### Load the previously inferred GRN
-    grn = pd.read_csv('./results/01_grn_inf/hematopoiesis/ngrnthresh9_erythrocytes_pyscenic_combined_grn.csv',
-                      index_col=0)
+    # grn = pd.read_csv('./results/01_grn_inf/hematopoiesis/ngrnthresh9_erythrocytes_pyscenic_combined_grn.csv',
+    #                   index_col=0)
+    grn = erythrocytes_grn()
 
     # ### Perform SwitchTFI analyses
     # - Compute weights and empirical corrected p-values for each edge in the input GRN
@@ -81,6 +86,8 @@ def main_compute_outdegree_tf_rankings():
 
 
 if __name__ == '__main__':
+
+    np.random.seed(1725149318)
 
     main_endocrine()
 

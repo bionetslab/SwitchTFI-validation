@@ -424,7 +424,15 @@ def main_sig_thresh_selection():
     def hyper_param_selection_helper(grn: pd.DataFrame,
                                      thresh_list: List[float],
                                      ranking_method: str = 'pr',
-                                     top_k: Tuple[int, ...] = (10,)):
+                                     top_k: Tuple[int, ...] = (10,),
+                                     result_folder: Union[str, None] = None,
+                                     fn_prefix: Union[str, None] = None):
+
+        n_vert_inp = np.unique(grn[["TF", "target"]].to_numpy()).shape[0]
+        n_tfs_inp = np.unique(grn[["TF"]].to_numpy()).shape[0]
+        n_targets_inp = np.unique(grn[["target"]].to_numpy()).shape[0]
+        n_edges_inp = grn.shape[0]
+
         pruned_grn_list = []
         res_list = []
 
@@ -452,14 +460,9 @@ def main_sig_thresh_selection():
         n_targets = []
         n_edges = []
         for i, pg in enumerate(pruned_grn_list):
-            print(f'###### Alpha = {thresh_list[i]}: ###### ')
-            print(f'## n vertices: {np.unique(pg[["TF", "target"]].to_numpy()).shape[0]}')
             n_verts.append(np.unique(pg[["TF", "target"]].to_numpy()).shape[0])
-            print(f'## n TFs: {np.unique(pg[["TF"]].to_numpy()).shape[0]}')
             n_tfs.append(np.unique(pg[["TF"]].to_numpy()).shape[0])
-            print(f'## n targets: {np.unique(pg[["target"]].to_numpy()).shape[0]}')
             n_targets.append(np.unique(pg[["target"]].to_numpy()).shape[0])
-            print(f'## n edges: {pg.shape[0]}')
             n_edges.append(pg.shape[0])
 
         grn_df = pd.DataFrame(index=thresh_list)
@@ -468,7 +471,15 @@ def main_sig_thresh_selection():
         grn_df['ntarget'] = n_targets
         grn_df['nedges'] = n_edges
 
+        grn_df.loc[1.0] = {'nvert': n_vert_inp, 'ntf': n_tfs_inp, 'ntarget': n_targets_inp, 'nedges': n_edges_inp}
+
+        print(f'# ### Transition GRN sizes arcoss FWER thresholds ### # ')
         print(grn_df)
+        print('\n')
+
+        if result_folder is not None:
+            grn_df.to_csv(os.path.join(result_folder,
+                                       f'{fn_prefix if fn_prefix is not None else ""}transition_grn_sizes.csv'))
 
         # For multiple ks determine their Jaccard-based similarity of the top-k ranked TFs
         mean_jis = []
@@ -477,8 +488,16 @@ def main_sig_thresh_selection():
             a, b = compare_gene_sets(res_df_list=res_list, top_k=k)
             mean_jis.append(a)
             jis.append(b)
-            print(f'###### Avg pairwise JI among top {k}: ######')
-            print(f'## JI: {a}')
+
+        ji_df = pd.DataFrame(columns=top_k)
+        ji_df.loc['JI'] = mean_jis
+        print('# ### Avg (across FWER thresholds) pairwise JI of top-k TFs: ### #')
+        print(ji_df)
+        print('\n')
+        if result_folder is not None:
+            ji_df.to_csv(os.path.join(result_folder,
+                                      f'{fn_prefix if fn_prefix is not None else ""}'
+                                      f'avg_jis_of_topk_tfs_across_fwer_thresholds.csv'))
 
     # ### Load the unpruned GRNs that were saved as an intermediate result during SwitchTFI analyses
     agrn = load_grn_json(grn_path='./results/02_switchtfi/endocrine/alpha/grn.json')
@@ -487,14 +506,32 @@ def main_sig_thresh_selection():
 
     # ### Run hyperparameter selection analyses
     alphas = [0.05, 0.1, 0.2, 0.5]
-    hyper_param_selection_helper(grn=agrn, thresh_list=alphas, ranking_method='pr', top_k=(1, 5, 10, 15, 20))
-    hyper_param_selection_helper(grn=agrn, thresh_list=alphas, ranking_method='out_deg', top_k=(1, 5, 10, 15, 20))
+    top_ks = (1, 5, 10, 15, 20)
+    res_p = os.path.join(os.getcwd(), 'results/03_validation/fwer_threshold_selection')
 
-    hyper_param_selection_helper(grn=bgrn, thresh_list=alphas, ranking_method='pr', top_k=(1, 5, 10, 15, 20))
-    hyper_param_selection_helper(grn=bgrn, thresh_list=alphas, ranking_method='out_deg', top_k=(1, 5, 10, 15, 20))
+    print('# ###### Alpha-cell transition ###### #')
+    print('# ### TFs ranked by PageRank:')
+    hyper_param_selection_helper(grn=agrn, thresh_list=alphas, ranking_method='pr', top_k=top_ks,
+                                 result_folder=res_p, fn_prefix='alpha_pr_')
+    print('# ### TFs ranked by out-degree:')
+    hyper_param_selection_helper(grn=agrn, thresh_list=alphas, ranking_method='out_deg', top_k=top_ks,
+                                 result_folder=res_p, fn_prefix='alpha_outdeg_')
 
-    hyper_param_selection_helper(grn=erygrn, thresh_list=alphas, ranking_method='pr', top_k=(1, 5, 10, 15, 20))
-    hyper_param_selection_helper(grn=erygrn, thresh_list=alphas, ranking_method='out_deg', top_k=(1, 5, 10, 15, 20))
+    print('# ###### Beta-cell transition ###### #')
+    print('# ### TFs ranked by PageRank:')
+    hyper_param_selection_helper(grn=bgrn, thresh_list=alphas, ranking_method='pr', top_k=top_ks,
+                                 result_folder=res_p, fn_prefix='beta_pr_')
+    print('# ### TFs ranked by out-degree:')
+    hyper_param_selection_helper(grn=bgrn, thresh_list=alphas, ranking_method='out_deg', top_k=top_ks,
+                                 result_folder=res_p, fn_prefix='beta_outdeg_')
+
+    print('# ###### Erythrocytes differentiation ###### #')
+    print('# ### TFs ranked by PageRank:')
+    hyper_param_selection_helper(grn=erygrn, thresh_list=alphas, ranking_method='pr', top_k=top_ks,
+                                 result_folder=res_p, fn_prefix='ery_pr_')
+    print('# ### TFs ranked by out-degree:')
+    hyper_param_selection_helper(grn=erygrn, thresh_list=alphas, ranking_method='out_deg', top_k=top_ks,
+                                 result_folder=res_p, fn_prefix='ery_outdeg_')
 
 
 def main_robustness_analysis():
@@ -1059,17 +1096,20 @@ if __name__ == '__main__':
 
     validation = True
     if validation:
+
+        np.random.seed(1725149318)
+
         main_sig_thresh_selection()
 
-        main_robustness_analysis()
+        # main_robustness_analysis()
 
-        main_pseudotime_inference()
+        # main_pseudotime_inference()
 
-        main_switchde_analysis()
+        # main_switchde_analysis()
 
-        main_trend_calculation()
+        # main_trend_calculation()
 
-        main_save_cellrank_driver_genes()
+        # main_save_cellrank_driver_genes()
 
     spliceJAC = False
     if spliceJAC:
