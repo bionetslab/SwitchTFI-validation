@@ -74,7 +74,8 @@ def main_switchde_analysis():
     # ### Script for determining differential gene expression along a previously calculated pseudotemporal trajectory
 
     # ### Set the path to the R version installed in the Conda environment
-    conda_env_path = '/data/bionets/ac07izid/miniconda3/envs/dtfi'
+    # !!! NOTE: The path must be adjusted according to the users installation
+    conda_env_path = '/data/bionets/ac07izid/miniconda3/envs/switchtfi_val'
     r_home_path = os.path.join(conda_env_path, "lib", "R")
     # Set the R_HOME environment variable
     os.environ["R_HOME"] = r_home_path
@@ -664,6 +665,45 @@ def main_robustness_analysis():
 
 
 # Misc #################################################################################################################
+def save_top10_driver_tfs():
+    base_p = os.path.join(os.getcwd(), 'results/02_switchtfi')
+    save_p = os.path.join(os.getcwd(), 'results/03_validation/gsea_results/top10_tfs')
+
+    def save_to_txt(csv_p: str, fn_prefix: str):
+        tf_list = pd.read_csv(os.path.join(base_p, csv_p), index_col=0)['gene'].to_list()[0:10]
+        file_p = os.path.join(save_p, f'{fn_prefix}top10_driver_tfs.txt')
+        with open(file_p, 'w') as file:
+            for tf in tf_list:
+                file.write(f"{tf}\n")
+
+    save_to_txt(csv_p='endocrine/alpha/ranked_tfs.csv', fn_prefix='alpha_pr_')
+    save_to_txt(csv_p='endocrine/alpha/outdeg_ranked_tfs.csv', fn_prefix='alpha_outdeg_')
+
+    save_to_txt(csv_p='endocrine/beta/ranked_tfs.csv', fn_prefix='beta_pr_')
+    save_to_txt(csv_p='endocrine/beta/outdeg_ranked_tfs.csv', fn_prefix='beta_outdeg_')
+
+    save_to_txt(csv_p='hematopoiesis/ranked_tfs.csv', fn_prefix='ery_pr_')
+    save_to_txt(csv_p='hematopoiesis/outdeg_ranked_tfs.csv', fn_prefix='ery_outdeg_')
+
+
+def save_ybx1_targets():
+    bgrn = pd.read_csv('./results/02_switchtfi/endocrine/beta/grn.csv', index_col=0)
+
+    regulon_bool = np.isin(bgrn['TF'].to_numpy(), ['Ybx1'])
+    regulon = bgrn[regulon_bool].copy().reset_index(drop=True)
+    weights = regulon['weight'].to_numpy()
+    pvals = regulon['pvals_wy'].to_numpy()
+    pvals += np.finfo(np.float64).eps
+    regulon['score'] = -np.log10(pvals) * weights
+    regulon = regulon.sort_values('score', axis=0, ascending=False)
+    target_list = regulon["target"].to_list()[0:20]
+
+    print(f'# ### Ybx1 regulon:\n{target_list}')
+    with open('./results/03_validation/gsea_results/beta_ybx1_targets.txt', 'w') as file:
+        for target in target_list:
+            file.write(f"{target}\n")
+
+
 def main_save_topk_genesets():
 
     def save_first_k_entries_to_file(d: pd.DataFrame,
@@ -1121,19 +1161,25 @@ if __name__ == '__main__':
     validation = True
     if validation:
 
-        np.random.seed(1725149318)
+        np.random.seed(1725149318)  # Random seed only relevant to robustness analysis
 
-        # main_sig_thresh_selection()
+        main_sig_thresh_selection()
 
-        # main_robustness_analysis()
+        main_robustness_analysis()
 
-        # main_pseudotime_inference()
+        main_pseudotime_inference()
 
         main_switchde_analysis()
 
-        # main_trend_calculation()
+        main_trend_calculation()
 
-        # main_save_cellrank_driver_genes()
+    # ### If transition driver genes should be computed with the competitor methods, set the respective flag to True
+    # For spliceJAC and DrivAER there are separate environments to run the script.
+    # Detailed instructions are given in the respective functions, see:
+    # main_save_splicejac_driver_genes() and main_save_drivaer_driver_genes()
+    CellRank = False
+    if CellRank:
+        main_save_cellrank_driver_genes()
 
     spliceJAC = False
     if spliceJAC:
@@ -1145,6 +1191,8 @@ if __name__ == '__main__':
 
 
     # ### Miscellaneous scripts, generally uninteresting to reader
+    # save_top10_driver_tfs()
+    # save_ybx1_targets()
     # main_save_topk_genesets()
     # main_print_digest_res()
     # main_store_anndata()
