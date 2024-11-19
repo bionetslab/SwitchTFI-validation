@@ -82,11 +82,11 @@ def compare_grn_vs_rand_background(base_grn: pd.DataFrame,
     def rand_subnet_generator(bgrn: pd.DataFrame,
                               tgrn: pd.DataFrame,
                               mode: str = 'simple',
-                              tf_target_keys: Tuple[str, str] = ('TF', 'target')) -> pd.DataFrame:
+                              random_state: int = 1725149318) -> pd.DataFrame:
 
         if mode == 'simple':
             # Sample uniform at random among all edges of bgrn
-            randgrn = bgrn.sample(n=tgrn.shape[0], replace=False, axis=0)
+            randgrn = bgrn.sample(n=tgrn.shape[0], replace=False, random_state=random_state, axis=0)
         elif mode == 'advanced':
             # 1) Sample TFs (as many as there are in tgrn)
             # 2) Sample uniform at random among edges starting at sampled TFs
@@ -104,8 +104,7 @@ def compare_grn_vs_rand_background(base_grn: pd.DataFrame,
     # Subsample n times and calculate metrics
     for i in range(n):
         # Randomly select edges from the base GRN -> random subnetwork
-        rand_subnet = rand_subnet_generator(bgrn=base_grn, tgrn=transition_grn, mode='simple',
-                                            tf_target_keys=tf_target_keys)
+        rand_subnet = rand_subnet_generator(bgrn=base_grn, tgrn=transition_grn, mode='simple', random_state=i)
         # Turn random subnetwork into undirected Networkx graph
         g = grn_to_nx(grn=rand_subnet, edge_attributes=None, tf_target_keys=tf_target_keys).to_undirected()
         # Store list of connected components of graph
