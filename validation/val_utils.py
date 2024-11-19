@@ -2,9 +2,11 @@
 import pandas as pd
 import numpy as np
 import networkx as nx
+import scanpy as sc
 
 from typing import *
 from itertools import combinations
+from scipy.stats import combine_pvalues
 from switchtfi.tf_ranking import grn_to_nx
 
 
@@ -114,5 +116,20 @@ def compare_grn_vs_rand_background(base_grn: pd.DataFrame,
 
     return ccs_list, n_vertices
 
+
+def combine_p_vals_fisher(grn: pd.DataFrame,
+                          anndata: sc.AnnData) -> pd.DataFrame:
+
+    grn['switchde_qvals_combined_fisher'] = np.ones(grn.shape[0])
+
+    for i in range(grn.shape[0]):
+        tf = grn['TF'].loc[i]
+        target = grn['target'].loc[i]
+        tf_qval = anndata.var['switchde_qval'][tf]
+        target_qval = anndata.var['switchde_qval'][target]
+
+        grn.at[i, 'switchde_qvals_combined_fisher'] = combine_pvalues([tf_qval, target_qval], method='fisher')[1]
+
+    return grn
 
 
