@@ -923,16 +923,16 @@ def plot_enrichr_results2(res_df: pd.DataFrame,
         plt.show()
 
 
-def plot_enrichr_results(res_df: pd.DataFrame,
-                         x: str = 'combined score',  # 'z-score', 'p-value', 'q-value', 'combined score'
-                         log_trafo: bool = False,
-                         title: Union[str, None] = None,
-                         title_fontsize: Union[str, float, None] = None,
-                         term_fontsize: Union[str, float, None] = None,
-                         axs: Union[plt.Axes, None] = None,
-                         transp: float = 0.8,
-                         fig_size: Tuple[float, float] = (16., 10.),
-                         show: bool = False):
+def plot_enrichrkg_results(res_df: pd.DataFrame,
+                           x: str = 'combined score',  # 'z-score', 'p-value', 'q-value', 'combined score'
+                           log_trafo: bool = False,
+                           title: Union[str, None] = None,
+                           title_fontsize: Union[str, float, None] = None,
+                           term_fontsize: Union[str, float, None] = None,
+                           axs: Union[plt.Axes, None] = None,
+                           transp: float = 0.8,
+                           fig_size: Tuple[float, float] = (16., 10.),
+                           show: bool = False):
 
     # Add column to dataframe with values to be plotted, set label of x-axis
     plot_vals = res_df[x].to_numpy()
@@ -999,6 +999,117 @@ def plot_enrichr_results(res_df: pd.DataFrame,
     labels = unique_categories
     legend = axs.legend(handles, labels, loc='lower right', fontsize=12)
     legend.get_frame().set_linewidth(0)  # Remove box around the legend
+
+    if show:
+        plt.tight_layout()
+        plt.show()
+
+
+def plot_enrichr_results(res_dfs: Sequence[pd.DataFrame],
+                         x: str = Literal['P-value', 'Adjusted P-value', 'Combined Score'],
+                         top_k: Union[Sequence[int], None] = None,
+                         reference_db_names: Union[Sequence[str], None] = None,
+                         log_trafo: bool = False,
+                         title: Union[str, None] = None,
+                         title_fontsize: Union[str, float, None] = None,
+                         term_fontsize: Union[str, float, None] = None,
+                         axs: Union[plt.Axes, None] = None,
+                         transp: float = 0.8,
+                         fig_size: Tuple[float, float] = (16., 10.),
+                         show: bool = False):
+
+    # ### Columns in the GSEA dataframe:
+    # Term	Overlap	P-value	Adjusted P-value	Old P-value	Old Adjusted P-value	Odds Ratio	Combined Score	Genes
+
+    if top_k is None:
+        top_k = [3] * len(res_dfs)
+
+    plot_df = pd.DataFrame()
+
+    for i, res_df in enumerate(res_dfs):
+        # Add column to dataframe with library/reference database name
+        if reference_db_names is not None:
+            res_df['Library'] = reference_db_names[i]
+
+        # Add column to dataframe with values to be plotted, set label of x-axis
+        plot_vals = res_df[x].to_numpy()
+        if x in {'P-value', 'Adjusted P-value'}:
+            plot_vals = -np.log(plot_vals)
+        else:
+            # plot_vals = np.log10(1 + plot_vals)
+            if log_trafo:
+                plot_vals = np.log10(plot_vals)
+        res_df['plot_val'] = plot_vals
+
+        # Sort dataframe w.r.t. plot vals
+        res_df.sort_values(by='plot_val', ascending=False, inplace=True)
+
+        first_k_rows = res_df.head(top_k[i])
+        if plot_df.empty:
+            plot_df = first_k_rows.copy()
+        else:
+            plot_df = pd.concat([plot_df, first_k_rows], ignore_index=True)
+
+    plot_df.sort_values(by='plot_val', ascending=True, inplace=True)
+
+    if reference_db_names is not None:
+        # Extract unique categories
+        unique_categories = plot_df['Library'].unique()
+        # Create a discrete colormap
+        colors = plt.get_cmap('Set3', len(unique_categories))
+        # Map unique categories to colors
+        color_mapping = {category: colors(i) for i, category in enumerate(unique_categories)}
+        # Apply the colormap to the DataFrame
+        plot_df['Color'] = plot_df['Library'].map(color_mapping)
+
+    if x in {'P-value', 'Adjusted P-value'}:
+        x_label = f'-log10({x})'
+    else:
+        x_label = 'Combined score'
+        if log_trafo:
+            x_label = 'log10(combined score)'
+
+    # Create a new figure and axis if not provided
+    if axs is None:
+        fig, axs = plt.subplots(figsize=fig_size)
+
+    # Create a bar plot
+    if reference_db_names is not None:
+        bars = axs.barh(plot_df['Term'], plot_df['plot_val'], color=plot_df['Color'], alpha=transp)
+    else:
+        bars = axs.barh(plot_df['Term'], plot_df['plot_val'], color='lightseagreen', alpha=transp)
+
+    # Annotate bars with the term at the base, with a small space
+    space = plot_df['plot_val'].max() * 0.02
+    for bar, term in zip(bars, plot_df['Term']):
+        axs.text(bar.get_x() + space, bar.get_y() + bar.get_height() / 2, term[0].upper() + term[1:], va='center',
+                 ha='left', fontsize=term_fontsize, color='black')
+
+    # Set library as y-tick labels
+    # axs.set_yticks(np.arange(len(res_df)))
+    # axs.set_yticklabels(res_df['Library'], fontsize=8, color='grey')
+    # Remove y ticks
+    axs.set_yticks([])
+
+    # Add labels and title
+    axs.set_xlabel(x_label, fontsize=12)
+
+    if title is not None:
+        if title_fontsize is not None:
+            axs.set_title(title, fontsize=title_fontsize)
+        else:
+            axs.set_title(title)
+
+    axs.spines['top'].set_visible(False)
+    axs.spines['right'].set_visible(False)
+
+    if reference_db_names is not None:
+        # Add legend with dots
+        handles = [plt.Line2D([0], [0], marker='o', color='w', markerfacecolor=color_mapping[category], markersize=12)
+                   for category in unique_categories]
+        labels = unique_categories
+        legend = axs.legend(handles, labels, loc='lower right', fontsize=12)
+        legend.get_frame().set_linewidth(0)  # Remove box around the legend
 
     if show:
         plt.tight_layout()
