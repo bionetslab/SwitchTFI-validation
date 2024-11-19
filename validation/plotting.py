@@ -1050,13 +1050,12 @@ def plot_enrichr_results(res_dfs: Sequence[pd.DataFrame],
         else:
             plot_df = pd.concat([plot_df, first_k_rows], ignore_index=True)
 
-    plot_df.sort_values(by='plot_val', ascending=True, inplace=True)
-
     if reference_db_names is not None:
         # Extract unique categories
-        unique_categories = plot_df['Library'].unique()
+        _, idx = np.unique(plot_df['Library'].to_numpy(), return_index=True)
+        unique_categories = plot_df['Library'].to_numpy()[np.sort(idx)]
         # Create a discrete colormap
-        colors = plt.get_cmap('Set3', len(unique_categories))
+        colors = plt.get_cmap('Set3')
         # Map unique categories to colors
         color_mapping = {category: colors(i) for i, category in enumerate(unique_categories)}
         # Apply the colormap to the DataFrame
@@ -1074,6 +1073,7 @@ def plot_enrichr_results(res_dfs: Sequence[pd.DataFrame],
         fig, axs = plt.subplots(figsize=fig_size)
 
     # Create a bar plot
+    plot_df.sort_values(by='plot_val', ascending=True, inplace=True)  # Sort before plotting
     if reference_db_names is not None:
         bars = axs.barh(plot_df['Term'], plot_df['plot_val'], color=plot_df['Color'], alpha=transp)
     else:
