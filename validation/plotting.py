@@ -37,7 +37,8 @@ def plot_step_function(
         pred_r_key: str = 'pred_r',
         show: bool = True,
         axs: Union[plt.Axes, None] = None,
-        legend_loc: Union[str, None] = 'right margin'
+        legend_loc: Union[str, None] = 'right margin',
+        legend_fontsize: Union[float, None] = None,
 ):
 
     if isinstance(which, tuple):  # Tuple of strings ('tf', 'target') as input
@@ -61,7 +62,8 @@ def plot_step_function(
                                     pred_r_key=pred_r_key,
                                     show=show,
                                     axs=axs,
-                                    legend_loc=legend_loc)
+                                    legend_loc=legend_loc,
+                                    legend_fontsize=legend_fontsize)
         return ax
 
     else:  # List of indices as input
@@ -84,7 +86,8 @@ def plot_step_function(
                                         pred_r_key=pred_r_key,
                                         show=show,
                                         axs=axs,
-                                        legend_loc=legend_loc)
+                                        legend_loc=legend_loc,
+                                        legend_fontsize=legend_fontsize)
             ax_list.append(ax)
         if ax_list:
             return ax_list
@@ -108,7 +111,8 @@ def plot_step_function_aux(
         pred_r_key: str = 'pred_r',
         show: bool = True,
         axs: Union[plt.Axes, None] = None,
-        legend_loc: Union[str, None] = 'right margin'
+        legend_loc: Union[str, None] = 'right margin',
+        legend_fontsize: Union[float, None] = None,
 ):
     # Get names of TF and target
     tf_key = tf_target_keys[0]
@@ -171,13 +175,20 @@ def plot_step_function_aux(
         # ax.legend(bbox_to_anchor=(1.05, 1), loc='center left', borderaxespad=0.)
         ax.legend(loc='center left', bbox_to_anchor=(1, 0.5))
 
+    if legend_loc != 'none':
+        ax.legend(loc=legend_loc, frameon=True, framealpha=1)
+
+    if legend_fontsize is not None and legend_loc != 'none':
+        legend = ax.legend_
+        for text in legend.get_texts():
+            text.set_fontsize(legend_fontsize)
+
     # adjust fontsize
     if ax_label_fontsize is not None:
         ax.xaxis.label.set_size(ax_label_fontsize)
         ax.yaxis.label.set_size(ax_label_fontsize)
 
     if title_fontsize is not None:
-        ax = plt.gca()  # Get the current axis
         ax.set_title(ax.get_title(), fontsize=title_fontsize)
 
     if show:

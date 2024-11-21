@@ -47,10 +47,11 @@ def plot_step_fct_and_trends():
     )
 
     layer_key = 'magic_imputed'
-    title_fs = 16
+    title_fs = 100
     ax_fs = 20
+    legend_fs = 20
     gene_trend_anno_fs = 12
-    letter_fs = 14
+    letter_fs = 20
 
     e0 = tuple(grn[['TF', 'target']].iloc[1])
     e1 = tuple(grn[['TF', 'target']].iloc[grn.shape[0] - 1])
@@ -63,7 +64,8 @@ def plot_step_fct_and_trends():
                        plot_threshold=True,
                        ax_label_fontsize=ax_fs,
                        title_fontsize=title_fs,
-                       legend_loc='none',
+                       legend_fontsize=legend_fs,
+                       legend_loc='upper right',
                        show=False,
                        axs=axd['A'])
 
@@ -74,7 +76,8 @@ def plot_step_fct_and_trends():
                        plot_threshold=True,
                        ax_label_fontsize=ax_fs,
                        title_fontsize=title_fs,
-                       legend_loc='custom right',
+                       legend_fontsize=legend_fs,
+                       legend_loc='upper center',
                        show=False,
                        axs=axd['B'])
 
@@ -119,7 +122,7 @@ def plot_step_fct_and_trends():
                                 ax_label_fontsize=ax_fs,
                                 show=False,
                                 axs=axd['G'],
-                                colorbar_pad=-0.125)
+                                colorbar_pad=0.0)
 
     regulons = get_regulons(grn=pgrn, gene_names=['Pdx1', 'Pax4'])
     targets0 = regulons['Pdx1']['targets']
@@ -133,7 +136,8 @@ def plot_step_fct_and_trends():
                                 show=False,
                                 axs=axd['H'],
                                 plot_colorbar=False,
-                                title='Targets of TF Pdx1')
+                                title='Targets of TF Pdx1',
+                                title_fontsize=title_fs)
 
     plot_gam_gene_trend_heatmap(adata=bdata,
                                 gene_names=targets1,
@@ -142,8 +146,9 @@ def plot_step_fct_and_trends():
                                 ax_label_fontsize=ax_fs,
                                 show=False,
                                 axs=axd['I'],
-                                colorbar_pad=-0.3,
-                                title='Targets of TF Pax4')
+                                colorbar_pad=0.0,
+                                title='Targets of TF Pax4',
+                                title_fontsize=title_fs)
 
     # Annotate subplot mosaic tiles with labels
     for label, ax in axd.items():
@@ -901,7 +906,7 @@ def plot_grns():
 
 if __name__ == '__main__':
 
-    # plot_step_fct_and_trends()
+    plot_step_fct_and_trends()
 
     # plot_quantitative_analyses()
 
