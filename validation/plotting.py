@@ -590,105 +590,26 @@ def plot_sdeqvals_vs_weight(
         plt.show()
 
 
-def plot_base_v_pruned_grn_comparison(adata: sc.AnnData,
-                                      base_grn: pd.DataFrame,
-                                      pruned_grn: pd.DataFrame,
-                                      switchde_alpha: float = 0.01,
-                                      title: Union[str, None] = None,
-                                      plot_legend: bool = True,
-                                      axs: Union[plt.Axes, None] = None,
-                                      show: bool = False,
-                                      tf_target_keys: Tuple[str, str] = ('TF', 'target'),
-                                      switchde_qvals_var_key: str = 'switchde_qval',
-                                      verbosity: int = 0):
-
-    base_genes = np.unique(base_grn[list(tf_target_keys)].to_numpy())
-    base_tfs = np.unique(base_grn[tf_target_keys[0]].to_numpy())
-    base_targets = np.unique(base_grn[tf_target_keys[1]].to_numpy())
-
-    # Subset Anndata to genes that appear in the base GRN
-    gn = adata.var_names.to_numpy()
-    base_grn_gene_bool = np.isin(gn, base_genes)
-    adata = adata[:, base_grn_gene_bool]
-    gn = adata.var_names.to_numpy()
-
-    pruned_genes = np.unique(pruned_grn[list(tf_target_keys)].to_numpy())
-    pruned_tfs = np.unique(pruned_grn[tf_target_keys[0]].to_numpy())
-    pruned_targets = np.unique(pruned_grn[tf_target_keys[1]].to_numpy())
-
-    switchde_qvals = adata.var[switchde_qvals_var_key].to_numpy()
-    sig = (switchde_qvals <= switchde_alpha)
-
-    base_frac_degenes = sig.mean()
-    pruned_frac_degenes = sig[np.isin(gn, pruned_genes)].mean()
-    base_frac_detfs = sig[np.isin(gn, base_tfs)].mean()
-    pruned_frac_detfs = sig[np.isin(gn, pruned_tfs)].mean()
-    base_frac_detargets = sig[np.isin(gn, base_targets)].mean()
-    pruned_frac_detargets = sig[np.isin(gn, pruned_targets)].mean()
-
-    if verbosity >= 1:
-        print(f'### genes: base: {base_frac_degenes}, pruned: {pruned_frac_degenes}')
-        print(f'### tfs: base: {base_frac_detfs}, pruned: {pruned_frac_detfs}')
-        print(f'### targets: base: {base_frac_detargets}, pruned: {pruned_frac_detargets}')
-
-    # pos = [1, 2]
-    # data = [-np.log(switchde_qvals[sig]), -np.log(switchde_qvals[sig * np.isin(vn, pruned_genes)])]
-    # axd['A'].violinplot(data, pos, showmedians=True)
-
-    data = pd.DataFrame()
-    data['DE fraction'] = [base_frac_degenes, pruned_frac_degenes, base_frac_detfs, pruned_frac_detfs,
-                           base_frac_detargets, pruned_frac_detargets]
-    data['GRN'] = ['base', 'pruned'] * 3
-    data['subset'] = ['genes', 'genes', 'TFs', 'TFs', 'targets', 'targets']
-
-    if axs is None:
-        ax = sns.stripplot(data=data, x='DE fraction', y='subset', hue='GRN', size=10, linewidth=1, orient='h',
-                           jitter=False)
-
-    else:
-        ax = sns.stripplot(data=data, x='DE fraction', y='subset', hue='GRN', size=10, linewidth=1, orient='h',
-                           jitter=False, ax=axs)
-
-    ax.xaxis.grid(False)
-    ax.yaxis.grid(True)
-    sns.despine(left=True, bottom=True)
-
-    ax.set(ylabel=None)
-
-    sns.move_legend(ax, 'center left', bbox_to_anchor=(1, 0.5))
-
-    x_ticks = np.round(np.linspace(data['DE fraction'].to_numpy().min(), data['DE fraction'].to_numpy().max(), num=4),
-                       decimals=2)
-    ax.set_xticks(x_ticks)
-    ax.set_xticklabels(x_ticks)
-
-    if not plot_legend:
-        ax.legend_.remove()
-
-    if title is not None:
-        ax.set_title(title)
-
-    if show:
-        plt.tight_layout()
-        plt.show()
-
-
-def plot_defrac_in_top_k_lineplot(res_df_list: List[pd.DataFrame],
-                                  adata: sc.AnnData,
-                                  switchde_alpha: float = 0.01,
-                                  max_top_k: int = 20,
-                                  interval: int = 1,
-                                  axs: Union[plt.Axes, None] = None,
-                                  title: Union[str, None] = None,
-                                  show: bool = False,
-                                  names: Union[List[str], None] = None,
-                                  markers: Union[List[str], None] = ('s', 'd', '^', 'o'),
-                                  palette: Union[List[str], None] = ('#1f77b4', '#ff7f0e', '#2ca02c', '#d62728'),
-                                  hue_order: Union[Tuple[str, ...], None] =
-                                  ('CellRank', 'spliceJAC', 'DrivAER', 'SwitchTFI'),
-                                  legend_loc: str = 'best',
-                                  gene_key: str = 'gene',
-                                  sdeqval_var_key: str = 'switchde_qval'):
+def plot_defrac_in_top_k_lineplot(
+        res_df_list: List[pd.DataFrame],
+        adata: sc.AnnData,
+        switchde_alpha: float = 0.01,
+        max_top_k: int = 20,
+        interval: int = 1,
+        axs: Union[plt.Axes, None] = None,
+        title: Union[str, None] = None,
+        title_fontsize: Union[float, None] = None,
+        ax_label_fontsize: Union[float, None] = None,
+        legend_fontsize: Union[float, None] = None,
+        show: bool = False,
+        names: Union[List[str], None] = None,
+        markers: Union[List[str], None] = ('s', 'd', '^', 'o'),
+        palette: Union[List[str], None] = ('#1f77b4', '#ff7f0e', '#2ca02c', '#d62728'),
+        hue_order: Union[Tuple[str, ...], None] = ('CellRank', 'spliceJAC', 'DrivAER', 'SwitchTFI'),
+        legend_loc: str = 'best',
+        gene_key: str = 'gene',
+        sdeqval_var_key: str = 'switchde_qval'
+):
 
     # Create dataframe for plotting
     df = create_switchdefrac_df(res_df_list=res_df_list,
@@ -720,7 +641,7 @@ def plot_defrac_in_top_k_lineplot(res_df_list: List[pd.DataFrame],
     # Manually reorder legend
     handles, labels = ax.get_legend_handles_labels()
     order = [labels.index(s) for s in list(hue_order)[::-1]]
-    ax.legend([handles[idx] for idx in order], [labels[idx] for idx in order], loc=legend_loc)
+    ax.legend([handles[idx] for idx in order], [labels[idx] for idx in order], loc=legend_loc, fontsize=legend_fontsize)
 
     # Set x-ticks at integers
     ax.set_xticks(range(interval, max_top_k + 1, interval))
@@ -732,82 +653,32 @@ def plot_defrac_in_top_k_lineplot(res_df_list: List[pd.DataFrame],
     for i in range(start_multiple_of_5, max_top_k + 1, 5):
         ax.axvline(x=i, color='lightgrey', linestyle='-', linewidth=0.7, zorder=0)
 
+    if ax_label_fontsize is not None:
+        ax.set_xlabel(ax.get_xlabel(), fontsize=ax_label_fontsize)
+        ax.set_ylabel(ax.get_ylabel(), fontsize=ax_label_fontsize)
+
     if title is not None:
-        ax.set_title(title)
+        ax.set_title(title, fontsize=title_fontsize)
 
     if show:
         plt.tight_layout()
         plt.show()
 
 
-def plot_defrac_in_top_k_lineplot2(res_df_list: List[pd.DataFrame],
-                                  adata: sc.AnnData,
-                                  switchde_alpha: float = 0.01,
-                                  max_top_k: int = 20,
-                                  axs: Union[plt.Axes, None] = None,
-                                  title: Union[str, None] = None,
-                                  show: bool = False,
-                                  names: Union[List[str], None] = None,
-                                  markers: Union[List[str], None] = ('s', 'd', '^', 'o'),
-                                  palette: Union[List[str], None] = ('#1f77b4', '#ff7f0e', '#2ca02c', '#d62728'),
-                                  hue_order: Union[Tuple[str, ...], None] =
-                                  ('CellRank', 'spliceJAC', 'DrivAER', 'SwitchTFI'),
-                                  legend_loc: str = 'best',
-                                  gene_key: str = 'gene',
-                                  sdeqval_var_key: str = 'switchde_qval'):
-
-    # Create dataframe for plotting
-    df = create_switchdefrac_df(res_df_list=res_df_list,
-                                adata=adata,
-                                switchde_alpha=switchde_alpha,
-                                max_top_k=max_top_k,
-                                names=names,
-                                gene_key=gene_key,
-                                sdeqval_var_key=sdeqval_var_key)
-    # Transform from wide into long format for seaborn
-    df_melted = pd.melt(df, id_vars=['Top k'], var_name='Method', value_name='ptDE fraction')
-
-    if markers is not None:
-        markers = list(markers)
-    if palette is not None:
-        palette = list(palette)
-
-    ax = sns.lineplot(data=df_melted, x='Top k', y='ptDE fraction', hue='Method', style='Method', markers=markers,
-                      palette=palette, dashes=False, hue_order=list(hue_order), ax=axs, zorder=2)
-
-    # Add horizontal line at fraction of de genes in dataset
-    de_frac = (adata.var[sdeqval_var_key] <= switchde_alpha).mean()
-    ax.axhline(y=de_frac, color='darkred', zorder=1, label='Dataset ptDE frac')
-    hue_order = ('Dataset ptDE frac', ) + hue_order
-
-    # Manually reorder legend
-    handles, labels = ax.get_legend_handles_labels()
-    order = [labels.index(s) for s in list(hue_order)[::-1]]
-    ax.legend([handles[idx] for idx in order], [labels[idx] for idx in order], loc=legend_loc)
-
-    # Set x-ticks at integers
-    ax.set_xticks(range(max_top_k + 1))
-
-    # Add vertical lines at multiples of 5
-    for i in range(0, max_top_k + 1, 5):
-        ax.axvline(x=i, color='lightgrey', linestyle='-', linewidth=0.7, zorder=0)
-
-    if title is not None:
-        ax.set_title(title)
-
-    if show:
-        plt.tight_layout()
-        plt.show()
-
-
-def plot_digest_results(digest_res_path_list: List[str],
-                        name_list: List[str],
-                        color_list: List[str],
-                        title: Union[str, None] = None,
-                        size: float = 5,
-                        axs: Union[plt.Axes, None] = None,
-                        show: bool = False,
-                        verbosity: int = 0):
+def plot_digest_results(
+        digest_res_path_list: List[str],
+        name_list: List[str],
+        color_list: List[str],
+        title: Union[str, None] = None,
+        size: float = 5,
+        title_fontsize: Union[float, None] = None,
+        ax_label_fontsize: Union[float, None] = None,
+        plot_xlabel: bool = True,
+        x_ticks_fontsize: Union[float, None] = None,
+        legend_fontsize: Union[float, None] = None,
+        axs: Union[plt.Axes, None] = None,
+        show: bool = False,
+        verbosity: int = 0):
 
     # Create dictionary mapping names to colors
     color_dict = {name: col for name, col in zip(name_list, color_list)}
@@ -854,189 +725,38 @@ def plot_digest_results(digest_res_path_list: List[str],
     # Manually reorder legend
     handles, labels = ax.get_legend_handles_labels()
     order = [labels.index(s) for s in name_list[::-1]]
-    ax.legend([handles[idx] for idx in order], [labels[idx] for idx in order], title='')
+    ax.legend([handles[idx] for idx in order], [labels[idx] for idx in order], title='', fontsize=legend_fontsize)
+
+    if ax_label_fontsize is not None:
+        ax.set_xlabel(ax.get_xlabel(), fontsize=ax_label_fontsize)
+        ax.set_ylabel(ax.get_ylabel(), fontsize=ax_label_fontsize)
+    if x_ticks_fontsize is not None:
+        ax.tick_params(axis='x', labelsize=x_ticks_fontsize)
+    if not plot_xlabel:
+        ax.set_xlabel(None)
 
     if title is not None:
-        ax.set_title(title)
+        ax.set_title(title, fontsize=title_fontsize)
 
     if show:
         plt.show()
 
 
-def plot_enrichr_results2(res_df: pd.DataFrame,
-                         x: str = 'combined score',  # 'z-score', 'p-value', 'q-value', 'combined score'
-                         color: str = 'q-value',
-                         title: Union[str, None] = None,
-                         title_fontsize: Union[str, float, None] = None,
-                         term_fontsize: Union[str, float, None] = None,
-                         axs: Union[plt.Axes, None] = None,
-                         transp: float = 0.8,
-                         fig_size: Tuple[float, float] = (16., 10.),
-                         show: bool = False):
-
-    # Add column to dataframe with values to be plotted, set label of x-axis
-    plot_vals = res_df[x].to_numpy()
-    if x in {'p-value', 'q-value'}:
-        plot_vals = -np.log(plot_vals)
-        x_label = f'-log({x})'
-    else:
-        # plot_vals = np.log10(1 + plot_vals)
-        x_label = 'Combined score'
-    res_df['plot_val'] = plot_vals
-
-    # Sort dataframe w.r.t. plot vals
-    res_df.sort_values(by='plot_val', ascending=True, inplace=True)
-
-    # Create a color map based on chosen column
-    norm = mcolors.Normalize(vmin=res_df[color].min(), vmax=res_df[color].max())
-    cmap = plt.get_cmap('coolwarm_r')
-
-    # Create a new figure and axis if not provided
-    if axs is None:
-        fig, axs = plt.subplots(figsize=fig_size)
-
-    # Create a bar plot
-    bars = axs.barh(res_df['Term'], res_df['plot_val'], color=cmap(norm(res_df[color])), alpha=transp)
-
-    # Add color bar
-    # Adjust the transparency of the colormap for the colorbar
-    cmap_transp = cmap(np.arange(cmap.N))
-    cmap_transp[:, -1] = transp  # Set the alpha channel to your desired transparency level (0.7 in this case)
-    cmap_transp = mcolors.ListedColormap(cmap_transp)
-
-    sm = plt.cm.ScalarMappable(cmap=cmap_transp, norm=norm)
-    sm.set_array([])
-    cbar = plt.colorbar(sm, ax=axs)
-    # cbar.set_alpha(transp)
-    # cbar._draw_all()  # Todo
-    # Force the figure to redraw to apply the transparency setting
-    axs.figure.canvas.draw_idle()
-    cbar.set_label(color)
-
-    # Annotate bars with the term at the base, with a small space
-    space = res_df['plot_val'].max() * 0.02
-    for bar, term in zip(bars, res_df['Term']):
-        axs.text(bar.get_x() + space, bar.get_y() + bar.get_height() / 2, term[0].upper() + term[1:], va='center',
-                 ha='left', fontsize=term_fontsize, color='black')
-
-    # Set library as y-tick labels
-    axs.set_yticks(np.arange(len(res_df)))
-    axs.set_yticklabels(res_df['Library'], fontsize=8, color='grey')
-
-    # Add labels and title
-    axs.set_xlabel(x_label, fontsize=12)
-
-    if title is not None:
-        if title_fontsize is not None:
-            axs.set_title(title, fontsize=title_fontsize)
-        else:
-            axs.set_title(title)
-
-    axs.spines['top'].set_visible(False)
-    axs.spines['right'].set_visible(False)
-
-    # if title is not None:
-    #     axs.set_title(title)
-
-    if show:
-        plt.tight_layout()
-        plt.show()
-
-
-def plot_enrichrkg_results(res_df: pd.DataFrame,
-                           x: str = 'combined score',  # 'z-score', 'p-value', 'q-value', 'combined score'
-                           log_trafo: bool = False,
-                           title: Union[str, None] = None,
-                           title_fontsize: Union[str, float, None] = None,
-                           term_fontsize: Union[str, float, None] = None,
-                           axs: Union[plt.Axes, None] = None,
-                           transp: float = 0.8,
-                           fig_size: Tuple[float, float] = (16., 10.),
-                           show: bool = False):
-
-    # Add column to dataframe with values to be plotted, set label of x-axis
-    plot_vals = res_df[x].to_numpy()
-    if x in {'p-value', 'q-value'}:
-        plot_vals = -np.log(plot_vals)
-        x_label = f'-log({x})'
-    else:
-        # plot_vals = np.log10(1 + plot_vals)
-        x_label = 'Combined score'
-        if log_trafo:
-            plot_vals = np.log10(plot_vals)
-            x_label = 'log10(combined score)'
-    res_df['plot_val'] = plot_vals
-
-    # Sort dataframe w.r.t. plot vals
-    res_df.sort_values(by='plot_val', ascending=True, inplace=True)
-
-    # Extract unique categories
-    unique_categories = res_df['Library'].unique()
-
-    # Create a discrete colormap
-    colors = plt.get_cmap('Set3', len(unique_categories))
-
-    # Map unique categories to colors
-    color_mapping = {category: colors(i) for i, category in enumerate(unique_categories)}
-
-    # Apply the colormap to the DataFrame
-    res_df['Color'] = res_df['Library'].map(color_mapping)
-
-    # Create a new figure and axis if not provided
-    if axs is None:
-        fig, axs = plt.subplots(figsize=fig_size)
-
-    # Create a bar plot
-    bars = axs.barh(res_df['Term'], res_df['plot_val'], color=res_df['Color'], alpha=transp)
-
-    # Annotate bars with the term at the base, with a small space
-    space = res_df['plot_val'].max() * 0.02
-    for bar, term in zip(bars, res_df['Term']):
-        axs.text(bar.get_x() + space, bar.get_y() + bar.get_height() / 2, term[0].upper() + term[1:], va='center',
-                 ha='left', fontsize=term_fontsize, color='black')
-
-    # Set library as y-tick labels
-    # axs.set_yticks(np.arange(len(res_df)))
-    # axs.set_yticklabels(res_df['Library'], fontsize=8, color='grey')
-    # Remove y ticks
-    axs.set_yticks([])
-
-    # Add labels and title
-    axs.set_xlabel(x_label, fontsize=12)
-
-    if title is not None:
-        if title_fontsize is not None:
-            axs.set_title(title, fontsize=title_fontsize)
-        else:
-            axs.set_title(title)
-
-    axs.spines['top'].set_visible(False)
-    axs.spines['right'].set_visible(False)
-
-    # Add legend with dots
-    handles = [plt.Line2D([0], [0], marker='o', color='w', markerfacecolor=color_mapping[category], markersize=12) for
-               category in unique_categories]
-    labels = unique_categories
-    legend = axs.legend(handles, labels, loc='lower right', fontsize=12)
-    legend.get_frame().set_linewidth(0)  # Remove box around the legend
-
-    if show:
-        plt.tight_layout()
-        plt.show()
-
-
-def plot_enrichr_results(res_dfs: Sequence[pd.DataFrame],
-                         x: str = Literal['P-value', 'Adjusted P-value', 'Combined Score'],
-                         top_k: Union[Sequence[int], None] = None,
-                         reference_db_names: Union[Sequence[str], None] = None,
-                         log_trafo: bool = False,
-                         title: Union[str, None] = None,
-                         title_fontsize: Union[str, float, None] = None,
-                         term_fontsize: Union[str, float, None] = None,
-                         axs: Union[plt.Axes, None] = None,
-                         transp: float = 0.8,
-                         fig_size: Tuple[float, float] = (16., 10.),
-                         show: bool = False):
+def plot_enrichr_results(
+        res_dfs: Sequence[pd.DataFrame],
+        x: str = Literal['P-value', 'Adjusted P-value', 'Combined Score'],
+        top_k: Union[Sequence[int], None] = None,
+        reference_db_names: Union[Sequence[str], None] = None,
+        log_trafo: bool = False,
+        title: Union[str, None] = None,
+        title_fontsize: Union[str, float, None] = None,
+        term_fontsize: Union[str, float, None] = None,
+        ax_label_fontsize: Union[float, None] = None,
+        legend_fontsize: Union[float, None] = None,
+        axs: Union[plt.Axes, None] = None,
+        transp: float = 0.8,
+        fig_size: Tuple[float, float] = (16., 10.),
+        show: bool = False):
 
     # ### Columns in the GSEA dataframe:
     # Term	Overlap	P-value	Adjusted P-value	Old P-value	Old Adjusted P-value	Odds Ratio	Combined Score	Genes
@@ -1112,13 +832,10 @@ def plot_enrichr_results(res_dfs: Sequence[pd.DataFrame],
     axs.set_yticks([])
 
     # Add labels and title
-    axs.set_xlabel(x_label, fontsize=12)
+    axs.set_xlabel(x_label, fontsize=ax_label_fontsize)
 
     if title is not None:
-        if title_fontsize is not None:
-            axs.set_title(title, fontsize=title_fontsize)
-        else:
-            axs.set_title(title)
+        axs.set_title(title, fontsize=title_fontsize)
 
     axs.spines['top'].set_visible(False)
     axs.spines['right'].set_visible(False)
@@ -1128,7 +845,7 @@ def plot_enrichr_results(res_dfs: Sequence[pd.DataFrame],
         handles = [plt.Line2D([0], [0], marker='o', color='w', markerfacecolor=color_mapping[category], markersize=12)
                    for category in unique_categories]
         labels = unique_categories
-        legend = axs.legend(handles, labels, loc='lower right', fontsize=12)
+        legend = axs.legend(handles, labels, loc='lower right', fontsize=legend_fontsize)
         legend.get_frame().set_linewidth(0)  # Remove box around the legend
 
     if show:
@@ -1136,15 +853,18 @@ def plot_enrichr_results(res_dfs: Sequence[pd.DataFrame],
         plt.show()
 
 
-def plot_circled_tfs(res_df: pd.DataFrame,
-                     topk: int = 10,
-                     fontsize: int = 6,
-                     title: Union[str, None] = None,
-                     title_fontsize: Union[str, float, None] = None,
-                     res_df2: Union[pd.DataFrame, None] = None,
-                     plottwoinone: bool = False,
-                     y_ticks: Union[Tuple[str, str], None] = None,
-                     axs: Union[plt.Axes, None] = None):
+def plot_circled_tfs(
+        res_df: pd.DataFrame,
+        topk: int = 10,
+        fontsize: int = 6,
+        title: Union[str, None] = None,
+        title_fontsize: Union[str, float, None] = None,
+        res_df2: Union[pd.DataFrame, None] = None,
+        plottwoinone: bool = False,
+        y_ticks: Union[Tuple[str, str], None] = None,
+        ax_label_fontsize: Union[float, None] = None,
+        axs: Union[plt.Axes, None] = None
+):
 
     tfs = res_df['gene'][0:topk].tolist()
     if res_df2 is not None:
@@ -1163,7 +883,7 @@ def plot_circled_tfs(res_df: pd.DataFrame,
                                       rgba2=tf_rgba1,
                                       values=len(tfs))
 
-    def plot_strings_with_colors(strings, colors, highlight_bool, fontsize, ypos, ax):
+    def plot_strings_with_colors(strings, colors, highlight_bool, ypos, ax):
         ax.set_aspect('equal')
         if highlight_bool is None:
             highlight_bool = [False] * len(strings)
@@ -1179,13 +899,13 @@ def plot_circled_tfs(res_df: pd.DataFrame,
         # ax.axis('off')
         ax.yaxis.set_visible(False)
         ax.set_xticks(range(0, len(strings)), labels=range(1, len(strings) + 1))
-        ax.set_xlabel('Rank', fontsize=12)
+        ax.set_xlabel('Rank', fontsize=ax_label_fontsize)
 
     if axs is None:
         fig, axs = plt.subplots()
 
-    plot_strings_with_colors(strings=tfs, colors=tf_cols, highlight_bool=intersec_bool, fontsize=fontsize, ypos=0.0,
-                             ax=axs)
+    plot_strings_with_colors(
+        strings=tfs, colors=tf_cols, highlight_bool=intersec_bool, ypos=0.0, ax=axs)
 
     if plottwoinone:
         tfs2 = res_df2['gene'][0:topk].tolist()
@@ -1194,20 +914,17 @@ def plot_circled_tfs(res_df: pd.DataFrame,
         for i, tf in enumerate(tfs2):
             if tf in inters:
                 intersec_bool2[i] = 1
-        plot_strings_with_colors(strings=tfs2, colors=tf_cols, highlight_bool=intersec_bool2, fontsize=fontsize,
-                                 ypos=1.25, ax=axs)
+        plot_strings_with_colors(
+            strings=tfs2, colors=tf_cols, highlight_bool=intersec_bool2, ypos=1.25, ax=axs)
         axs.set_ylim(-1, 2)
 
         if y_ticks is not None:
             axs.yaxis.set_visible(True)
-            axs.set_yticks([0, 1.25], list(y_ticks), fontsize=14)
+            axs.set_yticks([0, 1.25], list(y_ticks), fontsize=ax_label_fontsize)
             axs.tick_params(axis='y', which='both', left=False, right=False, labelleft=True)
 
     if title is not None:
-        if title_fontsize is not None:
-            axs.set_title(title, fontsize=title_fontsize)
-        else:
-            axs.set_title(title)
+        axs.set_title(title, fontsize=title_fontsize)
 
     axs.spines['top'].set_visible(False)
     axs.spines['right'].set_visible(False)
@@ -1219,6 +936,7 @@ def plot_upset_plot(
         top_k: int = 20,
         names: Tuple[str] = ('CellRank', 'spliceJAC', 'DrivAER', 'SwitchTFI outdeg', 'SwitchTFI'),
         title: Union[str, None] = None,
+        title_fontsize: Union[str, float, None] = None,
         gene_key: str = 'gene',
         plot_folder: Union[str, None] = None,
         fn_prefix: Union[str, None] = None,
@@ -1269,7 +987,7 @@ def plot_upset_plot(
         axs.axis('off')
 
         if title is not None:
-            axs.set_title(title)
+            axs.set_title(title, fontsize=title_fontsize)
 
         # Set aspect ratio and limits
         # axs.set_aspect('auto')

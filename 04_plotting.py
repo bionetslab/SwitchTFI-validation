@@ -49,8 +49,8 @@ def plot_step_fct_and_trends():
     layer_key = 'magic_imputed'
     title_fs = 16
     ax_fs = 20
-    letter_fs = 14
     gene_trend_anno_fs = 12
+    letter_fs = 14
 
     e0 = tuple(grn[['TF', 'target']].iloc[1])
     e1 = tuple(grn[['TF', 'target']].iloc[grn.shape[0] - 1])
@@ -218,27 +218,33 @@ def plot_quantitative_analyses():
         """
     )
 
+    # General
     title_fs = 16
     ax_fs = 20
     legend_fs = 16
     letter_fs = 14
 
+    # q-vals vs weight
+    dot_size0 = 6
+    # defrac lineplot
+    dot_size1 = 12
+
     plot_sdeqvals_vs_weight(
         grn=bbase_grn, comb_qval_alpha=0.01, weight_threshold=bminw, title=r'$\beta$-cell transition data',
-        legend_pos='upper center', size=6, ax_label_fontsize=ax_fs, title_fontsize=title_fs, legend_fontsize=legend_fs,
-        axs=axd['A'])
+        legend_pos='upper center', size=dot_size0, ax_label_fontsize=ax_fs, title_fontsize=title_fs,
+        legend_fontsize=legend_fs, axs=axd['A'])
     plot_sdeqvals_vs_weight(
         grn=erybase_grn, comb_qval_alpha=0.01, weight_threshold=eryminw, title='Erythrocyte differentiation data',
-        legend_pos='upper center', size=6, ax_label_fontsize=ax_fs, title_fontsize=title_fs, legend_fontsize=legend_fs,
-        axs=axd['D'])
+        legend_pos='upper center', size=dot_size0, ax_label_fontsize=ax_fs, title_fontsize=title_fs,
+        legend_fontsize=legend_fs, axs=axd['D'])
 
     plot_defrac_lineplot(
         adata=bdata, base_grn=bbase_grn, pruned_grn=bgrn, switchde_alpha=0.01, title=r'$\beta$-cell transition data',
-        size=12, ax_label_fontsize=ax_fs, title_fontsize=title_fs, legend_fontsize=legend_fs, legend_pos='center',
-        axs=axd['B'], verbosity=1)
+        size=dot_size1, ax_label_fontsize=ax_fs, title_fontsize=title_fs, legend_fontsize=legend_fs,
+        legend_pos='center', axs=axd['B'], verbosity=1)
     plot_defrac_lineplot(
         adata=erydata, base_grn=erybase_grn, pruned_grn=erygrn, switchde_alpha=0.01,
-        title='Erythrocyte differentiation data', size=12, ax_label_fontsize=ax_fs, title_fontsize=title_fs,
+        title='Erythrocyte differentiation data', size=dot_size1, ax_label_fontsize=ax_fs, title_fontsize=title_fs,
         legend_fontsize=legend_fs, axs=axd['E'], verbosity=1)
 
     # ### Plot histograms of percentage of Lcc nodes in randomly sampled GRNs of same size as transition GRN
@@ -335,23 +341,39 @@ def plot_qualitative_analysis():
         """
     )
 
-    title_fontsize = 'x-large'
+    # General
+    title_fs = 20
+    ax_fs = 20
+    letter_fs = 14
+    # Top 10 driver TFs plot
+    gene_name_fs = 11
+    # Gene trends plot
+    gene_trend_anno_fs = 12
+    # Enrichr results plots
+    term_fs = 20
+    legend_fs = 16
+    # Regulon
+    nodes_size = 1000
+    gene_fs = 12
 
     # ### Plot Top 10 driver TFs
-    plot_circled_tfs(res_df=atfs, topk=10, fontsize=11, res_df2=btfs, title=None, title_fontsize=None,
-                     plottwoinone=True, y_ticks=(r'$\alpha$:', r'$\beta$:'), axs=axd['A'])
+    plot_circled_tfs(
+        res_df=atfs, topk=10, fontsize=gene_name_fs, res_df2=btfs, title=None, title_fontsize=None, plottwoinone=True,
+        y_ticks=(r'$\alpha$:', r'$\beta$:'), ax_label_fontsize=ax_fs, axs=axd['A'])
 
     # ### Plot gene trends of top 10 alpha-cell transition driver TFs
-    plot_gam_gene_trend_heatmap(adata=adata, gene_names=atfs['gene'][0:10].tolist(),
-                                use_trend=True,
-                                annotate_gene_names=True,
-                                gene_names_fontsize=12,
-                                ax_label_fontsize=12,
-                                show=False,
-                                axs=axd['B'],
-                                plot_colorbar=False,
-                                title=r'$\alpha$-cell transition data',
-                                title_fontsize=title_fontsize)
+    plot_gam_gene_trend_heatmap(
+        adata=adata,
+        gene_names=atfs['gene'][0:10].tolist(),
+        use_trend=True,
+        annotate_gene_names=True,
+        gene_names_fontsize=gene_trend_anno_fs,
+        ax_label_fontsize=ax_fs,
+        show=False,
+        axs=axd['B'],
+        plot_colorbar=False,
+        title=r'$\alpha$-cell transition data',
+        title_fontsize=title_fs)
 
     # ### Plot GSEA results for top 10 beta-cell transition driver TFs
     plot_enrichr_results(
@@ -360,14 +382,17 @@ def plot_qualitative_analysis():
         top_k=[6, 6],
         reference_db_names=['GO_Biological_Process_2023', 'Reactome_2022'],
         title=r'$\beta$-cell transition data',
-        title_fontsize=title_fontsize,
-        term_fontsize=13,
+        title_fontsize=title_fs,
+        term_fontsize=term_fs,
+        ax_label_fontsize=ax_fs,
+        legend_fontsize=legend_fs,
         axs=axd['C']
     )
 
     # ### Plot the top 20 targets of Ybx1
-    plot_regulon(grn=bgrn, tf='Ybx1', sort_by='score', top_k=20, title=None, font_size=12, node_size=1000,
-                 show=False, dpi=300, axs=axd['D'])
+    plot_regulon(
+        grn=bgrn, tf='Ybx1', sort_by='score', top_k=20, title=None, font_size=gene_fs, node_size=nodes_size,
+        show=False, dpi=300, axs=axd['D'])
 
     # ### Plot the GSEA results for the top 20 targets of Ybx1
     plot_enrichr_results(
@@ -376,8 +401,10 @@ def plot_qualitative_analysis():
         top_k=[6, 3, 3],
         reference_db_names=['GO_Biological_Process_2023', 'Reactome_2022', 'GO_Cellular_Component_2023'],
         title=r'$\beta$-cell transition data',
-        title_fontsize=title_fontsize,
-        term_fontsize=13,
+        title_fontsize=title_fs,
+        term_fontsize=term_fs,
+        ax_label_fontsize=ax_fs,
+        legend_fontsize=legend_fs,
         axs=axd['E']
     )
 
@@ -385,23 +412,10 @@ def plot_qualitative_analysis():
     for label, ax in axd.items():
         trans = mtransforms.ScaledTranslation(-20 / 72, 7 / 72, fig.dpi_scale_trans)
         ax.text(0.0, 1.0, label, transform=ax.transAxes + trans,
-                fontsize=14.0, va='bottom', fontfamily='sans-serif', fontweight='bold')
+                fontsize=letter_fs, va='bottom', fontfamily='sans-serif', fontweight='bold')
 
     plt.show()
     # plt.savefig('./results/04_plots/qualitative_beta.png', dpi=fig.dpi)
-
-
-def plot_regulon():
-    # ### Script for plotting Figure 5
-    from switchtfi.plotting import plot_regulon
-    # Load transition GRN of Pre-endocrine beta-cell dataset
-    bgrn = pd.read_csv('./results/02_switchtfi/endocrine/beta/grn.csv', index_col=0)
-
-    plot_regulon(grn=bgrn, tf='Ybx1', sort_by='score', top_k=20, title=None, font_size=12, node_size=1200,
-                 show=False, dpi=300)
-
-    plt.show()
-    # plt.savefig('./results/04_plots/regulon_ybx1.png', dpi=300)
 
 
 def plot_method_comparison():
@@ -429,7 +443,7 @@ def plot_method_comparison():
     b_res_list = [bcr_genes, bspjc_genes, bdrivaer_genes, btfs_outdeg, btfs]
 
     # Define names of method and color to be used in plots
-    name_list = ['CellRank', 'spliceJAC', 'DrivAER', 'SwitchTFI outdeg', 'SwitchTFI']
+    name_list = ['CellRank', 'spliceJAC', 'DrivAER', 'SwitchTFI outdeg', 'SwitchTFI PageRank']
     colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#f52891cc', '#d62728']
 
 
@@ -460,7 +474,7 @@ def plot_method_comparison():
     erypl = [eryp1, eryp2, eryp3, eryp4]
 
     # Define names of method and color to be used in plots
-    ery_name_list = ['CellRank', 'DrivAER', 'SwitchTFI outdeg', 'SwitchTFI']
+    ery_name_list = ['CellRank', 'DrivAER', 'SwitchTFI outdeg', 'SwitchTFI PageRank']
     ery_colors = ['#1f77b4', '#2ca02c', '#f52891cc', '#d62728']
 
     # ### Plot results for Beta dataset ###
@@ -472,49 +486,101 @@ def plot_method_comparison():
         ],
     )
 
+    # General
+    title_fs = 20
+    ax_fs = 20
+    legend_fs = 16
+    letter_fs = 14
+    # Digest res
+    dataset_fs = 18
+    plt_xlabel = False
+    dotsize = 9
+
     # ### Plot Upsetplot
-    plot_upset_plot(res_list=b_res_list, names=tuple(name_list), title=r'$\beta$-cell transition data', axs=axd['A'],
-                    plot_folder='./results/04_plots', fn_prefix='beta')
-    plot_upset_plot(res_list=ery_res_list, names=tuple(ery_name_list), title='Erythrocyte differentiation data',
-                    axs=axd['B'], plot_folder='./results/04_plots', fn_prefix='ery')
+    plot_upset_plot(
+        res_list=b_res_list,
+        names=tuple(name_list),
+        title=r'$\beta$-cell transition data',
+        title_fontsize=title_fs,
+        axs=axd['A'],
+        plot_folder='./results/04_plots',
+        fn_prefix='beta')
+    plot_upset_plot(
+        res_list=ery_res_list,
+        names=tuple(ery_name_list),
+        title='Erythrocyte differentiation data',
+        title_fontsize=title_fs,
+        axs=axd['B'],
+        plot_folder='./results/04_plots',
+        fn_prefix='ery')
 
-    plot_defrac_in_top_k_lineplot(res_df_list=b_res_list,
-                                  adata=bdata,
-                                  switchde_alpha=0.01,
-                                  max_top_k=20,
-                                  interval=5,
-                                  axs=axd['C'],
-                                  title=r'$\beta$-cell transition data',
-                                  show=False,
-                                  names=name_list,
-                                  markers=['s', 'd', '^', 'o', 'o'],
-                                  palette=colors,
-                                  hue_order=('CellRank', 'spliceJAC', 'DrivAER', 'SwitchTFI outdeg', 'SwitchTFI'),
-                                  legend_loc='lower right')
+    plot_defrac_in_top_k_lineplot(
+        res_df_list=b_res_list,
+        adata=bdata,
+        switchde_alpha=0.01,
+        max_top_k=20,
+        interval=5,
+        axs=axd['C'],
+        title=r'$\beta$-cell transition data',
+        title_fontsize=title_fs,
+        ax_label_fontsize=ax_fs,
+        legend_fontsize=legend_fs,
+        show=False,
+        names=name_list,
+        markers=['s', 'd', '^', 'o', 'o'],
+        palette=colors,
+        hue_order=('CellRank', 'spliceJAC', 'DrivAER', 'SwitchTFI outdeg', 'SwitchTFI PageRank'),
+        legend_loc='lower right')
 
-    plot_defrac_in_top_k_lineplot(res_df_list=ery_res_list,
-                                  adata=erydata,
-                                  switchde_alpha=0.01,
-                                  max_top_k=20,
-                                  interval=5,
-                                  axs=axd['D'],
-                                  title='Erythrocyte differentiation data',
-                                  show=False,
-                                  names=ery_name_list,
-                                  markers=['s', '^', 'o', 'o'],
-                                  palette=ery_colors,
-                                  hue_order=('CellRank', 'DrivAER', 'SwitchTFI outdeg', 'SwitchTFI'),
-                                  legend_loc='center right')
+    plot_defrac_in_top_k_lineplot(
+        res_df_list=ery_res_list,
+        adata=erydata,
+        switchde_alpha=0.01,
+        max_top_k=20,
+        interval=5,
+        axs=axd['D'],
+        title='Erythrocyte differentiation data',
+        title_fontsize=title_fs,
+        ax_label_fontsize=ax_fs,
+        legend_fontsize=legend_fs,
+        show=False,
+        names=ery_name_list,
+        markers=['s', '^', 'o', 'o'],
+        palette=ery_colors,
+        hue_order=('CellRank', 'DrivAER', 'SwitchTFI outdeg', 'SwitchTFI PageRank'),
+        legend_loc='center right')
 
-    plot_digest_results(digest_res_path_list=bpl, name_list=name_list, color_list=colors,
-                        title=r'$\beta$-cell transition data', size=9, axs=axd['E'], verbosity=1)
-    plot_digest_results(digest_res_path_list=erypl, name_list=ery_name_list, color_list=ery_colors,
-                        title='Erythrocyte differentiation data', size=9, axs=axd['F'], verbosity=1)
+    plot_digest_results(
+        digest_res_path_list=bpl,
+        name_list=name_list,
+        color_list=colors,
+        title=r'$\beta$-cell transition data',
+        size=dotsize,
+        title_fontsize=title_fs,
+        ax_label_fontsize=ax_fs,
+        legend_fontsize=legend_fs,
+        x_ticks_fontsize=dataset_fs,
+        plot_xlabel=plt_xlabel,
+        axs=axd['E'],
+        verbosity=1)
+    plot_digest_results(
+        digest_res_path_list=erypl,
+        name_list=ery_name_list,
+        color_list=ery_colors,
+        title='Erythrocyte differentiation data',
+        size=dotsize,
+        title_fontsize=title_fs,
+        ax_label_fontsize=ax_fs,
+        legend_fontsize=legend_fs,
+        x_ticks_fontsize=dataset_fs,
+        plot_xlabel=plt_xlabel,
+        axs=axd['F'],
+        verbosity=1)
 
     for label, ax in axd.items():
         trans = mtransforms.ScaledTranslation(-20 / 72, 7 / 72, fig.dpi_scale_trans)
         ax.text(0.0, 1.0, label, transform=ax.transAxes + trans,
-                fontsize='x-large', va='bottom', fontfamily='sans-serif', fontweight='bold')
+                fontsize=letter_fs, va='bottom', fontfamily='sans-serif', fontweight='bold')
 
     plt.show()
     # plt.savefig('./results/04_plots/method_comparison.png', dpi=fig.dpi)
@@ -595,7 +661,7 @@ def plot_alpha_res_appendix():
     apl = [ap1, ap2, ap3, ap4, ap5]
 
     # ###  Define names of method and color to be used in method comparison plots
-    name_list = ['CellRank', 'spliceJAC', 'DrivAER', 'SwitchTFI outdeg', 'SwitchTFI']
+    name_list = ['CellRank', 'spliceJAC', 'DrivAER', 'SwitchTFI outdeg', 'SwitchTFI PageRank']
     colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#f52891cc', '#d62728']
 
     fig = plt.figure(figsize=(12, 12), constrained_layout=True, dpi=100)
@@ -607,11 +673,28 @@ def plot_alpha_res_appendix():
         """
     )
 
+    # General
+    ax_fs = 20
+    legend_fs = 16
+    letter_fs = 14
+    # q-vals vs weight
+    dot_size0 = 6
+    # defrac lineplot
+    dot_size1 = 12
+    # Enrichr
+    term_fs = 14
+    # Digest res
+    dot_size2 = 9
+    dataset_fs = 18
+    plt_xlabel = False
+
+
     # ### Plot quantitative analysis
     plot_sdeqvals_vs_weight(grn=abase_grn, comb_qval_alpha=0.01, weight_threshold=aminw, title=None,
-                            legend_pos='upper center', size=6, axs=axd['A'])
-    plot_defrac_lineplot(adata=adata, base_grn=abase_grn, pruned_grn=agrn, switchde_alpha=0.01,
-                         title=None, size=12, axs=axd['B'], verbosity=1)
+                            legend_fontsize=legend_fs, ax_label_fontsize=ax_fs, legend_pos='upper center',
+                            size=dot_size0, axs=axd['A'])
+    plot_defrac_lineplot(adata=adata, base_grn=abase_grn, pruned_grn=agrn, switchde_alpha=0.01, title=None,
+                         legend_fontsize=legend_fs, ax_label_fontsize=ax_fs, size=dot_size1, axs=axd['B'], verbosity=1)
 
     # ### Plot histograms of percentage of Lcc nodes in randomly sampled GRNs of same size as transition GRN
     # First run comparison against random background model ...
@@ -622,7 +705,7 @@ def plot_alpha_res_appendix():
     bccs = list(nx.connected_components(atgrn))
     # ... then plot the results
     plot_cc_score_hist(ccs=bccs, n_vert=atgrn.number_of_nodes(), ccs_list=accs_list, n_vert_list=an_vert_list,
-                       titel=None, axs=axd['C'])
+                       titel=None, ax_label_fontsize=ax_fs, legend_fontsize=legend_fs, axs=axd['C'])
 
     # ### Plot qualitative analysis
     # Plot GSEA results for top 10 beta-cell transition driver TFs
@@ -631,35 +714,41 @@ def plot_alpha_res_appendix():
         x='Adjusted P-value',
         top_k=[6, 6],
         reference_db_names=['GO_Biological_Process_2023', 'Reactome_2022'],
-        term_fontsize=13,
+        term_fontsize=term_fs,
+        ax_label_fontsize=ax_fs,
+        legend_fontsize=legend_fs,
         axs=axd['D']
     )
 
     # ### Plot method comparison
-    plot_defrac_in_top_k_lineplot(res_df_list=a_res_list,
-                                  adata=adata,
-                                  switchde_alpha=0.01,
-                                  max_top_k=20,
-                                  interval=5,
-                                  axs=axd['E'],
-                                  title=None,
-                                  show=False,
-                                  names=name_list,
-                                  markers=['s', 'd', '^', 'o', 'o'],
-                                  palette=colors,
-                                  hue_order=('CellRank', 'spliceJAC', 'DrivAER', 'SwitchTFI outdeg', 'SwitchTFI'))
+    plot_defrac_in_top_k_lineplot(
+        res_df_list=a_res_list,
+        adata=adata,
+        switchde_alpha=0.01,
+        max_top_k=20,
+        interval=5,
+        axs=axd['E'],
+        title=None,
+        ax_label_fontsize=ax_fs,
+        legend_fontsize=legend_fs,
+        show=False,
+        names=name_list,
+        markers=['s', 'd', '^', 'o', 'o'],
+        palette=colors,
+        hue_order=('CellRank', 'spliceJAC', 'DrivAER', 'SwitchTFI outdeg', 'SwitchTFI PageRank'))
 
     plot_upset_plot(res_list=a_res_list, names=tuple(name_list), axs=axd['F'], plot_folder='./results/04_plots',
                     fn_prefix='alpha_')
 
-    plot_digest_results(digest_res_path_list=apl, name_list=name_list, color_list=colors, size=9, axs=axd['G'],
-                        verbosity=1)
+    plot_digest_results(digest_res_path_list=apl, name_list=name_list, color_list=colors, size=dot_size2,
+                        ax_label_fontsize=ax_fs, plot_xlabel=plt_xlabel, x_ticks_fontsize=dataset_fs,
+                        legend_fontsize=legend_fs, axs=axd['G'], verbosity=1)
 
     # Annotate subplot mosaic tiles with labels
     for label, ax in axd.items():
         trans = mtransforms.ScaledTranslation(-20 / 72, 7 / 72, fig.dpi_scale_trans)
         ax.text(0.0, 1.0, label, transform=ax.transAxes + trans,
-                fontsize='x-large', va='bottom', fontfamily='sans-serif', fontweight='bold')
+                fontsize=letter_fs, va='bottom', fontfamily='sans-serif', fontweight='bold')
 
     plt.show()
     # plt.savefig('./results/04_plots/supplementary_alpha.png', dpi=fig.dpi)
@@ -731,22 +820,39 @@ def plot_ery_res_appendix():
         """
     )
 
-    plot_gam_gene_trend_heatmap(adata=adata_trend,
-                                gene_names=top_tfs,
-                                gene_names_fontsize=12,
-                                use_trend=True,
-                                annotate_gene_names=True,
-                                show=False,
-                                axs=axd['A'],
-                                colorbar_pad=0.05)
-    plot_circled_tfs(res_df=ranked_tfs, topk=10, fontsize=14, axs=axd['B'])
+    # General
+    ax_fs = 20
+    letter_fs = 14
+    # Top 10 driver TFs plot
+    gene_name_fs = 11
+    # Gene trends plot
+    gene_trend_anno_fs = 12
+    # Enrichr results plots
+    term_fs = 20
+    legend_fs = 16
+    # Regulon
+    nodes_size = 1000
+    gene_fs = 12
+
+    plot_gam_gene_trend_heatmap(
+        adata=adata_trend,
+        gene_names=top_tfs,
+        gene_names_fontsize=gene_trend_anno_fs,
+        ax_label_fontsize=ax_fs,
+        use_trend=True,
+        annotate_gene_names=True,
+        show=False,
+        axs=axd['A'],
+        colorbar_pad=0.05)
+    plot_circled_tfs(res_df=ranked_tfs, topk=10, fontsize=gene_name_fs, ax_label_fontsize=ax_fs, axs=axd['B'])
 
     plot_enrichr_results(
         res_dfs=[ery_gobp, ery_reactome, ery_mgi],
         x='Adjusted P-value',
         top_k=[6, 6, 6],
         reference_db_names=['GO_Biological_Process_2023', 'Reactome_2022', 'MGI_Mammalian_Phenotype_Level_4_2021'],
-        term_fontsize=13,
+        term_fontsize=term_fs,
+        legend_fontsize=legend_fs,
         axs=axd['C']
     )
 
@@ -779,71 +885,27 @@ def plot_grns():
         """
     )
 
+    letter_fs = 26
+
     plot_grn(grn=erybasegrn, plot_folder='./results/04_plots', fn_prefix='base_', axs=axd['A'])
     plot_grn(grn=erygrn, plot_folder='./results/04_plots', fn_prefix='', axs=axd['B'])
 
-    import matplotlib.transforms as mtransforms
     for label, ax in axd.items():
         trans = mtransforms.ScaledTranslation(-20 / 72, 7 / 72, fig.dpi_scale_trans)
         ax.text(0.0, 1.0, label, transform=ax.transAxes + trans,
-                fontsize=26, va='bottom', fontfamily='sans-serif', fontweight='bold')
+                fontsize=letter_fs, va='bottom', fontfamily='sans-serif', fontweight='bold')
 
     plt.show()
     # plt.savefig('./results/04_plots/grns.png')
-
-    fig = plt.figure(figsize=(6, 5), constrained_layout=True, dpi=600)
-    axd = fig.subplot_mosaic(
-        """
-        A
-        """
-    )
-    plot_grn(grn=erygrn, plot_folder='./results/04_plots', fn_prefix='zzz_', axs=axd['A'])
-    # plt.savefig('./results/04_plots/grnery.png')
-    plt.show()
-
-
-def test():
-    from validation.plotting import plot_enrichr_results
-    gobp = pd.read_csv(
-        os.path.join(
-            os.getcwd(), 'results/03_validation/gsea_results/beta_ybx1_targets_GO_Biological_Process_2023_table.txt'),
-        delimiter='\t'
-    )
-    gocc = pd.read_csv(
-        os.path.join(
-            os.getcwd(), 'results/03_validation/gsea_results/beta_ybx1_targets_GO_Cellular_Component_2023_table.txt'),
-        delimiter='\t'
-    )
-    reactome = pd.read_csv(
-        os.path.join(
-            os.getcwd(), 'results/03_validation/gsea_results/beta_ybx1_targets_Reactome_2022_table.txt'),
-        delimiter='\t'
-    )
-    mgi = pd.read_csv(
-        os.path.join(
-            os.getcwd(),
-            'results/03_validation/gsea_results/beta_ybx1_targets_MGI_Mammalian_Phenotype_Level_4_2021_table.txt'),
-        delimiter='\t'
-    )
-
-    plot_enrichr_results(
-        res_dfs=[gobp, gocc, reactome, mgi],
-        x='Adjusted P-value',
-        top_k=[6, 6, 6, 6],
-        reference_db_names=['GO_BP', 'GO_CC', 'Reactome', 'MGI'],
-        show=True
-    )
 
 
 if __name__ == '__main__':
 
     # plot_step_fct_and_trends()
 
-    plot_quantitative_analyses()
+    # plot_quantitative_analyses()
 
     # plot_qualitative_analysis()
-
-    # plot_regulon()
 
     # plot_method_comparison()
 
@@ -852,8 +914,6 @@ if __name__ == '__main__':
     # plot_ery_res_appendix()
 
     # plot_grns()
-
-    # test()
 
     print('done')
 
