@@ -19,23 +19,26 @@ from upsetplot import UpSet
 from switchtfi.utils import csr_to_numpy, anndata_to_numpy
 
 
-def plot_step_function(adata: sc.AnnData,
-                       grn: pd.DataFrame,
-                       which: Union[Tuple[str, str], list[int]],
-                       layer_key: Union[None, str] = None,
-                       palette: Union[dict, str, None] = None,
-                       plot_threshold: bool = False,
-                       ax_label_fontsize: Union[float, None] = None,
-                       clustering_key: str = 'clusters',
-                       weight_key: str = 'weight',
-                       tf_target_keys: Tuple[str, str] = ('TF', 'target'),
-                       cell_bool_key: str = 'cell_bool',
-                       threshold_key: str = 'threshold',
-                       pred_l_key: str = 'pred_l',
-                       pred_r_key: str = 'pred_r',
-                       show: bool = True,
-                       axs: Union[plt.Axes, None] = None,
-                       legend_loc: Union[str, None] = 'right margin'):
+def plot_step_function(
+        adata: sc.AnnData,
+        grn: pd.DataFrame,
+        which: Union[Tuple[str, str], list[int]],
+        layer_key: Union[None, str] = None,
+        palette: Union[dict, str, None] = None,
+        plot_threshold: bool = False,
+        ax_label_fontsize: Union[float, None] = None,
+        title_fontsize: Union[float, None] = None,
+        clustering_key: str = 'clusters',
+        weight_key: str = 'weight',
+        tf_target_keys: Tuple[str, str] = ('TF', 'target'),
+        cell_bool_key: str = 'cell_bool',
+        threshold_key: str = 'threshold',
+        pred_l_key: str = 'pred_l',
+        pred_r_key: str = 'pred_r',
+        show: bool = True,
+        axs: Union[plt.Axes, None] = None,
+        legend_loc: Union[str, None] = 'right margin'
+):
 
     if isinstance(which, tuple):  # Tuple of strings ('tf', 'target') as input
         tf = which[0]
@@ -48,6 +51,7 @@ def plot_step_function(adata: sc.AnnData,
                                     palette=palette,
                                     plot_threshold=plot_threshold,
                                     ax_label_fontsize=ax_label_fontsize,
+                                    title_fontsize=title_fontsize,
                                     clustering_key=clustering_key,
                                     weight_key=weight_key,
                                     tf_target_keys=tf_target_keys,
@@ -70,6 +74,7 @@ def plot_step_function(adata: sc.AnnData,
                                         palette=palette,
                                         plot_threshold=plot_threshold,
                                         ax_label_fontsize=ax_label_fontsize,
+                                        title_fontsize=title_fontsize,
                                         clustering_key=clustering_key,
                                         weight_key=weight_key,
                                         tf_target_keys=tf_target_keys,
@@ -85,23 +90,26 @@ def plot_step_function(adata: sc.AnnData,
             return ax_list
 
 
-def plot_step_function_aux(adata: sc.AnnData,
-                           grn: pd.DataFrame,
-                           i: Union[int],
-                           layer_key: Union[None, str] = None,
-                           palette: Union[dict, str, None] = None,
-                           plot_threshold: bool = False,
-                           ax_label_fontsize: Union[float, None] = None,
-                           clustering_key: str = 'clusters',
-                           weight_key: str = 'weight',
-                           tf_target_keys: Tuple[str, str] = ('TF', 'target'),
-                           cell_bool_key: str = 'cell_bool',
-                           threshold_key: str = 'threshold',
-                           pred_l_key: str = 'pred_l',
-                           pred_r_key: str = 'pred_r',
-                           show: bool = True,
-                           axs: Union[plt.Axes, None] = None,
-                           legend_loc: Union[str, None] = 'right margin'):
+def plot_step_function_aux(
+        adata: sc.AnnData,
+        grn: pd.DataFrame,
+        i: Union[int],
+        layer_key: Union[None, str] = None,
+        palette: Union[dict, str, None] = None,
+        plot_threshold: bool = False,
+        ax_label_fontsize: Union[float, None] = None,
+        title_fontsize: Union[float, None] = None,
+        clustering_key: str = 'clusters',
+        weight_key: str = 'weight',
+        tf_target_keys: Tuple[str, str] = ('TF', 'target'),
+        cell_bool_key: str = 'cell_bool',
+        threshold_key: str = 'threshold',
+        pred_l_key: str = 'pred_l',
+        pred_r_key: str = 'pred_r',
+        show: bool = True,
+        axs: Union[plt.Axes, None] = None,
+        legend_loc: Union[str, None] = 'right margin'
+):
     # Get names of TF and target
     tf_key = tf_target_keys[0]
     target_key = tf_target_keys[1]
@@ -168,17 +176,23 @@ def plot_step_function_aux(adata: sc.AnnData,
         ax.xaxis.label.set_size(ax_label_fontsize)
         ax.yaxis.label.set_size(ax_label_fontsize)
 
+    if title_fontsize is not None:
+        ax = plt.gca()  # Get the current axis
+        ax.set_title(ax.get_title(), fontsize=title_fontsize)
+
     if show:
         plt.show()
     else:
         return ax
 
 
-def plot_n_cells_vs_weight(grn: pd.DataFrame,
-                           plt_title: Union[str, None] = None,
-                           weight_key: str = 'weight',
-                           cell_bool_key: str = 'cell_bool',
-                           verbosity: int = 0) -> Tuple[np.ndarray, np.ndarray]:
+def plot_n_cells_vs_weight(
+        grn: pd.DataFrame,
+        plt_title: Union[str, None] = None,
+        weight_key: str = 'weight',
+        cell_bool_key: str = 'cell_bool',
+        verbosity: int = 0
+) -> Tuple[np.ndarray, np.ndarray]:
 
     weights = grn[weight_key].to_numpy()
     n_cells = np.array([a.sum() for a in grn[cell_bool_key].to_numpy()])
@@ -204,11 +218,13 @@ def plot_n_cells_vs_weight(grn: pd.DataFrame,
     return weights, n_cells
 
 
-def plot_pvals_vs_weight(grn: pd.DataFrame,
-                         weight_key: str = 'weight',
-                         pval_key: str = 'pvals_wy',
-                         sig_thresh: float = 0.05,
-                         show: bool = True):
+def plot_pvals_vs_weight(
+        grn: pd.DataFrame,
+        weight_key: str = 'weight',
+        pval_key: str = 'pvals_wy',
+        sig_thresh: float = 0.05,
+        show: bool = True
+):
 
     weights = grn[weight_key].to_numpy()
     pvals = grn[pval_key].to_numpy()
@@ -221,16 +237,18 @@ def plot_pvals_vs_weight(grn: pd.DataFrame,
         plt.show()
 
 
-def plot_gam_gene_trend(adata: sc.AnnData,
-                        gene_names: List[str],
-                        gene_trend_varm_key: str = 'gam_gene_trends',
-                        pseudotime_obs_key: str = 'palantir_pseudotime',
-                        plot_cells: bool = False,
-                        ci_uns_key: Union[str, None] = 'gam_confidence_intervals',
-                        ax_label_fontsize: Union[float, None] = None,
-                        show: bool = True,
-                        axs: Union[plt.Axes, None] = None,
-                        **kwargs):
+def plot_gam_gene_trend(
+        adata: sc.AnnData,
+        gene_names: List[str],
+        gene_trend_varm_key: str = 'gam_gene_trends',
+        pseudotime_obs_key: str = 'palantir_pseudotime',
+        plot_cells: bool = False,
+        ci_uns_key: Union[str, None] = 'gam_confidence_intervals',
+        ax_label_fontsize: Union[float, None] = None,
+        show: bool = True,
+        axs: Union[plt.Axes, None] = None,
+        **kwargs
+):
 
     pt_vec = adata.obs[pseudotime_obs_key].to_numpy()
     pt_grid = np.linspace(pt_vec.min(), pt_vec.max(), adata.varm[gene_trend_varm_key].shape[1])
@@ -294,21 +312,23 @@ def plot_gam_gene_trend(adata: sc.AnnData,
             plt.show()
 
 
-def plot_gam_gene_trend_heatmap(adata: sc.AnnData,
-                                gene_names: List[str],
-                                use_trend: bool = False,
-                                annotate_gene_names: bool = True,
-                                gene_names_fontsize: Union[str, float, None] = None,
-                                ax_label_fontsize: Union[float, None] = None,
-                                gene_trend_varm_key: Union[str, None] = 'gam_gene_trends',
-                                layer_key: Union[str, None] = 'magic_imputed',
-                                pseudotime_obs_key: Union[str, None] = 'palantir_pseudotime',
-                                show: bool = True,
-                                axs: Union[plt.Axes, None] = None,
-                                plot_colorbar: bool = True,
-                                colorbar_pad: float = 0.05,
-                                title: Union[str, None] = None,
-                                title_fontsize: Union[str, float, None] = None):
+def plot_gam_gene_trend_heatmap(
+        adata: sc.AnnData,
+        gene_names: List[str],
+        use_trend: bool = False,
+        annotate_gene_names: bool = True,
+        gene_names_fontsize: Union[str, float, None] = None,
+        ax_label_fontsize: Union[float, None] = None,
+        gene_trend_varm_key: Union[str, None] = 'gam_gene_trends',
+        layer_key: Union[str, None] = 'magic_imputed',
+        pseudotime_obs_key: Union[str, None] = 'palantir_pseudotime',
+        show: bool = True,
+        axs: Union[plt.Axes, None] = None,
+        plot_colorbar: bool = True,
+        colorbar_pad: float = 0.05,
+        title: Union[str, None] = None,
+        title_fontsize: Union[str, float, None] = None
+):
     # Get pt-vector
     pt_vec = adata.obs[pseudotime_obs_key].to_numpy()
 
@@ -413,19 +433,24 @@ def plot_gam_gene_trend_heatmap(adata: sc.AnnData,
                 axs.set_title(title)
 
 
-def plot_defrac_lineplot(adata: sc.AnnData,
-                         base_grn: pd.DataFrame,
-                         pruned_grn: pd.DataFrame,
-                         switchde_alpha: float = 0.01,
-                         title: Union[str, None] = None,
-                         size: float = 10.,
-                         plot_legend: bool = True,
-                         legend_pos: str = 'upper center',
-                         axs: Union[plt.Axes, None] = None,
-                         show: bool = False,
-                         tf_target_keys: Tuple[str, str] = ('TF', 'target'),
-                         switchde_qvals_var_key: str = 'switchde_qval',
-                         verbosity: int = 0):
+def plot_defrac_lineplot(
+        adata: sc.AnnData,
+        base_grn: pd.DataFrame,
+        pruned_grn: pd.DataFrame,
+        switchde_alpha: float = 0.01,
+        title: Union[str, None] = None,
+        size: float = 10.,
+        ax_label_fontsize: Union[float, None] = None,
+        title_fontsize: Union[float, None] = None,
+        legend_fontsize: Union[float, None] = None,
+        plot_legend: bool = True,
+        legend_pos: str = 'upper center',
+        axs: Union[plt.Axes, None] = None,
+        show: bool = False,
+        tf_target_keys: Tuple[str, str] = ('TF', 'target'),
+        switchde_qvals_var_key: str = 'switchde_qval',
+        verbosity: int = 0
+):
 
     base_genes = np.unique(base_grn[list(tf_target_keys)].to_numpy())
     base_tfs = np.unique(base_grn[tf_target_keys[0]].to_numpy())
@@ -469,13 +494,8 @@ def plot_defrac_lineplot(adata: sc.AnnData,
     data['GRN'] = ['Input GRN (Scenic)', 'Transition GRN (SwitchTFI)'] * 3
     data['subset'] = ['All genes', 'All genes', 'TFs', 'TFs', 'Targets', 'Targets']
 
-    if axs is None:
-        ax = sns.stripplot(data=data, x='DE fraction', y='subset', hue='GRN', size=size, linewidth=1, orient='h',
-                           jitter=False)
-
-    else:
-        ax = sns.stripplot(data=data, x='DE fraction', y='subset', hue='GRN', size=size, linewidth=1, orient='h',
-                           jitter=False, ax=axs)
+    ax = sns.stripplot(
+        data=data, x='DE fraction', y='subset', hue='GRN', size=size, linewidth=1, orient='h', jitter=False, ax=axs)
 
     ax.xaxis.grid(False)
     ax.yaxis.grid(True)
@@ -487,34 +507,49 @@ def plot_defrac_lineplot(adata: sc.AnnData,
     ax.spines['bottom'].set_visible(False)
     ax.set(ylabel=None)
 
-    sns.move_legend(ax, legend_pos)
-
-    x_ticks = np.round(np.linspace(data['DE fraction'].to_numpy().min(), data['DE fraction'].to_numpy().max(), num=4),
-                       decimals=2)
-    ax.set_xticks(x_ticks)
-    ax.set_xticklabels(x_ticks)
-
-    if not plot_legend:
+    if plot_legend:
+        sns.move_legend(ax, legend_pos)
+        legend = ax.legend_
+        legend.set_title(None)
+        if legend_fontsize is not None:
+            for text in legend.get_texts():  # Iterate through all legend texts
+                text.set_fontsize(legend_fontsize)
+    else:
         ax.legend_.remove()
 
     if title is not None:
-        ax.set_title(title)
+        ax.set_title(title, fontsize=title_fontsize)
+
+    x_ticks = np.round(
+        np.linspace(data['DE fraction'].to_numpy().min(), data['DE fraction'].to_numpy().max(), num=4), decimals=2)
+    ax.set_xticks(x_ticks)
+    ax.set_xticklabels(x_ticks)
+
+    if ax_label_fontsize is not None:
+        ax.set_xlabel(ax.get_xlabel(), fontsize=ax_label_fontsize)
+        # ax.set_xticklabels(ax.get_xticklabels(), fontsize=ax_label_fontsize)
+        ax.tick_params(axis='y', labelsize=ax_label_fontsize)
 
     if show:
         plt.tight_layout()
         plt.show()
 
 
-def plot_sdeqvals_vs_weight(grn: pd.DataFrame,
-                            comb_qval_alpha: float = 0.01,
-                            weight_threshold: Union[float, None] = None,
-                            title: Union[str, None] = None,
-                            legend_pos: str = 'best',
-                            size: Union[float, None] = None,
-                            weight_key: str = 'weight',
-                            qval_key: str = 'switchde_qvals_combined_fisher',
-                            axs: Union[plt.Axes, None] = None,
-                            show: bool = False):
+def plot_sdeqvals_vs_weight(
+        grn: pd.DataFrame,
+        comb_qval_alpha: float = 0.01,
+        weight_threshold: Union[float, None] = None,
+        title: Union[str, None] = None,
+        legend_pos: str = 'best',
+        size: Union[float, None] = None,
+        ax_label_fontsize: Union[float, None] = None,
+        title_fontsize: Union[float, None] = None,
+        legend_fontsize: Union[float, None] = None,
+        weight_key: str = 'weight',
+        qval_key: str = 'switchde_qvals_combined_fisher',
+        axs: Union[plt.Axes, None] = None,
+        show: bool = False
+):
 
     weights = grn[weight_key].to_numpy()
     qvals = grn[qval_key].to_numpy()
@@ -529,41 +564,26 @@ def plot_sdeqvals_vs_weight(grn: pd.DataFrame,
     # Define red and orange colors
     colors = np.array(['#1f77b4', '#ff7f0e'])
     if axs is None:
-        plt.scatter(weights, qvals, c=colors[w_bool], s=size, marker='o', alpha=0.8)
-        plt.xlabel('Weight')
-        plt.ylabel('-log10(combined q-value)')
-        plt.axhline(y=comb_qval_alpha, color='red', label=f'q-val threshold: {comb_qval_alpha}')
-        if weight_threshold is not None:
-            plt.axvline(x=weight_threshold, color='gold', label=f'Weight threshold: {weight_threshold}')
-        plt.legend(loc=legend_pos)
+        fig, axs = plt.subplots()
 
-        x_ticks = np.round(
-            np.linspace(weights.min(), weights.max(), num=4),
-            decimals=2)
-        plt.xticks(x_ticks, labels=x_ticks)
+    axs.scatter(weights, qvals, c=colors[w_bool], s=size, marker='o', alpha=0.8)
+    axs.set_xlabel('Weight', fontsize=ax_label_fontsize)
+    axs.set_ylabel('-log10(combined q-value)', fontsize=ax_label_fontsize)
+    axs.axhline(y=comb_qval_alpha, color='red', label=f'q-value threshold: {np.round(comb_qval_alpha, decimals=3)}')
 
-        if title is not None:
-            plt.title(title)
+    if weight_threshold is not None:
+        axs.axvline(x=weight_threshold, color='gold',
+                    label=f'Weight threshold: {np.round(weight_threshold, decimals=3)}')
+    axs.legend(loc=legend_pos, fontsize=legend_fontsize)
 
-    else:
-        axs.scatter(weights, qvals, c=colors[w_bool], s=size, marker='o', alpha=0.8)
-        axs.set_xlabel('Weight')
-        axs.set_ylabel('-log10(combined q-value)')
-        axs.axhline(y=comb_qval_alpha, color='red', label=f'q-value threshold: {np.round(comb_qval_alpha, decimals=3)}')
+    x_ticks = np.round(
+        np.linspace(weights.min(), weights.max(), num=4),
+        decimals=2)
+    axs.set_xticks(x_ticks)
+    axs.set_xticklabels(x_ticks)
 
-        if weight_threshold is not None:
-            axs.axvline(x=weight_threshold, color='gold',
-                        label=f'Weight threshold: {np.round(weight_threshold, decimals=3)}')
-        axs.legend(loc=legend_pos)
-
-        x_ticks = np.round(
-            np.linspace(weights.min(), weights.max(), num=4),
-            decimals=2)
-        axs.set_xticks(x_ticks)
-        axs.set_xticklabels(x_ticks)
-
-        if title is not None:
-            axs.set_title(title)
+    if title is not None:
+        axs.set_title(title, fontsize=title_fontsize)
 
     if show:
         plt.tight_layout()
@@ -1194,14 +1214,16 @@ def plot_circled_tfs(res_df: pd.DataFrame,
     axs.spines['left'].set_visible(False)
 
 
-def plot_upset_plot(res_list: List[pd.DataFrame],
-                    top_k: int = 20,
-                    names: Tuple[str] = ('CellRank', 'spliceJAC', 'DrivAER', 'SwitchTFI outdeg', 'SwitchTFI'),
-                    title: Union[str, None] = None,
-                    gene_key: str = 'gene',
-                    plot_folder: Union[str, None] = None,
-                    fn_prefix: Union[str, None] = None,
-                    axs: Union[plt.Axes, None] = None):
+def plot_upset_plot(
+        res_list: List[pd.DataFrame],
+        top_k: int = 20,
+        names: Tuple[str] = ('CellRank', 'spliceJAC', 'DrivAER', 'SwitchTFI outdeg', 'SwitchTFI'),
+        title: Union[str, None] = None,
+        gene_key: str = 'gene',
+        plot_folder: Union[str, None] = None,
+        fn_prefix: Union[str, None] = None,
+        axs: Union[plt.Axes, None] = None
+):
 
     index_tuples = []
     values = []
@@ -1255,12 +1277,19 @@ def plot_upset_plot(res_list: List[pd.DataFrame],
         # axs.set_ylim([image.shape[0], 0])
 
 
-def plot_cc_score_hist(ccs: list,
-                       n_vert: int,
-                       ccs_list: list,
-                       n_vert_list: list,
-                       titel: Union[str, None],
-                       axs: plt.Axes):
+def plot_cc_score_hist(
+        ccs: list,
+        n_vert: int,
+        ccs_list: list,
+        n_vert_list: list,
+        titel: Union[str, None],
+        ax_label_fontsize: Union[float, None] = None,
+        title_fontsize: Union[float, None] = None,
+        legend_fontsize: Union[float, None] = None,
+        axs: Union[plt.Axes, None] = None,
+):
+    if axs is None:
+        fig, axs = plt.subplots()
 
     # Calculate cc-scores for random subnetworks
     scores = [0] * len(ccs_list)
@@ -1272,16 +1301,21 @@ def plot_cc_score_hist(ccs: list,
     score_tgrn = sum((len(c) / n_vert) ** 2 for c in ccs)
 
     axs.hist(scores, bins=15, edgecolor='black', color='yellow')
-    axs.axvline(score_tgrn, color='red', linewidth=2,
-                label=f'Score transition GRN: {round(score_tgrn, 4)}\n'
-                      f'Empirical P-value: {round(calc_emp_pval(val=score_tgrn, val_vec=scores, geq=True), 4)}')
-    axs.legend()
+    axs.axvline(
+        score_tgrn, color='red', linewidth=2,
+        label=f'Score transition GRN: {round(score_tgrn, 4)}\n'
+              f'Empirical P-value: {round(calc_emp_pval(val=score_tgrn, val_vec=scores, geq=True), 4)}')
 
-    axs.set_xlabel('Score')
-    axs.set_ylabel(f'Count (total: n = {scores.shape[0]})')
+    legend = axs.legend()
+    if legend_fontsize is not None:
+        for text in legend.get_texts():
+            text.set_fontsize(legend_fontsize)
+
+    axs.set_xlabel('Score', fontsize=ax_label_fontsize)
+    axs.set_ylabel(f'Count (total: n = {scores.shape[0]})', fontsize=ax_label_fontsize)
 
     if titel is not None:
-        axs.set_title(titel)
+        axs.set_title(titel, fontsize=title_fontsize)
 
 
 # Auxiliary ############################################################################################################

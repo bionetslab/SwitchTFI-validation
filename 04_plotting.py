@@ -6,13 +6,17 @@ import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.transforms as mtransforms
 import os
-from scipy.stats import combine_pvalues, pearsonr
+from scipy.stats import pearsonr
 
 from switchtfi.utils import load_grn_json
+from validation.val_utils import combine_p_vals_fisher
 
 
 def plot_step_fct_and_trends():
     # ### Script for plotting Figure 2
+
+    from validation.plotting import plot_step_function, plot_gam_gene_trend, plot_gam_gene_trend_heatmap
+    from switchtfi.utils import get_regulons
 
     # Load AnnData
     bdata = sc.read_h5ad('./results/03_validation/anndata/trend_pre-endocrine_beta.h5ad')
@@ -42,21 +46,23 @@ def plot_step_fct_and_trends():
         """
     )
 
+    layer_key = 'magic_imputed'
+    title_fs = 16
+    ax_fs = 20
+    letter_fs = 14
+    gene_trend_anno_fs = 12
+
     e0 = tuple(grn[['TF', 'target']].iloc[1])
     e1 = tuple(grn[['TF', 'target']].iloc[grn.shape[0] - 1])
-
     print(e0, e1)
-
-    layer_key = 'magic_imputed'
-    ax_label_fs = 12
-
-    from validation.plotting import plot_step_function, plot_gam_gene_trend, plot_gam_gene_trend_heatmap
+    
     plot_step_function(adata=bdata,
                        grn=grn,
                        which=e0,
                        layer_key=layer_key,
                        plot_threshold=True,
-                       ax_label_fontsize=ax_label_fs,
+                       ax_label_fontsize=ax_fs,
+                       title_fontsize=title_fs,
                        legend_loc='none',
                        show=False,
                        axs=axd['A'])
@@ -66,7 +72,8 @@ def plot_step_fct_and_trends():
                        which=e1,
                        layer_key=layer_key,
                        plot_threshold=True,
-                       ax_label_fontsize=ax_label_fs,
+                       ax_label_fontsize=ax_fs,
+                       title_fontsize=title_fs,
                        legend_loc='custom right',
                        show=False,
                        axs=axd['B'])
@@ -74,7 +81,7 @@ def plot_step_fct_and_trends():
     plot_gam_gene_trend(adata=bdata,
                         gene_names=[e0[0]],
                         plot_cells=True,
-                        ax_label_fontsize=ax_label_fs,
+                        ax_label_fontsize=ax_fs,
                         show=False,
                         axs=axd['C'],
                         layer_key='magic_imputed')
@@ -82,7 +89,7 @@ def plot_step_fct_and_trends():
     plot_gam_gene_trend(adata=bdata,
                         gene_names=[e0[1]],
                         plot_cells=True,
-                        ax_label_fontsize=ax_label_fs,
+                        ax_label_fontsize=ax_fs,
                         show=False,
                         axs=axd['D'],
                         layer_key='magic_imputed')
@@ -90,7 +97,7 @@ def plot_step_fct_and_trends():
     plot_gam_gene_trend(adata=bdata,
                         gene_names=[e1[0]],
                         plot_cells=True,
-                        ax_label_fontsize=ax_label_fs,
+                        ax_label_fontsize=ax_fs,
                         show=False,
                         axs=axd['E'],
                         layer_key='magic_imputed')
@@ -98,7 +105,7 @@ def plot_step_fct_and_trends():
     plot_gam_gene_trend(adata=bdata,
                         gene_names=[e1[1]],
                         plot_cells=True,
-                        ax_label_fontsize=ax_label_fs,
+                        ax_label_fontsize=ax_fs,
                         show=False,
                         axs=axd['F'],
                         layer_key='magic_imputed')
@@ -108,13 +115,12 @@ def plot_step_fct_and_trends():
     plot_gam_gene_trend_heatmap(adata=bdata,
                                 gene_names=tf_names,
                                 use_trend=True,
-                                gene_names_fontsize=11,
-                                ax_label_fontsize=ax_label_fs,
+                                gene_names_fontsize=gene_trend_anno_fs,
+                                ax_label_fontsize=ax_fs,
                                 show=False,
                                 axs=axd['G'],
                                 colorbar_pad=-0.125)
 
-    from switchtfi.utils import get_regulons
     regulons = get_regulons(grn=pgrn, gene_names=['Pdx1', 'Pax4'])
     targets0 = regulons['Pdx1']['targets']
     targets1 = regulons['Pax4']['targets']
@@ -123,7 +129,7 @@ def plot_step_fct_and_trends():
                                 gene_names=targets0,
                                 use_trend=True,
                                 annotate_gene_names=False,
-                                ax_label_fontsize=ax_label_fs,
+                                ax_label_fontsize=ax_fs,
                                 show=False,
                                 axs=axd['H'],
                                 plot_colorbar=False,
@@ -133,7 +139,7 @@ def plot_step_fct_and_trends():
                                 gene_names=targets1,
                                 use_trend=True,
                                 annotate_gene_names=False,
-                                ax_label_fontsize=ax_label_fs,
+                                ax_label_fontsize=ax_fs,
                                 show=False,
                                 axs=axd['I'],
                                 colorbar_pad=-0.3,
@@ -146,7 +152,7 @@ def plot_step_fct_and_trends():
         # label physical distance to the left and up:
         trans = mtransforms.ScaledTranslation(-20 / 72, 7 / 72, fig.dpi_scale_trans)
         ax.text(0.0, 1.0, label, transform=ax.transAxes + trans,
-                fontsize=14, va='bottom', fontfamily='sans-serif', fontweight='bold')
+                fontsize=letter_fs, va='bottom', fontfamily='sans-serif', fontweight='bold')
 
     plt.show()
     # plt.savefig('./results/04_plots/stepfct_trends.png', dpi=fig.dpi)
@@ -154,6 +160,10 @@ def plot_step_fct_and_trends():
 
 def plot_quantitative_analyses():
     # ### Script for plotting Figure 3
+
+    from validation.plotting import plot_defrac_lineplot, plot_sdeqvals_vs_weight, plot_cc_score_hist
+    from validation.val_utils import compare_grn_vs_rand_background
+    from switchtfi.tf_ranking import grn_to_nx
 
     # Load AnnData
     bdata = sc.read_h5ad('./results/03_validation/anndata/switchde_magic_nozeroinflated_pre-endocrine_beta.h5ad')
@@ -167,20 +177,6 @@ def plot_quantitative_analyses():
     erybase_grn = load_grn_json('./results/02_switchtfi/hematopoiesis/grn.json')
 
     # Combine ptDE q-values using Fishers method for each edge (TF, target) => edgewise ptDE q-values
-    def combine_p_vals_fisher(grn: pd.DataFrame,
-                              anndata: sc.AnnData) -> pd.DataFrame:
-
-        grn['switchde_qvals_combined_fisher'] = np.ones(grn.shape[0])
-
-        for i in range(grn.shape[0]):
-            tf = grn['TF'].loc[i]
-            target = grn['target'].loc[i]
-            tf_qval = anndata.var['switchde_qval'][tf]
-            target_qval = anndata.var['switchde_qval'][target]
-
-            grn.at[i, 'switchde_qvals_combined_fisher'] = combine_pvalues([tf_qval, target_qval], method='fisher')[1]
-
-        return grn
 
     # Add minimal eps to 0 q-values for numeric stability, then combine q-values => joint q-value per edge
     bq = bdata.var['switchde_qval'].to_numpy()
@@ -214,9 +210,7 @@ def plot_quantitative_analyses():
     eryqcomb[eryqcomb == 0] = np.finfo(np.float64).eps
     erybase_grn['switchde_qvals_combined_fisher'] = eryqcomb
 
-    from validation.plotting import plot_defrac_lineplot, plot_sdeqvals_vs_weight, plot_cc_score_hist
-
-    fig = plt.figure(figsize=(12, 8), constrained_layout=True, dpi=300)
+    fig = plt.figure(figsize=(12, 8), constrained_layout=True, dpi=100)
     axd = fig.subplot_mosaic(
         """
         ABC
@@ -224,20 +218,31 @@ def plot_quantitative_analyses():
         """
     )
 
-    plot_sdeqvals_vs_weight(grn=bbase_grn, comb_qval_alpha=0.01, weight_threshold=bminw,
-                            title=r'$\beta$-cell transition data', legend_pos='upper center', size=6, axs=axd['A'])
-    plot_sdeqvals_vs_weight(grn=erybase_grn, comb_qval_alpha=0.01, weight_threshold=eryminw,
-                            title='Erythrocyte differentiation data', legend_pos='upper center', size=6, axs=axd['D'])
+    title_fs = 16
+    ax_fs = 20
+    legend_fs = 16
+    letter_fs = 14
 
-    plot_defrac_lineplot(adata=bdata, base_grn=bbase_grn, pruned_grn=bgrn, switchde_alpha=0.01,
-                         title=r'$\beta$-cell transition data', size=12, legend_pos='center', axs=axd['B'], verbosity=1)
-    plot_defrac_lineplot(adata=erydata, base_grn=erybase_grn, pruned_grn=erygrn, switchde_alpha=0.01,
-                         title='Erythrocyte differentiation data', size=12, axs=axd['E'], verbosity=1)
+    plot_sdeqvals_vs_weight(
+        grn=bbase_grn, comb_qval_alpha=0.01, weight_threshold=bminw, title=r'$\beta$-cell transition data',
+        legend_pos='upper center', size=6, ax_label_fontsize=ax_fs, title_fontsize=title_fs, legend_fontsize=legend_fs,
+        axs=axd['A'])
+    plot_sdeqvals_vs_weight(
+        grn=erybase_grn, comb_qval_alpha=0.01, weight_threshold=eryminw, title='Erythrocyte differentiation data',
+        legend_pos='upper center', size=6, ax_label_fontsize=ax_fs, title_fontsize=title_fs, legend_fontsize=legend_fs,
+        axs=axd['D'])
+
+    plot_defrac_lineplot(
+        adata=bdata, base_grn=bbase_grn, pruned_grn=bgrn, switchde_alpha=0.01, title=r'$\beta$-cell transition data',
+        size=12, ax_label_fontsize=ax_fs, title_fontsize=title_fs, legend_fontsize=legend_fs, legend_pos='center',
+        axs=axd['B'], verbosity=1)
+    plot_defrac_lineplot(
+        adata=erydata, base_grn=erybase_grn, pruned_grn=erygrn, switchde_alpha=0.01,
+        title='Erythrocyte differentiation data', size=12, ax_label_fontsize=ax_fs, title_fontsize=title_fs,
+        legend_fontsize=legend_fs, axs=axd['E'], verbosity=1)
 
     # ### Plot histograms of percentage of Lcc nodes in randomly sampled GRNs of same size as transition GRN
-    from validation.val_utils import compare_grn_vs_rand_background
-    from switchtfi.tf_ranking import grn_to_nx
-    n = 10000
+    n = 10
     bccs_list, bn_vert_list = compare_grn_vs_rand_background(base_grn=bbase_grn, transition_grn=bgrn, n=n)
     eryccs_list, eryn_vert_list = compare_grn_vs_rand_background(base_grn=erybase_grn, transition_grn=erygrn, n=n)
 
@@ -246,24 +251,32 @@ def plot_quantitative_analyses():
     bccs = list(nx.connected_components(btgrn))
     eryccs = list(nx.connected_components(erytgrn))
 
-    plot_cc_score_hist(ccs=bccs, n_vert=btgrn.number_of_nodes(), ccs_list=bccs_list, n_vert_list=bn_vert_list,
-                       titel=r'$\beta$-cell transition data', axs=axd['C'])
-    plot_cc_score_hist(ccs=eryccs, n_vert=erytgrn.number_of_nodes(), ccs_list=eryccs_list, n_vert_list=eryn_vert_list,
-                       titel='Erythrocyte differentiation data', axs=axd['F'])
+    plot_cc_score_hist(
+        ccs=bccs, n_vert=btgrn.number_of_nodes(), ccs_list=bccs_list, n_vert_list=bn_vert_list,
+        titel=r'$\beta$-cell transition data', ax_label_fontsize=ax_fs, title_fontsize=title_fs,
+        legend_fontsize=legend_fs, axs=axd['C'])
+    plot_cc_score_hist(
+        ccs=eryccs, n_vert=erytgrn.number_of_nodes(), ccs_list=eryccs_list, n_vert_list=eryn_vert_list,
+        titel='Erythrocyte differentiation data', ax_label_fontsize=ax_fs, title_fontsize=title_fs,
+        legend_fontsize=legend_fs, axs=axd['F'])
 
     # Annotate subplot mosaic tiles with labels
     for label, ax in axd.items():
         trans = mtransforms.ScaledTranslation(-20 / 72, 7 / 72, fig.dpi_scale_trans)
         ax.text(0.0, 1.0, label, transform=ax.transAxes + trans,
-                fontsize=14.0, va='bottom', fontfamily='sans-serif', fontweight='bold')
+                fontsize=letter_fs, va='bottom', fontfamily='sans-serif', fontweight='bold')
 
-    # plt.show()
-    plt.savefig('./results/04_plots/quantitative_beta.png', dpi=fig.dpi)
+    plt.show()
+    # plt.savefig('./results/04_plots/quantitative_beta.png', dpi=fig.dpi)
 
 
 def plot_qualitative_analysis():
     # ### Script for plotting Figure 4
-    # Load ranked TFs
+
+    from validation.plotting import plot_circled_tfs, plot_enrichr_results, plot_gam_gene_trend_heatmap
+    from switchtfi.plotting import plot_regulon
+
+    # ### Load ranked TFs for alpha- and beta-cell transition
     atfs = pd.read_csv('./results/02_switchtfi/endocrine/alpha/ranked_tfs.csv', index_col=[0])
     btfs = pd.read_csv('./results/02_switchtfi/endocrine/beta/ranked_tfs.csv', index_col=[0])
 
@@ -277,27 +290,58 @@ def plot_qualitative_analysis():
         for tf in btfs['gene'][0:top_k].tolist():
             print(tf)
 
-    # Load ENRICHR GSEA results
-    benrichr = pd.read_csv('./results/03_validation/gsea_results/beta_Enrichr-KG.csv')
-
-    # Load AnnData
+    # ### Load AnnData with gene trends for alpha-cell transition
     adata = sc.read_h5ad('./results/03_validation/anndata/trend_pre-endocrine_alpha.h5ad')
 
-    # ### Plot results for Beta dataset ###
-    fig = plt.figure(figsize=(12, 7), constrained_layout=True, dpi=300)
+    # ### Load transition GRN of beta-cell transition
+    bgrn = pd.read_csv('./results/02_switchtfi/endocrine/beta/grn.csv', index_col=0)
+
+    # ### Load ENRICHR GSEA results for beta-cell transition driver TFs and targets of Ybx1
+    b_gobp = pd.read_csv(
+        os.path.join(
+            os.getcwd(), 'results/03_validation/gsea_results/beta_pr_GO_Biological_Process_2023_table.txt'),
+        delimiter='\t'
+    )
+    b_reactome = pd.read_csv(
+        os.path.join(
+            os.getcwd(), 'results/03_validation/gsea_results/beta_pr_Reactome_2022_table.txt'),
+        delimiter='\t'
+    )
+    ybx1_gobp = pd.read_csv(
+        os.path.join(
+            os.getcwd(), 'results/03_validation/gsea_results/beta_ybx1_targets_GO_Biological_Process_2023_table.txt'),
+        delimiter='\t'
+    )
+    ybx1_gocc = pd.read_csv(
+        os.path.join(
+            os.getcwd(), 'results/03_validation/gsea_results/beta_ybx1_targets_GO_Cellular_Component_2023_table.txt'),
+        delimiter='\t'
+    )
+    ybx1_reactome = pd.read_csv(
+        os.path.join(
+            os.getcwd(), 'results/03_validation/gsea_results/beta_ybx1_targets_Reactome_2022_table.txt'),
+        delimiter='\t'
+    )
+
+    # ### Plot results for Beta dataset ### #
+    fig = plt.figure(figsize=(12, 12), constrained_layout=True, dpi=100)
     axd = fig.subplot_mosaic(
         """
         AAB
         CCC
         CCC
+        DEE
+        DEE
         """
     )
 
     title_fontsize = 'x-large'
-    from validation.plotting import plot_circled_tfs, plot_enrichr_results, plot_gam_gene_trend_heatmap
+
+    # ### Plot Top 10 driver TFs
     plot_circled_tfs(res_df=atfs, topk=10, fontsize=11, res_df2=btfs, title=None, title_fontsize=None,
                      plottwoinone=True, y_ticks=(r'$\alpha$:', r'$\beta$:'), axs=axd['A'])
 
+    # ### Plot gene trends of top 10 alpha-cell transition driver TFs
     plot_gam_gene_trend_heatmap(adata=adata, gene_names=atfs['gene'][0:10].tolist(),
                                 use_trend=True,
                                 annotate_gene_names=True,
@@ -309,10 +353,33 @@ def plot_qualitative_analysis():
                                 title=r'$\alpha$-cell transition data',
                                 title_fontsize=title_fontsize)
 
-    # plot_enrichr_results(res_df=benrichr, x='combined score', color='q-value', title='Beta',
-    #                      title_fontsize=title_fontsize, term_fontsize=12, axs=axd['A'])
-    plot_enrichr_results(res_df=benrichr, x='combined score', title=r'$\beta$-cell transition data',
-                         title_fontsize=title_fontsize, term_fontsize=13, axs=axd['C'])
+    # ### Plot GSEA results for top 10 beta-cell transition driver TFs
+    plot_enrichr_results(
+        res_dfs=[b_gobp, b_reactome],
+        x='Adjusted P-value',
+        top_k=[6, 6],
+        reference_db_names=['GO_Biological_Process_2023', 'Reactome_2022'],
+        title=r'$\beta$-cell transition data',
+        title_fontsize=title_fontsize,
+        term_fontsize=13,
+        axs=axd['C']
+    )
+
+    # ### Plot the top 20 targets of Ybx1
+    plot_regulon(grn=bgrn, tf='Ybx1', sort_by='score', top_k=20, title=None, font_size=12, node_size=1000,
+                 show=False, dpi=300, axs=axd['D'])
+
+    # ### Plot the GSEA results for the top 20 targets of Ybx1
+    plot_enrichr_results(
+        res_dfs=[ybx1_gobp, ybx1_reactome, ybx1_gocc],
+        x='Adjusted P-value',
+        top_k=[6, 3, 3],
+        reference_db_names=['GO_Biological_Process_2023', 'Reactome_2022', 'GO_Cellular_Component_2023'],
+        title=r'$\beta$-cell transition data',
+        title_fontsize=title_fontsize,
+        term_fontsize=13,
+        axs=axd['E']
+    )
 
     # Annotate subplot mosaic tiles with labels
     for label, ax in axd.items():
@@ -339,6 +406,10 @@ def plot_regulon():
 
 def plot_method_comparison():
     # ### Script for plotting Figure 6
+
+    from validation.plotting import plot_upset_plot
+    from validation.plotting import plot_defrac_in_top_k_lineplot, plot_digest_results
+
     # Load AnnData
     bdata = sc.read_h5ad('./results/03_validation/anndata/switchde_log1p_norm_zeroinflated_pre-endocrine_beta.h5ad')
     # bdata = sc.read_h5ad('./results/03_validation/anndata/switchde_magic_nozeroinflated_pre-endocrine_beta.h5ad')
@@ -393,7 +464,7 @@ def plot_method_comparison():
     ery_colors = ['#1f77b4', '#2ca02c', '#f52891cc', '#d62728']
 
     # ### Plot results for Beta dataset ###
-    fig = plt.figure(figsize=(14, 8), constrained_layout=True, dpi=300)
+    fig = plt.figure(figsize=(14, 8), constrained_layout=True, dpi=100)
     axd = fig.subplot_mosaic(
         [
             ['A', 'C', 'E'],  # ['A.β', 'B.β', 'C.β'],
@@ -401,14 +472,11 @@ def plot_method_comparison():
         ],
     )
 
-    # Plot Upsetplot
-    from validation.plotting import plot_upset_plot
+    # ### Plot Upsetplot
     plot_upset_plot(res_list=b_res_list, names=tuple(name_list), title=r'$\beta$-cell transition data', axs=axd['A'],
                     plot_folder='./results/04_plots', fn_prefix='beta')
     plot_upset_plot(res_list=ery_res_list, names=tuple(ery_name_list), title='Erythrocyte differentiation data',
                     axs=axd['B'], plot_folder='./results/04_plots', fn_prefix='ery')
-
-    from validation.plotting import plot_defrac_in_top_k_lineplot, plot_digest_results
 
     plot_defrac_in_top_k_lineplot(res_df_list=b_res_list,
                                   adata=bdata,
@@ -456,39 +524,21 @@ def plot_method_comparison():
 def plot_alpha_res_appendix():
     # ### Script for plotting Supplementary Figure 1
 
-    fig = plt.figure(figsize=(12, 12), constrained_layout=True, dpi=300)
-    axd = fig.subplot_mosaic(
-        """
-        ABC
-        DDD
-        EFG
-        """
+    from validation.plotting import (
+        plot_defrac_lineplot, plot_sdeqvals_vs_weight, plot_cc_score_hist, plot_enrichr_results,
+        plot_defrac_in_top_k_lineplot, plot_digest_results, plot_upset_plot
     )
+    from validation.val_utils import compare_grn_vs_rand_background
+    from switchtfi.tf_ranking import grn_to_nx
 
-    # ### Plot quantitative analysis
-    # Load AnnData
+    # ### Load AnnData with switchde p-values
     adata = sc.read_h5ad('./results/03_validation/anndata/switchde_magic_nozeroinflated_pre-endocrine_alpha.h5ad')
 
-    # Load result dataframes
+    # ### Load input and transition GRN
     agrn = pd.read_csv('./results/02_switchtfi/endocrine/alpha/grn.csv', index_col=0)
     abase_grn = load_grn_json('./results/02_switchtfi/endocrine/alpha/grn.json')
 
-    # Combine ptDE q-values using Fishers method for each edge (TF, target) => edgewise ptDE q-values
-    def combine_p_vals_fisher(grn: pd.DataFrame,
-                              anndata: sc.AnnData) -> pd.DataFrame:
-
-        grn['switchde_qvals_combined_fisher'] = np.ones(grn.shape[0])
-
-        for i in range(grn.shape[0]):
-            tf = grn['TF'].loc[i]
-            target = grn['target'].loc[i]
-            tf_qval = anndata.var['switchde_qval'][tf]
-            target_qval = anndata.var['switchde_qval'][target]
-
-            grn.at[i, 'switchde_qvals_combined_fisher'] = combine_pvalues([tf_qval, target_qval], method='fisher')[1]
-
-        return grn
-
+    # ### Compute edg-wise combined ptDE q-values
     # Add minimal eps to 0 q-values for numeric stability, then combine q-values => joint q-value per edge
     aq = adata.var['switchde_qval'].to_numpy()
     aq[aq == 0] = np.finfo(np.float64).eps
@@ -497,51 +547,32 @@ def plot_alpha_res_appendix():
     abase_grn = combine_p_vals_fisher(grn=abase_grn, anndata=adata)
     aminw = agrn['weight'].to_numpy().min()
 
-    # Compute correlation
+    # Compute correlation between edge-weights (from SwitchTFI) and ptDE edge-wise combined q-values
     acorr = pearsonr(abase_grn['weight'].to_numpy(), abase_grn['switchde_qvals_combined_fisher'].to_numpy())
-
     print('###### Correlations(weights, combined q-vals): ')
     print(f'### Alpha: {acorr}')
 
-    # Again for plotting add eps
+    # Again for plotting add eps to the combined q-values
     aqcomb = abase_grn['switchde_qvals_combined_fisher'].to_numpy()
     aqcomb[aqcomb == 0] = np.finfo(np.float64).eps
     abase_grn['switchde_qvals_combined_fisher'] = aqcomb
-    from validation.plotting import plot_defrac_lineplot, plot_sdeqvals_vs_weight, plot_cc_score_hist
 
-    plot_sdeqvals_vs_weight(grn=abase_grn, comb_qval_alpha=0.01, weight_threshold=aminw, title=None,
-                            legend_pos='upper center', size=6, axs=axd['A'])
-    plot_defrac_lineplot(adata=adata, base_grn=abase_grn, pruned_grn=agrn, switchde_alpha=0.01,
-                         title=None, size=12, axs=axd['B'], verbosity=1)
+    # ### Load ENRICHR GSEA results
+    a_gobp = pd.read_csv(
+        os.path.join(
+            os.getcwd(), 'results/03_validation/gsea_results/alpha_pr_GO_Biological_Process_2023_table.txt'),
+        delimiter='\t'
+    )
+    a_reactome = pd.read_csv(
+        os.path.join(
+            os.getcwd(), 'results/03_validation/gsea_results/alpha_pr_Reactome_2022_table.txt'),
+        delimiter='\t'
+    )
 
-    # ### Plot histograms of percentage of Lcc nodes in randomly sampled GRNs of same size as transition GRN
-    from validation.val_utils import compare_grn_vs_rand_background
-    from switchtfi.tf_ranking import grn_to_nx
-    n = 10000
-    accs_list, an_vert_list = compare_grn_vs_rand_background(base_grn=abase_grn, transition_grn=agrn, n=n)
-    atgrn = grn_to_nx(grn=agrn).to_undirected()
-    bccs = list(nx.connected_components(atgrn))
-
-    plot_cc_score_hist(ccs=bccs, n_vert=atgrn.number_of_nodes(), ccs_list=accs_list, n_vert_list=an_vert_list,
-                       titel=None, axs=axd['C'])
-
-    # ### Plot qualitative analysis
-    # Load ENRICHR GSEA results
-    aenrichr = pd.read_csv('./results/03_validation/gsea_results/alpha_Enrichr-KG.csv')
-
-    from validation.plotting import plot_enrichr_results
-
-    # plot_enrichr_results(res_df=aenrichr, x='combined score', color='q-value', axs=axd['C'])
-    plot_enrichr_results(res_df=aenrichr, x='combined score', term_fontsize=12, axs=axd['D'])
-
-    # ### Method comparison
-    # Load AnnData with switchtfi p-values
+    # ### Load AnnData with ptDE p-values
     adata = sc.read_h5ad('./results/03_validation/anndata/switchde_log1p_norm_zeroinflated_pre-endocrine_alpha.h5ad')
 
-    # sc.pl.umap(adata, color='palantir_pseudotime', show=False)
-    # plt.savefig('./results/04_plots/aumap.png')
-
-    # ### Load result dataframes
+    # ### Load result dataframes with predicted driver TFs from SwitchTFI and competitor methods
     atfs = pd.read_csv('./results/02_switchtfi/endocrine/alpha/ranked_tfs.csv', index_col=[0])
     atfs_outdeg = pd.read_csv('./results/02_switchtfi/endocrine/alpha/outdeg_ranked_tfs.csv', index_col=[0])
 
@@ -563,12 +594,48 @@ def plot_alpha_res_appendix():
     ap5 = os.path.join(digest_base_p, 'top20_alpha_switchtfi/0abd6509-83f7-4952-bde6-717d9b6b0648_result.json')
     apl = [ap1, ap2, ap3, ap4, ap5]
 
-    # Define names of method and color to be used in plots
+    # ###  Define names of method and color to be used in method comparison plots
     name_list = ['CellRank', 'spliceJAC', 'DrivAER', 'SwitchTFI outdeg', 'SwitchTFI']
     colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#f52891cc', '#d62728']
 
-    from validation.plotting import plot_defrac_in_top_k_lineplot, plot_digest_results, plot_upset_plot
+    fig = plt.figure(figsize=(12, 12), constrained_layout=True, dpi=100)
+    axd = fig.subplot_mosaic(
+        """
+        ABC
+        DDD
+        EFG
+        """
+    )
 
+    # ### Plot quantitative analysis
+    plot_sdeqvals_vs_weight(grn=abase_grn, comb_qval_alpha=0.01, weight_threshold=aminw, title=None,
+                            legend_pos='upper center', size=6, axs=axd['A'])
+    plot_defrac_lineplot(adata=adata, base_grn=abase_grn, pruned_grn=agrn, switchde_alpha=0.01,
+                         title=None, size=12, axs=axd['B'], verbosity=1)
+
+    # ### Plot histograms of percentage of Lcc nodes in randomly sampled GRNs of same size as transition GRN
+    # First run comparison against random background model ...
+    # n = 10000
+    n = 100
+    accs_list, an_vert_list = compare_grn_vs_rand_background(base_grn=abase_grn, transition_grn=agrn, n=n)
+    atgrn = grn_to_nx(grn=agrn).to_undirected()
+    bccs = list(nx.connected_components(atgrn))
+    # ... then plot the results
+    plot_cc_score_hist(ccs=bccs, n_vert=atgrn.number_of_nodes(), ccs_list=accs_list, n_vert_list=an_vert_list,
+                       titel=None, axs=axd['C'])
+
+    # ### Plot qualitative analysis
+    # Plot GSEA results for top 10 beta-cell transition driver TFs
+    plot_enrichr_results(
+        res_dfs=[a_gobp, a_reactome],
+        x='Adjusted P-value',
+        top_k=[6, 6],
+        reference_db_names=['GO_Biological_Process_2023', 'Reactome_2022'],
+        term_fontsize=13,
+        axs=axd['D']
+    )
+
+    # ### Plot method comparison
     plot_defrac_in_top_k_lineplot(res_df_list=a_res_list,
                                   adata=adata,
                                   switchde_alpha=0.01,
@@ -601,46 +668,47 @@ def plot_alpha_res_appendix():
 def plot_ery_res_appendix():
     # ### Script for plotting Supplementary Figure 2
 
-    # Load AnnData
+    from validation.plotting import plot_gam_gene_trend_heatmap, plot_circled_tfs, plot_enrichr_results
+
+    # ### Load AnnData with trand and with ptDE p-values
     adata_trend = sc.read_h5ad('./results/03_validation/anndata/trend_erythrocytes.h5ad')
     adata_sde = sc.read_h5ad('./results/03_validation/anndata/switchde_magic_nozeroinflated_erythrocytes.h5ad')
 
-    # Load GRNs
+    # ### Load input and transition GRN
     grn = load_grn_json('./results/02_switchtfi/hematopoiesis/grn.json')
     transition_grn = pd.read_csv('./results/02_switchtfi/hematopoiesis/grn.csv', index_col=0)
 
-    # Load ranked TFs
+    # ### Load ranked TFs
     ranked_tfs = pd.read_csv('./results/02_switchtfi/hematopoiesis/outdeg_ranked_tfs.csv', index_col=0)
     top_tfs = ranked_tfs['gene'].tolist()[0:10]
 
-    # Load the gesea results
-    enrichr_res = pd.read_csv('./results/03_validation/gsea_results/ery_Enrichr-KG.csv')
+    # ### Load the GSEA results
+    ery_gobp = pd.read_csv(
+        os.path.join(
+            os.getcwd(), 'results/03_validation/gsea_results/ery_outdeg_GO_Biological_Process_2023_table.txt'),
+        delimiter='\t'
+    )
+    ery_reactome = pd.read_csv(
+        os.path.join(
+            os.getcwd(), 'results/03_validation/gsea_results/ery_outdeg_Reactome_2022_table.txt'),
+        delimiter='\t'
+    )
+    ery_mgi = pd.read_csv(
+        os.path.join(
+            os.getcwd(),
+            'results/03_validation/gsea_results/ery_outdeg_MGI_Mammalian_Phenotype_Level_4_2021_table.txt'),
+        delimiter='\t'
+    )
 
-    # Combine the switchde q-values using Fishers method for each edge (TF, target) of the base GRN
-    def combine_p_vals_fisher(grn: pd.DataFrame,
-                              anndata: sc.AnnData) -> pd.DataFrame:
-
-        grn['switchde_qvals_combined_fisher'] = np.ones(grn.shape[0])
-
-        for i in range(grn.shape[0]):
-            tf = grn['TF'].loc[i]
-            target = grn['target'].loc[i]
-            tf_qval = anndata.var['switchde_qval'][tf]
-            target_qval = anndata.var['switchde_qval'][target]
-
-            grn.at[i, 'switchde_qvals_combined_fisher'] = combine_pvalues([tf_qval, target_qval], method='fisher')[1]
-
-        return grn
-
+    # ### Combine the switchde q-values using Fishers method for each edge (TF, target) of the base GRN
     # Add minimal eps to 0 q-values for numeric stability, then combine q-values => joint q-value per edge
     q = adata_sde.var['switchde_qval'].to_numpy()
     q[q == 0] = np.finfo(np.float64).eps
     adata_sde.var['switchde_qval'] = q
 
     grn = combine_p_vals_fisher(grn=grn, anndata=adata_sde)
-    minw = transition_grn['weight'].to_numpy().min()
 
-    # Compute correlation
+    # ### Compute correlation (just for printing, not for plotting)
     corr = pearsonr(grn['weight'].to_numpy(), grn['switchde_qvals_combined_fisher'].to_numpy())
     print('###### Correlations(weights, combined q-vals): ')
     print(f'### q-vals: {corr}')
@@ -654,7 +722,7 @@ def plot_ery_res_appendix():
     print(f'### -log(q-vals): {corr}')
 
     # Plot results
-    fig = plt.figure(figsize=(12, 10), constrained_layout=True, dpi=300)
+    fig = plt.figure(figsize=(12, 10), constrained_layout=True, dpi=100)
     axd = fig.subplot_mosaic(
         """
         A
@@ -662,13 +730,6 @@ def plot_ery_res_appendix():
         C
         """
     )
-
-    # Plot UMAP
-    # sc.pl.umap(adata_trend, color='prog_off', palette={'prog': '#ffac00', 'off': '#95f527'}, ax=axd['A'], title='',
-    #            show=False)
-    # sc.pl.umap(adata_trend, color='palantir_pseudotime', ax=axd['B'], title='', color_map='magma', show=False)
-
-    from validation.plotting import plot_gam_gene_trend_heatmap, plot_circled_tfs, plot_enrichr_results
 
     plot_gam_gene_trend_heatmap(adata=adata_trend,
                                 gene_names=top_tfs,
@@ -679,8 +740,15 @@ def plot_ery_res_appendix():
                                 axs=axd['A'],
                                 colorbar_pad=0.05)
     plot_circled_tfs(res_df=ranked_tfs, topk=10, fontsize=14, axs=axd['B'])
-    # plot_enrichr_results(res_df=enrichr_res, x='combined score', color='q-value', axs=axd['G'])
-    plot_enrichr_results(res_df=enrichr_res, x='combined score', log_trafo=True, term_fontsize=12, axs=axd['C'])
+
+    plot_enrichr_results(
+        res_dfs=[ery_gobp, ery_reactome, ery_mgi],
+        x='Adjusted P-value',
+        top_k=[6, 6, 6],
+        reference_db_names=['GO_Biological_Process_2023', 'Reactome_2022', 'MGI_Mammalian_Phenotype_Level_4_2021'],
+        term_fontsize=13,
+        axs=axd['C']
+    )
 
     for label, ax in axd.items():
         trans = mtransforms.ScaledTranslation(-20 / 72, 7 / 72, fig.dpi_scale_trans)
@@ -734,23 +802,58 @@ def plot_grns():
     plt.show()
 
 
+def test():
+    from validation.plotting import plot_enrichr_results
+    gobp = pd.read_csv(
+        os.path.join(
+            os.getcwd(), 'results/03_validation/gsea_results/beta_ybx1_targets_GO_Biological_Process_2023_table.txt'),
+        delimiter='\t'
+    )
+    gocc = pd.read_csv(
+        os.path.join(
+            os.getcwd(), 'results/03_validation/gsea_results/beta_ybx1_targets_GO_Cellular_Component_2023_table.txt'),
+        delimiter='\t'
+    )
+    reactome = pd.read_csv(
+        os.path.join(
+            os.getcwd(), 'results/03_validation/gsea_results/beta_ybx1_targets_Reactome_2022_table.txt'),
+        delimiter='\t'
+    )
+    mgi = pd.read_csv(
+        os.path.join(
+            os.getcwd(),
+            'results/03_validation/gsea_results/beta_ybx1_targets_MGI_Mammalian_Phenotype_Level_4_2021_table.txt'),
+        delimiter='\t'
+    )
+
+    plot_enrichr_results(
+        res_dfs=[gobp, gocc, reactome, mgi],
+        x='Adjusted P-value',
+        top_k=[6, 6, 6, 6],
+        reference_db_names=['GO_BP', 'GO_CC', 'Reactome', 'MGI'],
+        show=True
+    )
+
+
 if __name__ == '__main__':
 
-    plot_step_fct_and_trends()
+    # plot_step_fct_and_trends()
 
     plot_quantitative_analyses()
 
-    plot_qualitative_analysis()
+    # plot_qualitative_analysis()
 
-    plot_regulon()
+    # plot_regulon()
 
-    plot_method_comparison()
+    # plot_method_comparison()
 
-    plot_alpha_res_appendix()
+    # plot_alpha_res_appendix()
 
-    plot_ery_res_appendix()
+    # plot_ery_res_appendix()
 
-    plot_grns()
+    # plot_grns()
+
+    # test()
 
     print('done')
 
