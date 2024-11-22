@@ -34,7 +34,7 @@ def plot_step_fct_and_trends():
     # Load results dataframe
     res_tfs = pd.read_csv('./results/02_switchtfi/endocrine/beta/ranked_tfs.csv', index_col=[0])
 
-    fig = plt.figure(figsize=(12, 12), constrained_layout=True, dpi=100)
+    fig = plt.figure(figsize=(12, 13), constrained_layout=True, dpi=300)
     axd = fig.subplot_mosaic(
         """
         AABB
@@ -47,10 +47,10 @@ def plot_step_fct_and_trends():
     )
 
     layer_key = 'magic_imputed'
-    title_fs = 100
-    ax_fs = 20
-    legend_fs = 20
-    gene_trend_anno_fs = 12
+    title_fs = 20
+    ax_fs = 18
+    legend_fs = 18
+    gene_trend_anno_fs = 14
     letter_fs = 20
 
     e0 = tuple(grn[['TF', 'target']].iloc[1])
@@ -156,11 +156,11 @@ def plot_step_fct_and_trends():
         # ax.annotate(label, xy=(0.1, 1.1), xycoords='axes fraction', ha='center', fontsize=16)
         # label physical distance to the left and up:
         trans = mtransforms.ScaledTranslation(-20 / 72, 7 / 72, fig.dpi_scale_trans)
-        ax.text(0.0, 1.0, label, transform=ax.transAxes + trans,
+        ax.text(0.0, 0.95, label, transform=ax.transAxes + trans,
                 fontsize=letter_fs, va='bottom', fontfamily='sans-serif', fontweight='bold')
 
-    plt.show()
-    # plt.savefig('./results/04_plots/stepfct_trends.png', dpi=fig.dpi)
+    # plt.show()
+    plt.savefig('./results/04_plots/stepfct_trends_beta.png', dpi=fig.dpi)
 
 
 def plot_quantitative_analyses():
@@ -215,7 +215,7 @@ def plot_quantitative_analyses():
     eryqcomb[eryqcomb == 0] = np.finfo(np.float64).eps
     erybase_grn['switchde_qvals_combined_fisher'] = eryqcomb
 
-    fig = plt.figure(figsize=(12, 8), constrained_layout=True, dpi=100)
+    fig = plt.figure(figsize=(12, 8), constrained_layout=True, dpi=300)
     axd = fig.subplot_mosaic(
         """
         ABC
@@ -225,35 +225,35 @@ def plot_quantitative_analyses():
 
     # General
     title_fs = 16
-    ax_fs = 20
-    legend_fs = 16
-    letter_fs = 14
+    ax_fs = 16
+    legend_fs = 14
+    letter_fs = 20
 
     # q-vals vs weight
     dot_size0 = 6
     # defrac lineplot
-    dot_size1 = 12
+    dot_size1 = 14
 
     plot_sdeqvals_vs_weight(
-        grn=bbase_grn, comb_qval_alpha=0.01, weight_threshold=bminw, title=r'$\beta$-cell transition data',
+        grn=bbase_grn, comb_qval_alpha=0.01, weight_threshold=bminw, title=r'$\beta$-cell transition',
         legend_pos='upper center', size=dot_size0, ax_label_fontsize=ax_fs, title_fontsize=title_fs,
         legend_fontsize=legend_fs, axs=axd['A'])
     plot_sdeqvals_vs_weight(
-        grn=erybase_grn, comb_qval_alpha=0.01, weight_threshold=eryminw, title='Erythrocyte differentiation data',
+        grn=erybase_grn, comb_qval_alpha=0.01, weight_threshold=eryminw, title='Erythrocyte differentiation',
         legend_pos='upper center', size=dot_size0, ax_label_fontsize=ax_fs, title_fontsize=title_fs,
         legend_fontsize=legend_fs, axs=axd['D'])
 
     plot_defrac_lineplot(
-        adata=bdata, base_grn=bbase_grn, pruned_grn=bgrn, switchde_alpha=0.01, title=r'$\beta$-cell transition data',
+        adata=bdata, base_grn=bbase_grn, pruned_grn=bgrn, switchde_alpha=0.01, title=r'$\beta$-cell transition',
         size=dot_size1, ax_label_fontsize=ax_fs, title_fontsize=title_fs, legend_fontsize=legend_fs,
-        legend_pos='center', axs=axd['B'], verbosity=1)
+        legend_pos=(0.5, 0.65), axs=axd['B'], verbosity=1)
     plot_defrac_lineplot(
         adata=erydata, base_grn=erybase_grn, pruned_grn=erygrn, switchde_alpha=0.01,
-        title='Erythrocyte differentiation data', size=dot_size1, ax_label_fontsize=ax_fs, title_fontsize=title_fs,
-        legend_fontsize=legend_fs, axs=axd['E'], verbosity=1)
+        title='Erythrocyte differentiation', size=dot_size1, ax_label_fontsize=ax_fs, title_fontsize=title_fs,
+        legend_fontsize=legend_fs, legend_pos=(0.5, 0.65), axs=axd['E'], verbosity=1)
 
     # ### Plot histograms of percentage of Lcc nodes in randomly sampled GRNs of same size as transition GRN
-    n = 10
+    n = 10000
     bccs_list, bn_vert_list = compare_grn_vs_rand_background(base_grn=bbase_grn, transition_grn=bgrn, n=n)
     eryccs_list, eryn_vert_list = compare_grn_vs_rand_background(base_grn=erybase_grn, transition_grn=erygrn, n=n)
 
@@ -264,11 +264,11 @@ def plot_quantitative_analyses():
 
     plot_cc_score_hist(
         ccs=bccs, n_vert=btgrn.number_of_nodes(), ccs_list=bccs_list, n_vert_list=bn_vert_list,
-        titel=r'$\beta$-cell transition data', ax_label_fontsize=ax_fs, title_fontsize=title_fs,
+        titel=r'$\beta$-cell transition', ax_label_fontsize=ax_fs, title_fontsize=title_fs,
         legend_fontsize=legend_fs, axs=axd['C'])
     plot_cc_score_hist(
         ccs=eryccs, n_vert=erytgrn.number_of_nodes(), ccs_list=eryccs_list, n_vert_list=eryn_vert_list,
-        titel='Erythrocyte differentiation data', ax_label_fontsize=ax_fs, title_fontsize=title_fs,
+        titel='Erythrocyte differentiation', ax_label_fontsize=ax_fs, title_fontsize=title_fs,
         legend_fontsize=legend_fs, axs=axd['F'])
 
     # Annotate subplot mosaic tiles with labels
@@ -277,15 +277,14 @@ def plot_quantitative_analyses():
         ax.text(0.0, 1.0, label, transform=ax.transAxes + trans,
                 fontsize=letter_fs, va='bottom', fontfamily='sans-serif', fontweight='bold')
 
-    plt.show()
-    # plt.savefig('./results/04_plots/quantitative_beta.png', dpi=fig.dpi)
+    # plt.show()
+    plt.savefig('./results/04_plots/quantitative_beta_ery.png', dpi=fig.dpi)
 
 
 def plot_qualitative_analysis():
     # ### Script for plotting Figure 4
 
     from validation.plotting import plot_circled_tfs, plot_enrichr_results, plot_gam_gene_trend_heatmap
-    from switchtfi.plotting import plot_regulon
 
     # ### Load ranked TFs for alpha- and beta-cell transition
     atfs = pd.read_csv('./results/02_switchtfi/endocrine/alpha/ranked_tfs.csv', index_col=[0])
@@ -304,9 +303,6 @@ def plot_qualitative_analysis():
     # ### Load AnnData with gene trends for alpha-cell transition
     adata = sc.read_h5ad('./results/03_validation/anndata/trend_pre-endocrine_alpha.h5ad')
 
-    # ### Load transition GRN of beta-cell transition
-    bgrn = pd.read_csv('./results/02_switchtfi/endocrine/beta/grn.csv', index_col=0)
-
     # ### Load ENRICHR GSEA results for beta-cell transition driver TFs and targets of Ybx1
     b_gobp = pd.read_csv(
         os.path.join(
@@ -318,48 +314,34 @@ def plot_qualitative_analysis():
             os.getcwd(), 'results/03_validation/gsea_results/beta_pr_Reactome_2022_table.txt'),
         delimiter='\t'
     )
-    ybx1_gobp = pd.read_csv(
-        os.path.join(
-            os.getcwd(), 'results/03_validation/gsea_results/beta_ybx1_targets_GO_Biological_Process_2023_table.txt'),
-        delimiter='\t'
-    )
-    ybx1_gocc = pd.read_csv(
-        os.path.join(
-            os.getcwd(), 'results/03_validation/gsea_results/beta_ybx1_targets_GO_Cellular_Component_2023_table.txt'),
-        delimiter='\t'
-    )
-    ybx1_reactome = pd.read_csv(
-        os.path.join(
-            os.getcwd(), 'results/03_validation/gsea_results/beta_ybx1_targets_Reactome_2022_table.txt'),
-        delimiter='\t'
-    )
 
     # ### Plot results for Beta dataset ### #
-    fig = plt.figure(figsize=(12, 12), constrained_layout=True, dpi=100)
+    fig = plt.figure(figsize=(13, 9), constrained_layout=True, dpi=300)
+    mosaic = [
+        ['A', 'A', '.'],
+        ['A', 'A', 'B'],
+        ['A', 'A', 'B'],
+        ['A', 'A', '.'],
+        ['C', 'C', 'C'],
+    ]
+
     axd = fig.subplot_mosaic(
-        """
-        AAB
-        CCC
-        CCC
-        DEE
-        DEE
-        """
+        mosaic=mosaic,
+        gridspec_kw={"height_ratios": [1/4, 1/4, 1/4, 1/4, 3], }
+                     # "width_ratios": [3, 1]},
     )
 
     # General
     title_fs = 20
-    ax_fs = 20
-    letter_fs = 14
+    ax_fs = 16
+    letter_fs = 20
     # Top 10 driver TFs plot
-    gene_name_fs = 11
+    gene_name_fs = 16
     # Gene trends plot
-    gene_trend_anno_fs = 12
+    gene_trend_anno_fs = 14
     # Enrichr results plots
-    term_fs = 20
+    term_fs = 16
     legend_fs = 16
-    # Regulon
-    nodes_size = 1000
-    gene_fs = 12
 
     # ### Plot Top 10 driver TFs
     plot_circled_tfs(
@@ -377,7 +359,7 @@ def plot_qualitative_analysis():
         show=False,
         axs=axd['B'],
         plot_colorbar=False,
-        title=r'$\alpha$-cell transition data',
+        title=r'$\alpha$-cell transition',
         title_fontsize=title_fs)
 
     # ### Plot GSEA results for top 10 beta-cell transition driver TFs
@@ -386,31 +368,12 @@ def plot_qualitative_analysis():
         x='Adjusted P-value',
         top_k=[6, 6],
         reference_db_names=['GO_Biological_Process_2023', 'Reactome_2022'],
-        title=r'$\beta$-cell transition data',
+        title=r'$\beta$-cell transition',
         title_fontsize=title_fs,
         term_fontsize=term_fs,
         ax_label_fontsize=ax_fs,
         legend_fontsize=legend_fs,
         axs=axd['C']
-    )
-
-    # ### Plot the top 20 targets of Ybx1
-    plot_regulon(
-        grn=bgrn, tf='Ybx1', sort_by='score', top_k=20, title=None, font_size=gene_fs, node_size=nodes_size,
-        show=False, dpi=300, axs=axd['D'])
-
-    # ### Plot the GSEA results for the top 20 targets of Ybx1
-    plot_enrichr_results(
-        res_dfs=[ybx1_gobp, ybx1_reactome, ybx1_gocc],
-        x='Adjusted P-value',
-        top_k=[6, 3, 3],
-        reference_db_names=['GO_Biological_Process_2023', 'Reactome_2022', 'GO_Cellular_Component_2023'],
-        title=r'$\beta$-cell transition data',
-        title_fontsize=title_fs,
-        term_fontsize=term_fs,
-        ax_label_fontsize=ax_fs,
-        legend_fontsize=legend_fs,
-        axs=axd['E']
     )
 
     # Annotate subplot mosaic tiles with labels
@@ -419,8 +382,87 @@ def plot_qualitative_analysis():
         ax.text(0.0, 1.0, label, transform=ax.transAxes + trans,
                 fontsize=letter_fs, va='bottom', fontfamily='sans-serif', fontweight='bold')
 
-    plt.show()
-    # plt.savefig('./results/04_plots/qualitative_beta.png', dpi=fig.dpi)
+    # plt.show()
+    plt.savefig('./results/04_plots/qualitative_beta.png', dpi=fig.dpi)
+
+
+def plot_hypotheses_generation_ybx1():
+    # ### Script for plotting Figure 5
+
+    from validation.plotting import plot_enrichr_results
+    from switchtfi.plotting import plot_regulon
+
+    # ### Load transition GRN of beta-cell transition
+    bgrn = pd.read_csv('./results/02_switchtfi/endocrine/beta/grn.csv', index_col=0)
+
+    # ### Load ENRICHR GSEA results for beta-cell transition driver TFs and targets of Ybx1
+    ybx1_gobp = pd.read_csv(
+        os.path.join(
+            os.getcwd(), 'results/03_validation/gsea_results/beta_ybx1_targets_GO_Biological_Process_2023_table.txt'),
+        delimiter='\t'
+    )
+    ybx1_gocc = pd.read_csv(
+        os.path.join(
+            os.getcwd(), 'results/03_validation/gsea_results/beta_ybx1_targets_GO_Cellular_Component_2023_table.txt'),
+        delimiter='\t'
+    )
+    ybx1_reactome = pd.read_csv(
+        os.path.join(
+            os.getcwd(), 'results/03_validation/gsea_results/beta_ybx1_targets_Reactome_2022_table.txt'),
+        delimiter='\t'
+    )
+
+    # ### Plot results for Beta dataset ### #
+    fig = plt.figure(figsize=(13, 8), constrained_layout=True, dpi=300)
+    mosaic = [
+        ['A', 'A', 'A', 'A'],
+        ['B', 'B', 'B', 'B']
+    ]
+
+    axd = fig.subplot_mosaic(
+        mosaic=mosaic,
+        gridspec_kw={'height_ratios': [5, 6], }
+                     # "width_ratios": [3, 1]},
+    )
+
+    # General
+    ax_fs = 16
+    letter_fs = 20
+    # Enrichr results plots
+    term_fs = 16
+    legend_fs = 16
+    # Regulon
+    nodes_size = 1000
+    gene_fs = 16
+
+    # ### Plot the top 20 targets of Ybx1
+    plot_regulon(
+        grn=bgrn, tf='Ybx1', sort_by='score', top_k=20, title=None, title_fontsize=None,
+        font_size=gene_fs, node_size=nodes_size, show=False, dpi=300, axs=axd['A'])
+
+    # ### Plot the GSEA results for the top 20 targets of Ybx1
+    plot_enrichr_results(
+        res_dfs=[ybx1_gobp, ybx1_reactome, ybx1_gocc],
+        x='Adjusted P-value',
+        top_k=[6, 3, 3],
+        reference_db_names=['GO_Biological_Process_2023', 'Reactome_2022', 'GO_Cellular_Component_2023'],
+        title=None,
+        title_fontsize=None,
+        term_fontsize=term_fs,
+        truncate_term_k=80,
+        ax_label_fontsize=ax_fs,
+        legend_fontsize=legend_fs,
+        axs=axd['B']
+    )
+
+    # Annotate subplot mosaic tiles with labels
+    for label, ax in axd.items():
+        trans = mtransforms.ScaledTranslation(-20 / 72, 7 / 72, fig.dpi_scale_trans)
+        ax.text(0.0, 1.0, label, transform=ax.transAxes + trans,
+                fontsize=letter_fs, va='bottom', fontfamily='sans-serif', fontweight='bold')
+
+    # plt.show()
+    plt.savefig('./results/04_plots/hypothesis_gen_ybx1.png', dpi=fig.dpi)
 
 
 def plot_method_comparison():
@@ -906,11 +948,13 @@ def plot_grns():
 
 if __name__ == '__main__':
 
-    plot_step_fct_and_trends()
+    # plot_step_fct_and_trends()
 
     # plot_quantitative_analyses()
 
-    # plot_qualitative_analysis()
+    plot_qualitative_analysis()
+
+    plot_hypotheses_generation_ybx1()
 
     # plot_method_comparison()
 
