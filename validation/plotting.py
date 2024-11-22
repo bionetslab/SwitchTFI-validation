@@ -9,6 +9,7 @@ import matplotlib.image as mpimg
 import math
 import json
 import os
+import re
 from typing import *
 
 from scipy.stats import pearsonr
@@ -401,7 +402,7 @@ def plot_gam_gene_trend_heatmap(
 
         if plot_colorbar:
             # Add colorbar
-            plt.colorbar(heatmap, label='Scaled expression')
+            plt.colorbar(heatmap, label='Scaled expression', fontsize=14)
 
         if title is not None:
             if title_fontsize is not None:
@@ -436,7 +437,8 @@ def plot_gam_gene_trend_heatmap(
             x_tick_positions = np.linspace(0, data.shape[0] - 1, num=2).astype(int)
         axs.set_xticks(x_tick_positions, x_tick_values)
         if plot_colorbar:
-            plt.colorbar(heatmap, label='Scaled expression', ax=axs, location='right', pad=colorbar_pad)
+            cbar = plt.colorbar(heatmap, label='Scaled expression', ax=axs, location='right', pad=colorbar_pad)
+            cbar.ax.set_ylabel('Scaled expression', fontsize=18)
         if title is not None:
             if title_fontsize is not None:
                 axs.set_title(title, fontsize=title_fontsize)
@@ -455,7 +457,7 @@ def plot_defrac_lineplot(
         title_fontsize: Union[float, None] = None,
         legend_fontsize: Union[float, None] = None,
         plot_legend: bool = True,
-        legend_pos: str = 'upper center',
+        legend_pos: Union[str, Tuple[float, float]] = 'upper center',
         axs: Union[plt.Axes, None] = None,
         show: bool = False,
         tf_target_keys: Tuple[str, str] = ('TF', 'target'),
@@ -500,13 +502,13 @@ def plot_defrac_lineplot(
     # axd['A'].violinplot(data, pos, showmedians=True)
 
     data = pd.DataFrame()
-    data['DE fraction'] = [base_frac_degenes, pruned_frac_degenes, base_frac_detfs, pruned_frac_detfs,
+    data['ptDE fraction'] = [base_frac_degenes, pruned_frac_degenes, base_frac_detfs, pruned_frac_detfs,
                            base_frac_detargets, pruned_frac_detargets]
     data['GRN'] = ['Input GRN (Scenic)', 'Transition GRN (SwitchTFI)'] * 3
     data['subset'] = ['All genes', 'All genes', 'TFs', 'TFs', 'Targets', 'Targets']
 
     ax = sns.stripplot(
-        data=data, x='DE fraction', y='subset', hue='GRN', size=size, linewidth=1, orient='h', jitter=False, ax=axs)
+        data=data, x='ptDE fraction', y='subset', hue='GRN', size=size, linewidth=1, orient='h', jitter=False, ax=axs)
 
     ax.xaxis.grid(False)
     ax.yaxis.grid(True)
@@ -519,8 +521,15 @@ def plot_defrac_lineplot(
     ax.set(ylabel=None)
 
     if plot_legend:
-        sns.move_legend(ax, legend_pos)
-        legend = ax.legend_
+        if isinstance(legend_pos, str):
+            sns.move_legend(ax, legend_pos)
+            legend = ax.legend_
+        else:
+            legend = ax.legend(
+                loc='center',  # Use the center of the bounding box as the anchor point
+                bbox_to_anchor=legend_pos,  # Position: x=1.05 (outside right), y=0.75 (3/4 height)
+                borderaxespad=0.0,  # Remove padding between the axes and the legend box
+            )
         legend.set_title(None)
         if legend_fontsize is not None:
             for text in legend.get_texts():  # Iterate through all legend texts
@@ -532,7 +541,7 @@ def plot_defrac_lineplot(
         ax.set_title(title, fontsize=title_fontsize)
 
     x_ticks = np.round(
-        np.linspace(data['DE fraction'].to_numpy().min(), data['DE fraction'].to_numpy().max(), num=4), decimals=2)
+        np.linspace(data['ptDE fraction'].to_numpy().min(), data['ptDE fraction'].to_numpy().max(), num=4), decimals=2)
     ax.set_xticks(x_ticks)
     ax.set_xticklabels(x_ticks)
 
@@ -762,6 +771,7 @@ def plot_enrichr_results(
         title: Union[str, None] = None,
         title_fontsize: Union[str, float, None] = None,
         term_fontsize: Union[str, float, None] = None,
+        truncate_term_k: int = 1000,
         ax_label_fontsize: Union[float, None] = None,
         legend_fontsize: Union[float, None] = None,
         axs: Union[plt.Axes, None] = None,
@@ -831,10 +841,26 @@ def plot_enrichr_results(
         bars = axs.barh(plot_df['Term'], plot_df['plot_val'], color='lightseagreen', alpha=transp)
 
     # Annotate bars with the term at the base, with a small space
+    def truncate_term(t: str, k: int = 60):
+        pattern = r"(\(GO:\d+\)|MP:\d+|R-HSA-\d+)$"
+        match = re.search(pattern, t)
+        if match:
+            ending = match.group()
+            main_part = t[:match.start()].rstrip()  # Get the part before the ending
+            # main_part = t[:match.start()].strip()
+            if len(main_part) > k:  # Truncate if longer than k
+                main_part = main_part[:k] + "..."
+            truncated_t = (main_part + " " + ending)
+        else:
+            # If no matching ending, truncate the entire string if needed
+            truncated_t = t[:k] + "..." if len(t) > k else t
+
+        return truncated_t
+
     space = plot_df['plot_val'].max() * 0.02
     for bar, term in zip(bars, plot_df['Term']):
-        axs.text(bar.get_x() + space, bar.get_y() + bar.get_height() / 2, term[0].upper() + term[1:], va='center',
-                 ha='left', fontsize=term_fontsize, color='black')
+        axs.text(bar.get_x() + space, bar.get_y() + bar.get_height() / 2, truncate_term(t=term, k=truncate_term_k),
+                 va='center', ha='left', fontsize=term_fontsize, color='black')
 
     # Set library as y-tick labels
     # axs.set_yticks(np.arange(len(res_df)))
@@ -1032,7 +1058,7 @@ def plot_cc_score_hist(
     axs.hist(scores, bins=15, edgecolor='black', color='yellow')
     axs.axvline(
         score_tgrn, color='red', linewidth=2,
-        label=f'Score transition GRN: {round(score_tgrn, 4)}\n'
+        label=f'Score trans. GRN: {round(score_tgrn, 4)}\n'
               f'Empirical P-value: {round(calc_emp_pval(val=score_tgrn, val_vec=scores, geq=True), 4)}')
 
     legend = axs.legend()
