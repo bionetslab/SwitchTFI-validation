@@ -137,7 +137,7 @@ def plot_step_function_aux(
                            layers=layer_key,
                            legend_loc=legend_loc,
                            palette=palette,
-                           title=f"{weight_key.capitalize()}: {grn[weight_key].iloc[i]}",
+                           title=f"{weight_key.capitalize()}: {np.round(grn[weight_key].iloc[i], 4)}",
                            show=False,
                            use_raw=False,
                            ax=axs)
