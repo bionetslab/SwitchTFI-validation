@@ -1,5 +1,6 @@
 
 import numpy as np
+import pandas as pd
 import scanpy as sc
 import scanpy.external as sce
 import seaborn as sns
@@ -19,11 +20,13 @@ import os
 from switchtfi.utils import anndata_to_numpy
 
 
-def filter_low_quality_reads(adata: sc.AnnData,
-                             species: str = 'mus musculus',
-                             pct_counts_mt_threshold: float = 8.0,
-                             verbosity: int = 0,
-                             plot: bool = False) -> sc.AnnData:
+def filter_low_quality_reads(
+        adata: sc.AnnData,
+        species: str = 'mus musculus',
+        pct_counts_mt_threshold: float = 8.0,
+        verbosity: int = 0,
+        plot: bool = False
+) -> sc.AnnData:
     """
     Filter low-quality cells from an AnnData object based on general count based metrics and mitochondrial counts.
 
@@ -42,24 +45,26 @@ def filter_low_quality_reads(adata: sc.AnnData,
 
     if verbosity >= 1:
         print('### Filtering low quality reads ... ###')
+
     # Annotate genes that are mitochondrial
     if species == 'mus musculus':
         gene_prefix = 'mt-'
-    elif species == 'homo sapiens':
+    else:  #  species == 'homo sapiens'
         gene_prefix = 'MT-'
-    else:
-        gene_prefix = ''
+
     adata.var['mt'] = adata.var_names.str.startswith(gene_prefix)
 
     # Calculate QC-metrics, adds columns to .var, .obs
     # n_genes_by_counts = number of genes with positive counts in a cell
     # total_counts = total number of count for a cell (library size)
     # pct_counts_mt = proportion of total counts for a cell which are mitochondrial
-    sc.pp.calculate_qc_metrics(adata,
-                               qc_vars=['mt'],
-                               inplace=True,
-                               percent_top=[20],
-                               log1p=True)
+    sc.pp.calculate_qc_metrics(
+        adata,
+        qc_vars=['mt'],
+        inplace=True,
+        percent_top=[20],
+        log1p=True
+    )
 
     if plot:
         p1 = sns.displot(adata.obs['total_counts'], bins=100, kde=False)
@@ -75,6 +80,7 @@ def filter_low_quality_reads(adata: sc.AnnData,
             | is_outlier(adata, obs_key_qc_metric='log1p_n_genes_by_counts', nmads=5)
             | is_outlier(adata, obs_key_qc_metric='pct_counts_in_top_20_genes', nmads=5)
     )
+
     if verbosity >= 1:
         dummy = adata.obs.outlier.value_counts()
         print('# The number of general count based non-/outliers are:')
@@ -82,33 +88,36 @@ def filter_low_quality_reads(adata: sc.AnnData,
 
     # Annotate cells that are outliers w.r.t QC- metric:
     # fraction of counts from mitochondrial genes per barcode (or fraction > 8 percent)
-    adata.obs["mt_outlier"] = is_outlier(adata, "pct_counts_mt", 3) | \
-                              (adata.obs["pct_counts_mt"] > pct_counts_mt_threshold)
+    adata.obs["mt_outlier"] = (
+            is_outlier(adata, obs_key_qc_metric="pct_counts_mt", nmads=3)
+            | (adata.obs["pct_counts_mt"] > pct_counts_mt_threshold)
+    )
 
     if verbosity >= 1:
         print('# The number of mt-based non-/outliers are:')
         print(adata.obs.mt_outlier.value_counts())
 
     # Filter adata based on the identified outliers
-    if verbosity >= 1:
-        n_cells_before = adata.n_obs
-        print(f'# Number of cells before filtering: {n_cells_before}')
+    n_cells_before = adata.n_obs
     adata = adata[(~adata.obs.outlier) & (~adata.obs.mt_outlier)].copy()
 
     if verbosity >= 1:
+        print(f'# Number of cells before filtering: {n_cells_before}')
         print(f'# Number of cells after filtering: {adata.n_obs}')
         print(f'# Number of cells removed due to low quality: {n_cells_before - adata.n_obs}')
 
     if plot:
-        p1 = sc.pl.scatter(adata, "total_counts", "n_genes_by_counts", color="pct_counts_mt")
+        p1 = sc.pl.scatter(adata, 'total_counts', 'n_genes_by_counts', color='pct_counts_mt')
         plt.show()
 
     return adata
 
 
-def correct_for_ambient_rna(adata: sc.AnnData,
-                            unfiltered_adata: sc.AnnData,
-                            verbosity: int = 0) -> sc.AnnData:
+def correct_for_ambient_rna(
+        adata: sc.AnnData,
+        unfiltered_adata: sc.AnnData,
+        verbosity: int = 0
+) -> sc.AnnData:
     """
     Correct for ambient RNA contamination in an AnnData object.
 
@@ -129,6 +138,7 @@ def correct_for_ambient_rna(adata: sc.AnnData,
 
     if verbosity >= 1:
         print('### Correcting for ambient RNA ... ###')
+
     # Copy adata, normalize and apply log
     adata_pp = adata.copy()
     sc.pp.normalize_per_cell(adata_pp)
@@ -183,9 +193,11 @@ def correct_for_ambient_rna(adata: sc.AnnData,
     return adata
 
 
-def filter_uninformative_genes(adata: sc.AnnData,
-                               threshold: Tuple[Union[int, float], str] = (20, 'n_cells'),
-                               verbosity: int = 0) -> sc.AnnData:
+def filter_uninformative_genes(
+        adata: sc.AnnData,
+        threshold: Tuple[Union[int, float], str] = (20, 'n_cells'),
+        verbosity: int = 0
+) -> sc.AnnData:
     """
     Filter out uninformative genes from an AnnData object based on expression thresholds.
 
@@ -211,9 +223,10 @@ def filter_uninformative_genes(adata: sc.AnnData,
     thresh = threshold[0]
     mode = threshold[1]
 
+    n_genes_before = adata.n_vars
+
     if verbosity:
         print('### Filtering uninformative genes ... ###')
-        n_genes_before = adata.n_vars
         print(f'# Number of genes before filtering: {n_genes_before}')
 
     # Filter by number of cells in which gene is expressed
@@ -239,13 +252,15 @@ def filter_uninformative_genes(adata: sc.AnnData,
     return adata
 
 
-def quality_control(adata: sc.AnnData,
-                    species: str = 'mus musculus',
-                    cor_amb_rna: bool = True,  # Only to be used, if raw data is from droplet based technology
-                    pct_counts_mt_threshold: float = 8.0,
-                    gene_expr_threshold: Tuple[Union[int, float], str] = (20, 'n_cells'),
-                    verbosity: int = 0,
-                    plot: bool = False) -> sc.AnnData:
+def quality_control(
+        adata: sc.AnnData,
+        species: str = 'mus musculus',
+        cor_amb_rna: bool = True,  # Only to be used, if raw data is from droplet based technology
+        pct_counts_mt_threshold: float = 8.0,
+        gene_expr_threshold: Tuple[Union[int, float], str] = (20, 'n_cells'),
+        verbosity: int = 0,
+        plot: bool = False
+) -> sc.AnnData:
     # Following best practices according to
     # https://www.sc-best-practices.org/preamble.html
     """
@@ -276,32 +291,45 @@ def quality_control(adata: sc.AnnData,
     Returns:
         sc.AnnData: The AnnData object after quality control.
     """
-    assert species in {'mus musculus', 'homo sapiens'}, "'species' can be 'mus musculus', 'homo sapiens'"
+
+    if not species in {'mus musculus', 'homo sapiens'}:
+        raise ValueError(f"Parameter species is {species} but must be 'mus musculus' or 'homo sapiens'")
+
     # Store original AnnData
     og_adata = adata.copy()
+
     # Filter cells with low quality reads
-    adata = filter_low_quality_reads(adata=adata,
-                                     species=species,
-                                     pct_counts_mt_threshold=pct_counts_mt_threshold,
-                                     verbosity=verbosity,
-                                     plot=plot)
+    adata = filter_low_quality_reads(
+        adata=adata,
+        species=species,
+        pct_counts_mt_threshold=pct_counts_mt_threshold,
+        verbosity=verbosity,
+        plot=plot
+    )
+
     if cor_amb_rna:
         # Correct for ambient RNA
-        adata = correct_for_ambient_rna(adata=adata,
-                                        unfiltered_adata=og_adata,
-                                        verbosity=verbosity)
+        adata = correct_for_ambient_rna(
+            adata=adata,
+            unfiltered_adata=og_adata,
+            verbosity=verbosity
+        )
 
     # In tutorial: 20 / 14814 = 0,00135007425408397461860402322128
     # -> use less aggressive threshold of 5 (only have ~1000 cells in data set -> 5 / 1000 = 0.005)
-    adata = filter_uninformative_genes(adata=adata,
-                                       threshold=gene_expr_threshold,
-                                       verbosity=verbosity)
+    adata = filter_uninformative_genes(
+        adata=adata,
+        threshold=gene_expr_threshold,
+        verbosity=verbosity
+    )
 
     return adata
 
 
-def normalize(adata: sc.AnnData,
-              plot: bool = False) -> sc.AnnData:
+def normalize(
+        adata: sc.AnnData,
+        plot: bool = False
+) -> sc.AnnData:
     """
     Normalize and log-transform gene expression data in an AnnData object.
 
@@ -335,9 +363,11 @@ def normalize(adata: sc.AnnData,
     return adata
 
 
-def scale_to_unit_variance(adata: sc.AnnData,
-                           layer_key: Union[str, None] = None,
-                           plot: bool = False) -> sc.AnnData:
+def scale_to_unit_variance(
+        adata: sc.AnnData,
+        layer_key: Union[str, None] = None,
+        plot: bool = False
+) -> sc.AnnData:
     # Scale gene-columns to unit variance (no 0 centering)
     # => needed if GENIE/GRNboost2 is used for GRN inference!!!
 
@@ -378,10 +408,12 @@ def scale_to_unit_variance(adata: sc.AnnData,
     return adata
 
 
-def annotate_highly_deviant_genes(adata: sc.AnnData,
-                                  top_k: int = 6000,
-                                  verbosity: int = 0,
-                                  plot: bool = False) -> sc.AnnData:
+def annotate_highly_deviant_genes(
+        adata: sc.AnnData,
+        top_k: int = 6000,
+        verbosity: int = 0,
+        plot: bool = False
+) -> sc.AnnData:
     """
     Annotate the top-k highly deviant genes in an AnnData object.
 
@@ -443,10 +475,12 @@ def annotate_highly_deviant_genes(adata: sc.AnnData,
     return adata
 
 
-def impute_data_magic(adata: sc.AnnData,
-                      diffusion_time: Union[int, str] = 1,  # 'auto'
-                      layer_key: str = 'log1p_norm',
-                      verbosity: int = 0) -> sc.AnnData:
+def impute_data_magic(
+        adata: sc.AnnData,
+        diffusion_time: Union[int, str] = 1,  # 'auto'
+        layer_key: str = 'log1p_norm',
+        verbosity: int = 0
+) -> sc.AnnData:
     """
     Perform MAGIC imputation on an AnnData object.
     This function runs the MAGIC algorithm to impute missing values using
@@ -475,18 +509,20 @@ def impute_data_magic(adata: sc.AnnData,
         print(f"WARNING: Layer '{layer_key}' does not exist, proceeding with adata.X instead")
 
     # Run MAGIC with default parameter except for diffusion time t
-    sce.pp.magic(adata=bdata,
-                 name_list='all_genes',
-                 knn=5,
-                 decay=1,
-                 knn_max=None,
-                 t=diffusion_time,
-                 n_pca=100,
-                 solver='exact',
-                 random_state=None,
-                 n_jobs=None,
-                 verbose=(verbosity >= 1),
-                 copy=None)
+    sce.pp.magic(
+        adata=bdata,
+        name_list='all_genes',
+        knn=5,
+        decay=1,
+        knn_max=None,
+        t=diffusion_time,
+        n_pca=100,
+        solver='exact',
+        random_state=None,
+        n_jobs=None,
+        verbose=(verbosity >= 1),
+        copy=None
+    )
 
     # Add new layer to adata
     adata.layers['magic_imputed'] = bdata.X.copy()
@@ -533,17 +569,19 @@ def additional_calculations(adata: sc.AnnData) -> sc.AnnData:
     return adata
 
 
-def data_pipeline(adata: sc.AnnData,
-                  res_path: Union[None, str] = None,
-                  obs_subset_keys: Union[Tuple[str, list[str]], None] = None,
-                  species: str = 'mus musculus',  # 'homo sapiens', 'mus musculus'
-                  pct_counts_mt_threshold: float = 8.0,
-                  cor_amb_rna: bool = True,  # Only use if Dropseq technology was used
-                  gene_expr_threshold: Tuple[Union[int, float], str] = (20, 'n_cells'),
-                  top_k_deviant: int = 6000,
-                  diffusion_time: int = 1,
-                  verbosity: int = 0,
-                  plot: bool = False) -> sc.AnnData:
+def data_pipeline(
+        adata: sc.AnnData,
+        res_path: Union[None, str] = None,
+        obs_subset_keys: Union[Tuple[str, list[str]], None] = None,
+        species: str = 'mus musculus',  # 'homo sapiens', 'mus musculus'
+        pct_counts_mt_threshold: float = 8.0,
+        cor_amb_rna: bool = True,  # Only use if Dropseq technology was used
+        gene_expr_threshold: Tuple[Union[int, float], str] = (20, 'n_cells'),
+        top_k_deviant: int = 6000,
+        diffusion_time: int = 1,
+        verbosity: int = 0,
+        plot: bool = False
+) -> sc.AnnData:
     """
     Preprocessing pipeline according to best practices for single cell RNA-seq data stored in an AnnData object,
     including quality control, normalization, scaling and imputation, and gene annotation. Alterations to the
@@ -584,20 +622,25 @@ def data_pipeline(adata: sc.AnnData,
     Raises:
         ValueError: If expected keys or data formats are not present in the AnnData object.
     """
+
     # Subset Anndata if any keys and values to keep are passed
     if obs_subset_keys is not None:
-        adata = subset_obs(adata=adata,
-                           obs_key=obs_subset_keys[0],
-                           keep_vals=obs_subset_keys[1])
+        adata = subset_obs(
+            adata=adata,
+            obs_key=obs_subset_keys[0],
+            keep_vals=obs_subset_keys[1]
+        )
 
     # Perform quality control
-    adata = quality_control(adata=adata,
-                            species=species,
-                            pct_counts_mt_threshold=pct_counts_mt_threshold,
-                            cor_amb_rna=cor_amb_rna,
-                            gene_expr_threshold=gene_expr_threshold,
-                            verbosity=verbosity,
-                            plot=plot)
+    adata = quality_control(
+        adata=adata,
+        species=species,
+        pct_counts_mt_threshold=pct_counts_mt_threshold,
+        cor_amb_rna=cor_amb_rna,
+        gene_expr_threshold=gene_expr_threshold,
+        verbosity=verbosity,
+        plot=plot
+    )
 
     # Normalize data (cellcount / total count, log1p-transform)
     adata = normalize(adata=adata, plot=plot)
@@ -607,14 +650,21 @@ def data_pipeline(adata: sc.AnnData,
     adata = scale_to_unit_variance(adata=adata, layer_key='norm', plot=plot)
     adata = scale_to_unit_variance(adata=adata, layer_key='log1p_norm', plot=plot)
 
-    # Compute imputed data matrix
-    adata = impute_data_magic(adata=adata,
-                              diffusion_time=diffusion_time,
-                              layer_key='log1p_norm',
-                              verbosity=verbosity)
+    # Compute imputed data matrix for normalized and log1p transformed data
+    adata = impute_data_magic(
+        adata=adata,
+        diffusion_time=diffusion_time,
+        layer_key='log1p_norm',
+        verbosity=verbosity
+    )
 
     # Annotate highly deviant genes
-    adata = annotate_highly_deviant_genes(adata=adata, top_k=top_k_deviant, verbosity=verbosity, plot=plot)
+    adata = annotate_highly_deviant_genes(
+        adata=adata,
+        top_k=top_k_deviant,
+        verbosity=verbosity,
+        plot=plot
+    )
 
     # Perform additional calculations
     adata = additional_calculations(adata=adata)
@@ -630,9 +680,11 @@ def data_pipeline(adata: sc.AnnData,
 
 
 # Auxiliary functions ##################################################################################################
-def subset_obs(adata: sc.AnnData,
-               obs_key: str,
-               keep_vals: list[Any]) -> sc.AnnData:
+def subset_obs(
+        adata: sc.AnnData,
+        obs_key: str,
+        keep_vals: list[Any]
+) -> sc.AnnData:
     """
    Subset an AnnData object based on values in a specific observation key.
 
@@ -651,14 +703,17 @@ def subset_obs(adata: sc.AnnData,
        sc.AnnData: The subsetted AnnData object containing only the cells that match the
        specified `keep_vals` in the `obs_key` column.
    """
+
     adata = adata[np.isin(adata.obs[obs_key].array, keep_vals), :]
 
     return adata
 
 
-def is_outlier(adata: sc.AnnData,
-               obs_key_qc_metric: str,
-               nmads: int = 5):
+def is_outlier(
+        adata: sc.AnnData,
+        obs_key_qc_metric: str,
+        nmads: int = 5
+) -> pd.Series:
     """
     Identify outliers in a QC metric using Median Absolute Deviations, MAD = median(|x_i - median(x)|).
 
@@ -676,7 +731,16 @@ def is_outlier(adata: sc.AnnData,
     # Uses Median Absolute Deviations as outlier criterion for QC-metric x_i, x
     # MAD = median(|x_i - median(x)|)
     m = adata.obs[obs_key_qc_metric]
-    outlier = (m < np.median(m) - nmads * median_abs_deviation(m)) | \
-              (np.median(m) + nmads * median_abs_deviation(m) < m)
+
+    median = np.median(m)
+    mad = median_abs_deviation(m)
+
+    lower_bound = median - nmads * mad
+    upper_bound = median + nmads * mad
+
+    outlier = (m < lower_bound) | (m > upper_bound)
+
+    # outlier = (m < np.median(m) - nmads * median_abs_deviation(m)) | \
+    #           (np.median(m) + nmads * median_abs_deviation(m) < m)
 
     return outlier
