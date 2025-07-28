@@ -25,7 +25,7 @@ def filter_low_quality_reads(
         species: str = 'mus musculus',
         pct_counts_mt_threshold: float = 8.0,
         verbosity: int = 0,
-        plot: bool = False
+        plot_path: Union[str, None] = None
 ) -> sc.AnnData:
     """
     Filter low-quality cells from an AnnData object based on general count based metrics and mitochondrial counts.
@@ -37,7 +37,7 @@ def filter_low_quality_reads(
         pct_counts_mt_threshold (float, optional): The threshold for the percentage of mitochondrial
             gene counts used to filter cells. Defaults to 8.0.
         verbosity (int, optional): Level of logging for detailed output. Defaults to 0.
-        plot (bool, optional): Whether to plot QC metrics and filtering results. Defaults to False.
+        plot_path (str, optional): Where to save QC metrics plots to. If None, no plots are saved. Defaults to None.
 
     Returns:
         sc.AnnData: The filtered AnnData object with low-quality cells removed.
@@ -66,12 +66,18 @@ def filter_low_quality_reads(
         log1p=True
     )
 
-    if plot:
-        p1 = sns.displot(adata.obs['total_counts'], bins=100, kde=False)
-        # sc.pl.violin(adata, 'total_counts')
-        p2 = sc.pl.violin(adata, 'pct_counts_mt')
-        p3 = sc.pl.scatter(adata, 'total_counts', 'n_genes_by_counts', color='pct_counts_mt')
-        plt.show()
+    if plot_path is not None:
+        sns.displot(adata.obs['total_counts'], bins=100, kde=False)
+        plt.savefig(os.path.join(plot_path, 'total_counts_histogram.png'))
+        plt.close('all')
+
+        sc.pl.violin(adata, 'pct_counts_mt')
+        plt.savefig(os.path.join(plot_path, 'pct_counts_mt_violin.png'))
+        plt.close('all')
+
+        sc.pl.scatter(adata, 'total_counts', 'n_genes_by_counts', color='pct_counts_mt')
+        plt.savefig(os.path.join(plot_path, 'total_counts_vs_n_genes_by_counts.png'))
+        plt.close('all')
 
     # Annotate cells that are outliers w.r.t. QC-metrics:
     # number of counts per barcode (count depth), number of genes per barcode, pct of counts in top 20 genes
@@ -106,9 +112,10 @@ def filter_low_quality_reads(
         print(f'# Number of cells after filtering: {adata.n_obs}')
         print(f'# Number of cells removed due to low quality: {n_cells_before - adata.n_obs}')
 
-    if plot:
-        p1 = sc.pl.scatter(adata, 'total_counts', 'n_genes_by_counts', color='pct_counts_mt')
-        plt.show()
+    if plot_path is not None:
+        sc.pl.scatter(adata, 'total_counts', 'n_genes_by_counts', color='pct_counts_mt')
+        plt.savefig(os.path.join(plot_path, 'total_counts_vs_n_genes_by_counts_after_cell_removal.png'))
+        plt.close('all')
 
     return adata
 
@@ -259,7 +266,7 @@ def quality_control(
         pct_counts_mt_threshold: float = 8.0,
         gene_expr_threshold: Tuple[Union[int, float], str] = (20, 'n_cells'),
         verbosity: int = 0,
-        plot: bool = False
+        plot_path: Union[str, None] = None
 ) -> sc.AnnData:
     # Following best practices according to
     # https://www.sc-best-practices.org/preamble.html
@@ -286,7 +293,7 @@ def quality_control(
             and 'gene_count_quantile' (quantile of gene counts, passed as a decimal in [0,1]).
             Defaults to (20, 'n_cells').
         verbosity (int, optional): Level of logging. Defaults to 0.
-        plot (bool, optional): Whether to plot QC metrics. Defaults to False.
+        plot_path (str, optional): Where to save QC metrics plots to. If None, no plots are saved. Defaults to None.
 
     Returns:
         sc.AnnData: The AnnData object after quality control.
@@ -304,7 +311,7 @@ def quality_control(
         species=species,
         pct_counts_mt_threshold=pct_counts_mt_threshold,
         verbosity=verbosity,
-        plot=plot
+        plot_path=plot_path
     )
 
     if cor_amb_rna:
@@ -328,7 +335,7 @@ def quality_control(
 
 def normalize(
         adata: sc.AnnData,
-        plot: bool = False
+        plot_path: Union[str, None] = None
 ) -> sc.AnnData:
     """
     Normalize and log-transform gene expression data in an AnnData object.
@@ -340,8 +347,8 @@ def normalize(
 
     Args:
         adata (sc.AnnData): The input AnnData object.
-        plot (bool, optional): Whether to plot histograms of the counts before and after
-            log transformation. Defaults to False.
+        plot_path (str, optional): Whhere to save histogram plots of the counts before and after
+            log transformation to. Defaults to None.
 
     Returns:
         sc.AnnData: The AnnData object with normalized and log-transformed data in new layers.
@@ -352,13 +359,16 @@ def normalize(
     # log1p transform
     adata.layers['log1p_norm'] = sc.pp.log1p(scaled_counts['X'], copy=True)
 
-    if plot:
+    if plot_path is not None:
+
         fig, axes = plt.subplots(1, 2, figsize=(10, 5))
-        p1 = sns.histplot(adata.X.sum(1), bins=100, kde=False, ax=axes[0])
+        sns.histplot(adata.X.sum(1), bins=100, kde=False, ax=axes[0])
         axes[0].set_title('Total counts')
-        p2 = sns.histplot(adata.layers['log1p_norm'].sum(1), bins=100, kde=False, ax=axes[1])
-        axes[1].set_title('Shifted logarithm')
-        plt.show()
+
+        sns.histplot(adata.layers['log1p_norm'].sum(1), bins=100, kde=False, ax=axes[1])
+        axes[1].set_title('Count normalization + log1p')
+
+        plt.savefig(os.path.join(plot_path, 'raw_and_normalized_log1p_count_per_cell_histogram.png'))
 
     return adata
 
@@ -366,7 +376,7 @@ def normalize(
 def scale_to_unit_variance(
         adata: sc.AnnData,
         layer_key: Union[str, None] = None,
-        plot: bool = False
+        plot_path: Union[str, None] = None
 ) -> sc.AnnData:
     # Scale gene-columns to unit variance (no 0 centering)
     # => needed if GENIE/GRNboost2 is used for GRN inference!!!
@@ -382,7 +392,7 @@ def scale_to_unit_variance(
     Args:
         adata (sc.AnnData): The input AnnData object.
         layer_key (Union[str, None], optional): The layer to scale. Defaults to the main expression matrix if None.
-        plot (bool, optional): Whether to plot histograms of gene expression sums. Defaults to False.
+        plot_path (str, optional): Where to plot histograms of gene expression sums to. Defaults to None.
 
     Returns:
         sc.AnnData: The AnnData object with the scaled data added as a new layer.
@@ -397,13 +407,17 @@ def scale_to_unit_variance(
 
     adata.layers[f'scaled_{layer_key}'] = sc.pp.scale(x, zero_center=False, copy=True)
 
-    if plot:
+    if plot_path is not None:
         fig, axes = plt.subplots(1, 2, figsize=(10, 5))
-        p1 = sns.histplot(x.sum(1), bins=100, kde=False, ax=axes[0])
+        sns.histplot(x.sum(1), bins=100, kde=False, ax=axes[0])
         axes[0].set_title(layer_key)
-        p2 = sns.histplot(adata.layers[f'scaled_{layer_key}'].sum(1), bins=100, kde=False, ax=axes[1])
+        plt.savefig(os.path.join(plot_path, f'{layer_key}_count_per_cell_histogram.png'))
+        plt.close('all')
+
+        sns.histplot(adata.layers[f'scaled_{layer_key}'].sum(1), bins=100, kde=False, ax=axes[1])
         axes[1].set_title(f'scaled_{layer_key}')
-        plt.show()
+        plt.savefig(os.path.join(plot_path, f'scaled_{layer_key}_count_per_cell_histogram.png'))
+        plt.close('all')
 
     return adata
 
@@ -412,7 +426,7 @@ def annotate_highly_deviant_genes(
         adata: sc.AnnData,
         top_k: int = 6000,
         verbosity: int = 0,
-        plot: bool = False
+        plot_path: Union[str, None] = False
 ) -> sc.AnnData:
     """
     Annotate the top-k highly deviant genes in an AnnData object.
@@ -425,7 +439,7 @@ def annotate_highly_deviant_genes(
         adata (sc.AnnData): The input AnnData object.
         top_k (int, optional): Number of top deviant genes to annotate. Defaults to 6000.
         verbosity (int, optional): Logging level. Defaults to 0.
-        plot (bool, optional): Whether to plot the gene dispersions. Defaults to False.
+        plot_path (str, optional): Where to save the gene dispersions plot  the gene dispersions. Defaults to False.
 
     Returns:
         sc.AnnData: The AnnData object with highly deviant gene annotations.
@@ -440,13 +454,13 @@ def annotate_highly_deviant_genes(
     rcb.logger.setLevel(logging.ERROR)
 
     # Set up R environment and transfer raw counts from Python to R
-    ro.globalenv["adata"] = adata
+    ro.globalenv['adata'] = adata
 
     # Run R code using rpy2
     ro.r.source(os.path.join(os.path.dirname(__file__), 'deviant_genes_annotation.R'))
 
     # Retrieve results from R to Python
-    binomial_deviance = ro.r("rowData(sce)$binomial_deviance").T
+    binomial_deviance = ro.r('rowData(sce)$binomial_deviance').T
 
     # Annotate top-k most deviant genes
     idx = binomial_deviance.argsort()[-top_k:]
@@ -454,23 +468,18 @@ def annotate_highly_deviant_genes(
     mask[idx] = True
 
     # Annotate anndata object
-    adata.var["highly_deviant"] = mask
-    adata.var["binomial_deviance"] = binomial_deviance
+    adata.var['highly_deviant'] = mask
+    adata.var['binomial_deviance'] = binomial_deviance
 
-    if plot:
-        try:
-            # Compute the mean and dispersion for each gene across all cells.
-            sc.pp.highly_variable_genes(adata, layer='log1p_norm')
-            # Plot dispersions vs mean, color by 'highly_deviant'
-            ax = sns.scatterplot(
-                data=adata.var, x="means", y="dispersions", hue="highly_deviant", s=5
-            )
-            ax.set_xlim(None, 1.5)
-            ax.set_ylim(None, 3)
-            plt.show()
+    if plot_path is not None:
+        # Compute the mean and dispersion for each gene across all cells.
+        sc.pp.highly_variable_genes(adata, layer='log1p_norm')
+        # Plot dispersions vs mean, color by 'highly_deviant'
+        sns.scatterplot(
+            data=adata.var, x='means', y='dispersions', hue='highly_deviant', s=5
+        )
 
-        except KeyError:
-            print("WARNING: layer 'log1p_norm' does not exist")
+        plt.savefig(os.path.join(plot_path, 'mean_vs_dispersion_highly_deviant_genes.png'))
 
     return adata
 
@@ -623,6 +632,16 @@ def data_pipeline(
         ValueError: If expected keys or data formats are not present in the AnnData object.
     """
 
+    # Define path where plots are to be saved to
+    if res_path is not None and plot:
+        base_path = os.path.dirname(res_path)
+        filename_without_extension = os.path.splitext(os.path.basename(res_path))[0]
+        plot_path = os.path.join(base_path, 'preprocessing_plots', filename_without_extension)
+        os.makedirs(plot_path, exist_ok=True)
+
+    else:
+        plot_path = None
+
     # Subset Anndata if any keys and values to keep are passed
     if obs_subset_keys is not None:
         adata = subset_obs(
@@ -639,16 +658,16 @@ def data_pipeline(
         cor_amb_rna=cor_amb_rna,
         gene_expr_threshold=gene_expr_threshold,
         verbosity=verbosity,
-        plot=plot
+        plot_path=plot_path
     )
 
     # Normalize data (cellcount / total count, log1p-transform)
-    adata = normalize(adata=adata, plot=plot)
+    adata = normalize(adata=adata, plot_path=plot_path)
 
     # Scale data to unit variance and add as additional layers
-    adata = scale_to_unit_variance(adata=adata, layer_key=None, plot=plot)
-    adata = scale_to_unit_variance(adata=adata, layer_key='norm', plot=plot)
-    adata = scale_to_unit_variance(adata=adata, layer_key='log1p_norm', plot=plot)
+    adata = scale_to_unit_variance(adata=adata, layer_key=None, plot_path=plot_path)
+    adata = scale_to_unit_variance(adata=adata, layer_key='norm', plot_path=plot_path)
+    adata = scale_to_unit_variance(adata=adata, layer_key='log1p_norm', plot_path=plot_path)
 
     # Compute imputed data matrix for normalized and log1p transformed data
     adata = impute_data_magic(
@@ -663,7 +682,7 @@ def data_pipeline(
         adata=adata,
         top_k=top_k_deviant,
         verbosity=verbosity,
-        plot=plot
+        plot_path=plot_path
     )
 
     # Perform additional calculations
