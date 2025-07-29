@@ -173,4 +173,4 @@ cython_debug/
 # Exclude GRN inference output files
 *_auc_matrix.csv
 *_basic_grn.csv
-*_results_pyscenic.csv
+*_result_pyscenic
