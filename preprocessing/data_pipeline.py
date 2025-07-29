@@ -67,17 +67,19 @@ def filter_low_quality_reads(
     )
 
     if plot_path is not None:
-        sns.displot(adata.obs['total_counts'], bins=100, kde=False)
-        plt.savefig(os.path.join(plot_path, 'total_counts_histogram.png'))
-        plt.close('all')
+        # sns.displot(adata.obs['total_counts'], bins=100, kde=False)
+        # plt.savefig(os.path.join(plot_path, 'total_counts_histogram.png'))
+        # plt.close('all')
 
-        sc.pl.violin(adata, 'pct_counts_mt')
-        plt.savefig(os.path.join(plot_path, 'pct_counts_mt_violin.png'))
-        plt.close('all')
+        sc.pl.violin(adata, 'pct_counts_mt', show=False)
+        fig = plt.gcf()
+        fig.savefig(os.path.join(plot_path, 'pct_counts_mt_violin.png'))
+        plt.close(fig)
 
-        sc.pl.scatter(adata, 'total_counts', 'n_genes_by_counts', color='pct_counts_mt')
-        plt.savefig(os.path.join(plot_path, 'total_counts_vs_n_genes_by_counts.png'))
-        plt.close('all')
+        sc.pl.scatter(adata, 'total_counts', 'n_genes_by_counts', color='pct_counts_mt', show=False)
+        fig = plt.gcf()
+        fig.savefig(os.path.join(plot_path, 'total_counts_vs_n_genes_by_counts.png'))
+        plt.close(fig)
 
     # Annotate cells that are outliers w.r.t. QC-metrics:
     # number of counts per barcode (count depth), number of genes per barcode, pct of counts in top 20 genes
@@ -113,9 +115,10 @@ def filter_low_quality_reads(
         print(f'# Number of cells removed due to low quality: {n_cells_before - adata.n_obs}')
 
     if plot_path is not None:
-        sc.pl.scatter(adata, 'total_counts', 'n_genes_by_counts', color='pct_counts_mt')
-        plt.savefig(os.path.join(plot_path, 'total_counts_vs_n_genes_by_counts_after_cell_removal.png'))
-        plt.close('all')
+        sc.pl.scatter(adata, 'total_counts', 'n_genes_by_counts', color='pct_counts_mt', show=False)
+        fig = plt.gcf()
+        fig.savefig(os.path.join(plot_path, 'total_counts_vs_n_genes_by_counts_after_cell_removal.png'))
+        plt.close(fig)
 
     return adata
 
@@ -362,13 +365,14 @@ def normalize(
     if plot_path is not None:
 
         fig, axes = plt.subplots(1, 2, figsize=(10, 5))
-        sns.histplot(adata.X.sum(1), bins=100, kde=False, ax=axes[0])
-        axes[0].set_title('Total counts')
+        sns.histplot(adata.X.sum(1), bins=100, kde=False, legend=False, ax=axes[0])
+        axes[0].set_title('total counts')
 
-        sns.histplot(adata.layers['log1p_norm'].sum(1), bins=100, kde=False, ax=axes[1])
-        axes[1].set_title('Count normalization + log1p')
+        sns.histplot(adata.layers['log1p_norm'].sum(1), bins=100, kde=False, legend=False, ax=axes[1])
+        axes[1].set_title('count normalization + log1p')
 
-        plt.savefig(os.path.join(plot_path, 'raw_and_normalized_log1p_count_per_cell_histogram.png'))
+        fig.savefig(os.path.join(plot_path, 'raw_and_normalized_log1p_count_per_cell_histogram.png'))
+        plt.close(fig)
 
     return adata
 
@@ -409,15 +413,17 @@ def scale_to_unit_variance(
 
     if plot_path is not None:
         fig, axes = plt.subplots(1, 2, figsize=(10, 5))
-        sns.histplot(x.sum(1), bins=100, kde=False, ax=axes[0])
-        axes[0].set_title(layer_key)
-        plt.savefig(os.path.join(plot_path, f'{layer_key}_count_per_cell_histogram.png'))
-        plt.close('all')
 
-        sns.histplot(adata.layers[f'scaled_{layer_key}'].sum(1), bins=100, kde=False, ax=axes[1])
-        axes[1].set_title(f'scaled_{layer_key}')
-        plt.savefig(os.path.join(plot_path, f'scaled_{layer_key}_count_per_cell_histogram.png'))
-        plt.close('all')
+        sns.histplot(x.sum(1), bins=100, legend=False, ax=axes[0])
+        axes[0].set_title(f'{layer_key} unscaled')
+
+        sns.histplot(
+            adata.layers[f'scaled_{layer_key}'].sum(1), bins=100, kde=False, legend=False, ax=axes[1]
+        )
+        axes[1].set_title(f'{layer_key} scaled (unit variance)')
+
+        fig.savefig(os.path.join(plot_path, f'unit_variance_scaling_{layer_key}_count_per_cell_histogram.png'))
+        plt.close(fig)
 
     return adata
 
