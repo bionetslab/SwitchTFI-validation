@@ -73,6 +73,7 @@ def pyscenic_pipeline(
 
         if additional_tfs is not None:
             tf_names.extend(additional_tfs)
+            tf_names = list(set(tf_names))
 
         check_tf_gene_set_intersection(
             tf_names=np.array(tf_names),
