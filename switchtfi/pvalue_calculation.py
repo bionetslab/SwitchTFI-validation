@@ -13,13 +13,15 @@ from .utils import labels_to_bool, solve_lsap
 
 
 # Global p-values ######################################################################################################
-def compute_westfall_young_adjusted_pvalues(adata: sc.AnnData,
-                                            grn: pd.DataFrame,
-                                            n_permutations: int = 100,
-                                            weight_key: str = 'weight',
-                                            cell_bool_key: str = 'cell_bool',
-                                            clustering_dt_reg_key: str = 'cluster_bool_dt',
-                                            clustering_obs_key: str = 'clusters') -> pd.DataFrame:
+def compute_westfall_young_adjusted_pvalues(
+        adata: sc.AnnData,
+        grn: pd.DataFrame,
+        n_permutations: int = 100,
+        weight_key: str = 'weight',
+        cell_bool_key: str = 'cell_bool',
+        clustering_dt_reg_key: str = 'cluster_bool_dt',
+        clustering_obs_key: str = 'clusters'
+) -> pd.DataFrame:
     """
     Compute Westfall-Young adjusted p-values for the edges weights fitted to a GRN by SwitchTFI.
 
@@ -32,13 +34,13 @@ def compute_westfall_young_adjusted_pvalues(adata: sc.AnnData,
     Args:
         adata (sc.AnnData): The input AnnData object.
         grn (pd.DataFrame): The GRN DataFrame containing TF-target gene pairs.
-        n_permutations (int, optional): Number of permutations for the Westfall-Young procedure. Defaults to 100.
-        weight_key (str, optional): Column name in the GRN representing the weights. Defaults to 'weight'.
-        cell_bool_key (str, optional): Column name in the GRN containing a bool arrays indicating which cells
-        were used for weight fitting. Defaults to 'cell_bool'.
-        clustering_dt_reg_key (str, optional): Column name in the GRN, containing the arrays with entries
-            corresponding to the clustering derived during weight calculation. Defaults to 'cluster_bool_dt'.
-        clustering_obs_key (str, optional): Key for the cluster labels in `adata.obs`. Defaults to 'clusters'.
+        n_permutations (int): Number of permutations for the Westfall-Young procedure. Defaults to 100.
+        weight_key (str): Column name in the GRN representing the weights. Defaults to 'weight'.
+        cell_bool_key (str): Column name in the GRN containing bool arrays indicating which cells were used during
+        weight fitting for the respective edge. Defaults to 'cell_bool'.
+        clustering_dt_reg_key (str): Column name in the GRN, containing the arrays with entries
+        corresponding to the clustering derived during weight calculation. Defaults to 'cluster_bool_dt'.
+        clustering_obs_key (str): Key for the cluster labels in `adata.obs`. Defaults to 'clusters'.
 
     Returns:
         pd.DataFrame: The GRN with adjusted p-values added in the 'pvals_wy' column.
@@ -70,25 +72,33 @@ def compute_westfall_young_adjusted_pvalues(adata: sc.AnnData,
 
         for j in range(n_permutations):
             # Permute labels and compute weight
-            permutation_weights[i, j] = solve_lsap(clust1=clustering_dt_reg,
-                                                   clust2=np.random.permutation(edge_labels))
+            permutation_weights[i, j] = solve_lsap(
+                clust1=clustering_dt_reg,
+                clust2=np.random.permutation(edge_labels)
+            )
+
     # Compute empirical adjusted p-values
     true_weights = grn[weight_key].to_numpy()
-    p_vals = test_statistic_to_w_y_adjusted_pvalue(true_weights=true_weights,
-                                                   permutation_weights=permutation_weights)
+    p_vals = test_statistic_to_w_y_adjusted_pvalue(
+        true_weights=true_weights,
+        permutation_weights=permutation_weights
+    )
 
     grn['pvals_wy'] = p_vals
 
     return grn
 
 
-def compute_empirical_pvalues(adata: sc.AnnData,
-                              grn: pd.DataFrame,
-                              n_permutations: int = 100,
-                              weight_key: str = 'weight',
-                              cell_bool_key: str = 'cell_bool',
-                              clustering_dt_reg_key: str = 'cluster_bool_dt',
-                              clustering_obs_key: str = 'clusters') -> pd.DataFrame:
+def compute_empirical_pvalues(
+        adata: sc.AnnData,
+        grn: pd.DataFrame,
+        n_permutations: int = 100,
+        weight_key: str = 'weight',
+        cell_bool_key: str = 'cell_bool',
+        clustering_dt_reg_key: str = 'cluster_bool_dt',
+        clustering_obs_key: str = 'clusters'
+) -> pd.DataFrame:
+
     n_edges = grn.shape[0]
     # Get labels fom anndata, turn into bool vector
     labels = labels_to_bool(adata.obs[clustering_obs_key].to_numpy())
@@ -105,14 +115,18 @@ def compute_empirical_pvalues(adata: sc.AnnData,
 
         for j in range(n_permutations):
             # Permute labels and compute weight
-            permutation_weights[i, j] = solve_lsap(clust1=clustering_dt_reg,
-                                                   clust2=np.random.permutation(edge_labels))
+            permutation_weights[i, j] = solve_lsap(
+                clust1=clustering_dt_reg,
+                clust2=np.random.permutation(edge_labels)
+            )
 
     # Compute empirical adjusted p-values
     true_weights = grn[weight_key].to_numpy()
-    p_vals = test_statistic_to_emp_pvals(true_weights=true_weights,
-                                         permutation_weights=permutation_weights,
-                                         exact_pval=True)
+    p_vals = test_statistic_to_emp_pvals(
+        true_weights=true_weights,
+        permutation_weights=permutation_weights,
+        exact_pval=True
+    )
 
     grn['emp_pvals'] = p_vals
 
@@ -225,13 +239,16 @@ def compute_corrected_pvalues(
 
     else:
         if pval_key is None:
-            grn = compute_empirical_pvalues(adata=adata,
-                                            grn=grn,
-                                            n_permutations=n_permutations,
-                                            weight_key=weight_key,
-                                            cell_bool_key=cell_bool_key,
-                                            clustering_dt_reg_key=clustering_dt_reg_key,
-                                            clustering_obs_key=clustering_obs_key)
+            grn = compute_empirical_pvalues(
+                adata=adata,
+                grn=grn,
+                n_permutations=n_permutations,
+                weight_key=weight_key,
+                cell_bool_key=cell_bool_key,
+                clustering_dt_reg_key=clustering_dt_reg_key,
+                clustering_obs_key=clustering_obs_key
+            )
+
             pval_key = 'emp_pvals'
 
         grn = adjust_pvals(
@@ -247,12 +264,7 @@ def compute_corrected_pvalues(
         grn_p = os.path.join(result_folder, f'{fn_prefix}grn.json')
         grn.to_json(grn_p)
 
-    if plot:
-
-        if result_folder is not None:
-            plot_folder = result_folder
-        else:
-            plot_folder = os.getcwd()
+    if plot and result_folder is not None:
 
         weights = grn[weight_key].to_numpy()
         pvals = grn[f'pvals_{method}'].to_numpy()
@@ -263,19 +275,24 @@ def compute_corrected_pvalues(
         ax.axhline(y=0.05, color='red', label='alpha=0.05')
         ax.axhline(y=0.01, color='orange', label='alpha=0.01')
         plt.legend()
-        fig.savefig(os.path.join(plot_folder, f'weight_vs_{method}_corrected_pvalues.png'))
+        fig.savefig(os.path.join(result_folder, f'weight_vs_{method}_corrected_pvalues.png'))
         plt.close(fig)
+
+    else:
+        warnings.warn('Saving of plot not possible if result_folder is not specified.', UserWarning)
 
     return grn
 
 
-def remove_insignificant_edges(grn: pd.DataFrame,
-                               alpha: float = 0.05,
-                               p_value_key: str = 'pvals_wy',
-                               result_folder: Union[None, str] = None,
-                               verbosity: int = 0,
-                               inplace: bool = True,
-                               fn_prefix: Union[str, None] = None) -> pd.DataFrame:
+def remove_insignificant_edges(
+        grn: pd.DataFrame,
+        alpha: float = 0.05,
+        p_value_key: str = 'pvals_wy',
+        result_folder: Union[str, None] = None,
+        verbosity: int = 0,
+        inplace: bool = True,
+        fn_prefix: Union[str, None] = None
+) -> pd.DataFrame:
     """
     Remove edges with insignificant weight from the GRN based on previously computed adjusted p-values.
 
@@ -285,12 +302,12 @@ def remove_insignificant_edges(grn: pd.DataFrame,
 
     Args:
         grn (pd.DataFrame): The GRN DataFrame containing edges and their adjusted p-values.
-        alpha (float, optional): The significance threshold for removing edges. Defaults to 0.05.
-        p_value_key (str, optional): Column name for the p-values to evaluate. Defaults to 'pvals_wy'.
-        result_folder (Union[None, str], optional): Folder to save the filtered GRN. Defaults to None.
-        verbosity (int, optional): Level of logging for detailed output. Defaults to 0.
-        inplace (bool, optional): Whether to modify the GRN in place or return a copy. Defaults to True.
-        fn_prefix (Union[str, None], optional): Optional filename prefix for saving results. Defaults to None.
+        alpha (float): The significance threshold for removing edges. Defaults to 0.05.
+        p_value_key (str): Column name for the p-values to evaluate. Defaults to 'pvals_wy'.
+        result_folder (str, optional): Folder to save the filtered GRN. Defaults to None.
+        verbosity (int): Level of logging for detailed output. Defaults to 0.
+        inplace (bool): Whether to modify the GRN in place or return a copy. Defaults to True.
+        fn_prefix (str, optional): Optional filename prefix for saving results. Defaults to None.
 
     Returns:
         pd.DataFrame: The filtered GRN containing only significant edges.
@@ -313,16 +330,21 @@ def remove_insignificant_edges(grn: pd.DataFrame,
         grn.to_json(grn_p)
 
     if verbosity >= 1:
-        print('### Removing edges due to insignificance ###')
-        print(f'# There were {n_edges_before} edges in the GRN')
-        print(f'# {grn.shape[0]} edges remain in the GRN, {n_edges_before - grn.shape[0]} edges were removed')
+        print('### Removing edges below FWER threshold ###')
+        print(
+            f'# Out of {n_edges_before} edges {grn.shape[0]} edges remain in the GRN,\n'
+            f'{n_edges_before - grn.shape[0]} edges were removed'
+        )
 
     return grn
 
 
 # Auxiliary functions ##################################################################################################
-def test_statistic_to_w_y_adjusted_pvalue(true_weights: np.ndarray,
-                                          permutation_weights: np.ndarray) -> np.ndarray:
+def test_statistic_to_w_y_adjusted_pvalue(
+        true_weights: np.ndarray,
+        permutation_weights: np.ndarray
+) -> np.ndarray:
+
     # Get maximum weight (test statistic) per permutation, dim: n_edges, n_permutations
     max_permutation_weight = permutation_weights.max(axis=0)
 
@@ -342,17 +364,22 @@ def test_statistic_to_w_y_adjusted_pvalue2(true_weights: np.ndarray,
     return p_vals
 
 
-def test_statistic_to_emp_pvals(true_weights: np.ndarray,
-                                permutation_weights: np.ndarray,
-                                exact_pval: bool = True) -> np.ndarray:
+def test_statistic_to_emp_pvals(
+        true_weights: np.ndarray,
+        permutation_weights: np.ndarray,
+        exact_pval: bool = True
+) -> np.ndarray:
+
     # Permutation_weights has dim: n_edges, n_permutations
 
     if exact_pval:
         # Fraction of times when permutation weight is bigger than true weight
         # Corrected by adding +1 in de-/nominator => No nonzero p-values (min_pval = 1 / n_permutations)
         # See paper: p-vals should never be zero ...
-        p_vals = ((permutation_weights >= true_weights[:, np.newaxis]).sum(axis=1) + 1) / \
-                 (permutation_weights.shape[1] + 1)
+        p_vals = (
+                ((permutation_weights >= true_weights[:, np.newaxis]).sum(axis=1) + 1) /
+                (permutation_weights.shape[1] + 1)
+        )
     else:
         # Fraction of times when permutation weight is bigger than true weight
         p_vals = (permutation_weights >= true_weights[:, np.newaxis]).sum(axis=1) / permutation_weights.shape[1]
