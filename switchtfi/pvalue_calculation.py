@@ -1,9 +1,9 @@
 
 import os
-import scanpy as sc
-import pandas as pd
 import numpy as np
+import pandas as pd
 import matplotlib.pyplot as plt
+import scanpy as sc
 
 from typing import *
 from tqdm import tqdm
@@ -132,8 +132,9 @@ def adjust_pvals(grn: pd.DataFrame,
     # For FDR control use:
     # - 'fdr_bh' : Benjamini/Hochberg, independence or non-negative correlation
     # - 'fdr_by' : Benjamini/Yekutieli, independence or negative correlation
-    # - 'fdr_tsbh' : two stage fdr correction, independence or non-negative correlation
-    # - 'fdr_tsbky' : two stage fdr correction, independence or non-negative correlation
+    # - 'fdr_tsbh' : two stage fdr correction, independence or non-negative correlation, uses alpha
+    # - 'fdr_tsbky' : two stage fdr correction, independence or non-negative correlation, uses alpha
+    # NOTE: alpha is only used for two-stage procedures!
 
     p_values = grn[pval_key].to_numpy()
 
@@ -148,19 +149,21 @@ def adjust_pvals(grn: pd.DataFrame,
     return grn
 
 
-def compute_corrected_pvalues(adata: sc.AnnData,
-                              grn: pd.DataFrame,
-                              method: str = 'wy',
-                              n_permutations: int = 1000,
-                              result_folder: Union[str, None] = None,
-                              weight_key: str = 'weight',
-                              cell_bool_key: str = 'cell_bool',
-                              clustering_dt_reg_key: str = 'cluster_bool_dt',
-                              clustering_obs_key: str = 'clusters',
-                              plot: bool = False,
-                              pval_key: Union[str, None] = None,
-                              alpha: Union[float, None] = None,
-                              fn_prefix: Union[str, None] = None) -> pd.DataFrame:
+def compute_corrected_pvalues(
+        adata: sc.AnnData,
+        grn: pd.DataFrame,
+        method: Literal['wy', 'bonferroni', 'sidak', 'fdr_bh', 'fdr_by'] = 'wy',
+        n_permutations: int = 1000,
+        result_folder: Union[str, None] = None,
+        weight_key: str = 'weight',
+        cell_bool_key: str = 'cell_bool',
+        clustering_dt_reg_key: str = 'cluster_bool_dt',
+        clustering_obs_key: str = 'clusters',
+        plot: bool = False,
+        pval_key: Union[str, None] = None,
+        alpha: Union[float, None] = None,
+        fn_prefix: Union[str, None] = None
+) -> pd.DataFrame:
     """
     Compute corrected p-values for GRN edges using simple permutation-based empirical p-values
     plus multiple testing correction or the Westfall-Young method.
@@ -172,27 +175,29 @@ def compute_corrected_pvalues(adata: sc.AnnData,
     Args:
         adata (sc.AnnData): The input AnnData object.
         grn (pd.DataFrame): The GRN DataFrame with TF-target gene pairs.
-        method (str, optional): The method for p-value correction ('wy', 'bonferroni', 'fdr_bh'). Defaults to 'wy'.
-        n_permutations (int, optional): Number of permutations for Westfall-Young or empirical p-values. Defaults to 1000.
-        result_folder (Union[str, None], optional): Folder to save the results. Defaults to None.
-        weight_key (str, optional): Column name for the weights in the GRN. Defaults to 'weight'.
-        cell_bool_key (str, optional): Column name in the GRN containing a bool arrays indicating which cells
+        method (Literal['wy', 'bonferroni', 'sidak', 'fdr_bh', 'fdr_by'] ): P-value calculation method. Defaults to 'wy'.
+        n_permutations (int): Number of permutations for Westfall-Young or empirical p-values. Defaults to 1000.
+        result_folder (str, optional): Folder to save the results. Defaults to None.
+        weight_key (str): Column name for the weights in the GRN. Defaults to 'weight'.
+        cell_bool_key (str): Column name in the GRN containing a bool arrays indicating which cells
         were used for weight fitting. Defaults to 'cell_bool'.
-        clustering_dt_reg_key (str, optional): Column name in the GRN, containing the arrays with entries
-            corresponding to the clustering derived during weight calculation. Defaults to 'cluster_bool_dt'.
-        clustering_obs_key (str, optional): Key for cluster labels in `adata.obs`. Defaults to 'clusters'.
-        plot (bool, optional): Whether to generate a scatter plot of weights vs. p-values. Defaults to False.
-        pval_key (Union[str, None], optional): The column name for p-values in the GRN. Defaults to None.
-        alpha (Union[float, None], optional): Significance level for p-value correction. Defaults to None.
-        fn_prefix (Union[str, None], optional): Optional filename prefix for saving results. Defaults to None.
+        clustering_dt_reg_key (str): Column name in the GRN, containing the arrays with entries corresponding to the
+        clustering derived during weight calculation. Defaults to 'cluster_bool_dt'.
+        clustering_obs_key (str): Key for cluster labels in `adata.obs`. Defaults to 'clusters'.
+        plot (bool): Whether to generate a scatter plot of weights vs. p-values. Defaults to False.
+        pval_key (str, optional): Column name for empirical p-values (not multiple testing corrected) in the GRN,
+        if it exists. Defaults to None, i.e. empirical p-values are computed from scratch.
+        alpha (float, optional): FDR level for multiple testing correction. Only necessary for some of the methods.
+        Defaults to None, i.e. is set to 0.05 internally.
+        fn_prefix (str, optional): Optional filename prefix for saving results. Defaults to None.
 
     Returns:
         pd.DataFrame: The GRN with corrected p-values added.
     """
 
     # 'wy', 'bonferroni', 'sidak' control FWER, 'fdr_bh', 'fdr_by' control FDR
-    assert method in {'wy', 'bonferroni', 'sidak', 'fdr_bh', 'fdr_by'}, \
-        "Method can be 'wy', 'bonferroni', 'sidak', 'fdr_bh', 'fdr_by'"
+    if method not in {'wy', 'bonferroni', 'sidak', 'fdr_bh', 'fdr_by'}:
+        raise ValueError("Method must be one of: 'wy', 'bonferroni', 'sidak', 'fdr_bh', 'fdr_by'")
 
     if method == 'wy':
         grn = compute_westfall_young_adjusted_pvalues(adata=adata,
