@@ -1,14 +1,15 @@
 
-import ctxcore.rnkdb
-import pyscenic.utils
-import scanpy as sc
-import pandas as pd
-import numpy as np
-import matplotlib.pyplot as plt
-import seaborn as sns
 import os
 import glob
 import pickle
+import ctxcore.rnkdb
+import pyscenic.utils
+
+import numpy as np
+import pandas as pd
+import scanpy as sc
+import matplotlib.pyplot as plt
+import seaborn as sns
 
 from typing import *
 from tqdm import tqdm
@@ -19,16 +20,18 @@ from pyscenic.prune import prune2df, df2regulons
 from pyscenic.aucell import aucell
 
 
-def pyscenic_pipeline(adata: sc.AnnData,
-                      layer_key: Union[None, str],
-                      tf_file: Union[None, str],
-                      result_folder: Union[None, str],
-                      database_path: str,
-                      motif_annotations_path: str,
-                      grn_inf_method: str = 'grnboost2',
-                      fn_prefix: Union[None, str] = None,
-                      verbosity: int = 0,
-                      plot: bool = False):
+def pyscenic_pipeline(
+        adata: sc.AnnData,
+        layer_key: Union[None, str],
+        tf_file: Union[None, str],
+        result_folder: Union[None, str],
+        database_path: str,
+        motif_annotations_path: str,
+        grn_inf_method: str = 'grnboost2',
+        fn_prefix: Union[None, str] = None,
+        verbosity: int = 0,
+        plot: bool = False
+) -> pd.DataFrame:
     """
     Run the SCENIC method for gene regulatory network (GRN) inference on scRNA-seq data stored as an AnnData object.
 
@@ -65,64 +68,87 @@ def pyscenic_pipeline(adata: sc.AnnData,
     # Load list of TFs
     if tf_file is not None:
         tf_names = load_tf_names(tf_file)
-        check_tf_gene_set_intersection(tf_names=np.array(tf_names),
-                                       gene_names=adata.var_names.to_numpy(),
-                                       verbosity=verbosity)
+        check_tf_gene_set_intersection(
+            tf_names=np.array(tf_names),
+            gene_names=adata.var_names.to_numpy(),
+            verbosity=verbosity
+        )
+
     else:
         tf_names = 'all'
 
     # Phase I: Inference of co-expression modules ###
     # Infer initial GRN using GRNboost2
-    adjacencies = infer_basic_grn(expression_matrix=expression_mtrx,
-                                  tf_names=tf_names,
-                                  method=grn_inf_method,
-                                  result_folder=result_folder,
-                                  verbosity=verbosity,
-                                  plot=plot,
-                                  fn_prefix=fn_prefix)
+    adjacencies = infer_basic_grn(
+        expression_matrix=expression_mtrx,
+        tf_names=tf_names,
+        method=grn_inf_method,
+        result_folder=result_folder,
+        verbosity=verbosity,
+        plot=plot,
+        fn_prefix=fn_prefix
+    )
+
     # Derive potential regulons from these co-expression modules
-    modules = modules_from_grn(adjacencies=adjacencies,
-                               expression_matrix=expression_mtrx,
-                               result_folder=result_folder,
-                               fn_prefix=fn_prefix)
+    modules = modules_from_grn(
+        adjacencies=adjacencies,
+        expression_matrix=expression_mtrx,
+        result_folder=result_folder,
+        fn_prefix=fn_prefix
+    )
 
     # Phase II: Prune modules for targets with cis regulatory footprints (aka RcisTarget) ###
-    res_df = prune_grn(modules=modules,
-                       database_path=database_path,
-                       motif_annotations_path=motif_annotations_path,
-                       result_folder=result_folder,
-                       verbosity=verbosity,
-                       fn_prefix=fn_prefix)
+    res_df = prune_grn(
+        modules=modules,
+        database_path=database_path,
+        motif_annotations_path=motif_annotations_path,
+        result_folder=result_folder,
+        verbosity=verbosity,
+        fn_prefix=fn_prefix
+    )
 
     # Phase III: Extract pruned GRN from pyscenic results dataframe
-    pruned_grn = pyscenic_result_df_to_grn(pyscenic_result_df=res_df,
-                                           result_folder=result_folder,
-                                           verbosity=verbosity,
-                                           fn_prefix=fn_prefix)
+    pruned_grn = pyscenic_result_df_to_grn(
+        pyscenic_result_df=res_df,
+        result_folder=result_folder,
+        verbosity=verbosity,
+        fn_prefix=fn_prefix
+    )
 
     # Phase IV: Cellular regulon enrichment matrix (aka AUCell)
     # Get regulons from results dataframe
-    regulons = pyscenic_res_df_to_regulons(pyscenic_result_df=res_df,
-                                           result_folder=result_folder,
-                                           fn_prefix=fn_prefix)
+    regulons = pyscenic_res_df_to_regulons(
+        pyscenic_result_df=res_df,
+        result_folder=result_folder,
+        fn_prefix=fn_prefix
+    )
+
     # Calculate cellular regulon enrichment matrix
     # cell x TF, Enrichment of a regulon is measures as AUC of the recovery curve of the genes that define this regulon.
-    auc_mtrx = regulons_to_aucell_matrix(expression_matrix=expression_mtrx,
-                                         regulons=regulons,
-                                         result_folder=result_folder,
-                                         verbosity=verbosity,
-                                         plot=plot,
-                                         fn_prefix=fn_prefix)
+    auc_mtrx = regulons_to_aucell_matrix(
+        expression_matrix=expression_mtrx,
+        regulons=regulons,
+        result_folder=result_folder,
+        verbosity=verbosity,
+        plot=plot,
+        fn_prefix=fn_prefix
+    )
 
     return pruned_grn
 
 
-def check_tf_gene_set_intersection(tf_names: np.ndarray,
-                                   gene_names: np.ndarray,
-                                   verbosity: int = 0):
+def check_tf_gene_set_intersection(
+        tf_names: np.ndarray,
+        gene_names: np.ndarray,
+        verbosity: int = 0
+):
 
     intersection = np.intersect1d(tf_names, gene_names, return_indices=False)
     perc = intersection.shape[0] / tf_names.shape[0]
+
+    if intersection.shape[0] == 0:
+        raise ValueError("No overlap between TF list and gene names in dataset.")
+
     if verbosity >= 1:
         print(f'# There are {gene_names.shape[0]} genes present in the dataset')
         print(f'# There are {tf_names.shape[0]} TFs')
@@ -130,13 +156,15 @@ def check_tf_gene_set_intersection(tf_names: np.ndarray,
         print(f'# this corresponds to {round(perc, 3) * 100}%')
 
 
-def infer_basic_grn(expression_matrix: pd.DataFrame,
-                    tf_names: Union[str, list[str]],
-                    method: str = 'grnboost2',
-                    result_folder: Union[None, str] = None,
-                    verbosity: int = 0,
-                    plot: bool = False,
-                    **kwargs) -> pd.DataFrame:
+def infer_basic_grn(
+        expression_matrix: pd.DataFrame,
+        tf_names: Union[str, list[str]],
+        method: str = 'grnboost2',
+        result_folder: Union[None, str] = None,
+        verbosity: int = 0,
+        plot: bool = False,
+        **kwargs
+) -> pd.DataFrame:
 
     if verbosity >= 1:
         if method == 'grnboost2':
@@ -144,16 +172,21 @@ def infer_basic_grn(expression_matrix: pd.DataFrame,
         elif method == 'genie3':
             print('### GENIE3 ... ###')
 
+    # Infer GRN: Df with columns: TF, target, importance
     if method == 'grnboost2':
-        grn = grnboost2(expression_data=expression_matrix,
-                        tf_names=tf_names,
-                        verbose=False)  # out structure: TF target importance
+        grn = grnboost2(
+            expression_data=expression_matrix,
+            tf_names=tf_names,
+            verbose=False
+        )
     elif method == 'genie3':
-        grn = genie3(expression_data=expression_matrix,
-                     tf_names=tf_names,
-                     verbose=False)
+        grn = genie3(
+            expression_data=expression_matrix,
+            tf_names=tf_names,
+            verbose=False
+        )
     else:
-        grn = pd.DataFrame()
+        raise NotImplementedError(f'Method "{method}" not implemented, must be "grnboost2" or "genie3".')
 
     if result_folder is not None:
         prefix = kwargs.get('fn_prefix')  # Get prefix for filename, returns None if no root is passed in kwargs
@@ -175,13 +208,16 @@ def infer_basic_grn(expression_matrix: pd.DataFrame,
     return grn
 
 
-def modules_from_grn(adjacencies: pd.DataFrame,
-                     expression_matrix: pd.DataFrame,
-                     result_folder: Union[None, str] = None,
-                     **kwargs) -> list[pyscenic.utils.Regulon]:
-    # modules = list(modules_from_adjacencies(adjacencies, expression_matrix))
+def modules_from_grn(
+        adjacencies: pd.DataFrame,
+        expression_matrix: pd.DataFrame,
+        result_folder: Union[None, str] = None,
+        **kwargs
+) -> list[pyscenic.utils.Regulon]:
+
+    # Get modules, set rho_mask_dropouts=False, default for version >= 0.9.18
     modules = list(modules_from_adjacencies(adjacencies, expression_matrix, rho_mask_dropouts=False))
-    # Todo ...
+
     if result_folder is not None:
         prefix = kwargs.get('fn_prefix')  # Get prefix for filename, returns None if no root is passed in kwargs
         if prefix is None:
@@ -189,27 +225,30 @@ def modules_from_grn(adjacencies: pd.DataFrame,
         modules_p = os.path.join(result_folder, f'{prefix}modules.pkl')
         with open(modules_p, 'wb') as f:
             pickle.dump(modules, f)
-        # with open(modules_p, 'rb') as f:
-        #     modules = pickle.load(f)
 
     return modules
 
 
-def prune_grn(modules: list[pyscenic.utils.Regulon],
-              database_path: str,
-              motif_annotations_path: str,
-              result_folder: Union[None, str] = None,
-              verbosity: int = 0,
-              **kwargs) -> pd.DataFrame:
+def prune_grn(
+        modules: list[pyscenic.utils.Regulon],
+        database_path: str,
+        motif_annotations_path: str,
+        result_folder: Union[None, str] = None,
+        verbosity: int = 0,
+        **kwargs
+) -> pd.DataFrame:
+
     if verbosity >= 1:
         print('### Prune GRN ... ###')
 
     dbs = load_ranking_databases(database_path=database_path)
 
     # Prune GRN
-    res_df = prune2df(rnkdbs=dbs,
-                      modules=modules,
-                      motif_annotations_fname=motif_annotations_path)
+    res_df = prune2df(
+        rnkdbs=dbs,
+        modules=modules,
+        motif_annotations_fname=motif_annotations_path
+    )
 
     if result_folder is not None:
         prefix = kwargs.get('fn_prefix')  # Get prefix for filename, returns None if no root is passed in kwargs
@@ -219,14 +258,16 @@ def prune_grn(modules: list[pyscenic.utils.Regulon],
         res_df.to_csv(res_p)
 
     if verbosity >= 1:
-        print(res_df.head())
+        print('# ### Pruned GRN:\n', res_df.head())
 
     return res_df
 
 
-def pyscenic_res_df_to_regulons(pyscenic_result_df: pd.DataFrame,
-                                result_folder: Union[None, str] = None,
-                                **kwargs) -> Sequence[pyscenic.utils.Regulon]:
+def pyscenic_res_df_to_regulons(
+        pyscenic_result_df: pd.DataFrame,
+        result_folder: Union[None, str] = None,
+        **kwargs
+) -> Sequence[pyscenic.utils.Regulon]:
 
     # pyscenic_result_df = correct_dtype_psc_res_df(pyscenic_result_df=pyscenic_result_df)
     regulons = df2regulons(pyscenic_result_df)
@@ -244,12 +285,15 @@ def pyscenic_res_df_to_regulons(pyscenic_result_df: pd.DataFrame,
     return regulons
 
 
-def regulons_to_aucell_matrix(expression_matrix: pd.DataFrame,
-                              regulons: Sequence[pyscenic.utils.Regulon],
-                              result_folder: Union[None, str] = None,
-                              verbosity: int = 0,
-                              plot: bool = False,
-                              **kwargs) -> pd.DataFrame:
+def regulons_to_aucell_matrix(
+        expression_matrix: pd.DataFrame,
+        regulons: Sequence[pyscenic.utils.Regulon],
+        result_folder: Union[None, str] = None,
+        verbosity: int = 0,
+        plot: bool = False,
+        **kwargs
+) -> pd.DataFrame:
+
     auc_mtx = aucell(expression_matrix, regulons)
 
     if result_folder is not None:
@@ -295,12 +339,15 @@ def regulons_to_aucell_matrix(expression_matrix: pd.DataFrame,
     return auc_mtx
 
 
-def pyscenic_result_df_to_grn(pyscenic_result_df: pd.DataFrame,
-                              result_folder: Union[None, str],
-                              verbosity: int = 0,
-                              **kwargs) -> pd.DataFrame:
+def pyscenic_result_df_to_grn(
+        pyscenic_result_df: pd.DataFrame,
+        result_folder: Union[None, str],
+        verbosity: int = 0,
+        **kwargs
+) -> pd.DataFrame:
+
     # Note: pyscenic_result_df has the following structure
-    # Index columns: 'TF', 'MotifID'
+    # Index: 'TF', 'MotifID'
     # Column name levels: 'Enrichment'; 'AUC', 'NES', 'MotifSimilarityQvalue', 'OrthologousIdentity', 'Annotation',
     # 'Context', 'TargetGenes', 'RankAtMax'
 
@@ -308,20 +355,11 @@ def pyscenic_result_df_to_grn(pyscenic_result_df: pd.DataFrame,
     tf_names = pyscenic_result_df.index.get_level_values('TF').to_numpy()
     tf_list = []
     tg_list = []
-    weight_list = []  # ???
+    weight_list = []
     for tf in tqdm(tf_names, total=tf_names.shape[0]):
         for target_list in pyscenic_result_df.loc[[tf]]['Enrichment']['TargetGenes']:
-            if isinstance(target_list, str):
-                # tl_str = target_list
-                # tl_str = tl_str.replace('[', '')
-                # tl_str = tl_str.replace(']', '')
-                # tl_str = tl_str.replace('(', '')
-                # tl_str = tl_str.replace(')', '')
-                # tl_str = tl_str.replace(' ', '')
-                # tl_str = tl_str.replace("'", '')
-                # tl_str = tl_str.split(sep=',')
-                # target_list = [(tl_str[i], float(tl_str[i + 1])) for i in range(0, len(tl_str), 2)]
 
+            if isinstance(target_list, str):
                 target_list = target_list_string_to_list(tl_str=target_list)
 
             for target, weight in target_list:
@@ -358,12 +396,14 @@ def pyscenic_result_df_to_grn(pyscenic_result_df: pd.DataFrame,
     return grn
 
 
-def combine_grns(grn_list: List[pd.DataFrame],
-                 n_occurrence_thresh: int,
-                 result_folder: Union[None, str],
-                 tf_target_keys: Tuple[str, str] = ('TF', 'target'),
-                 verbosity: int = 0,
-                 **kwargs) -> pd.DataFrame:
+def combine_grns(
+        grn_list: List[pd.DataFrame],
+        n_occurrence_thresh: int,
+        result_folder: Union[None, str],
+        tf_target_keys: Tuple[str, str] = ('TF', 'target'),
+        verbosity: int = 0,
+        **kwargs
+) -> pd.DataFrame:
 
     """
     Combine multiple Gene Regulatory Networks (GRNs) into a single consensus GRN.
@@ -434,8 +474,7 @@ def load_ranking_databases(database_path: str) -> list[ctxcore.rnkdb.FeatherRank
         database_files = glob.glob(database_path)
         dbs = [RankingDatabase(fname=fname, name=get_fname_wo_extension(fname)) for fname in database_files]
     else:
-        dbs = [RankingDatabase(fname=database_path,
-                               name=get_fname_wo_extension(database_path))]
+        dbs = [RankingDatabase(fname=database_path, name=get_fname_wo_extension(database_path))]
 
     return dbs
 
@@ -450,8 +489,11 @@ def load_pyscenic_result_df(res_df_path: str,
     return res_df
 
 
-def remove_self_loops(grn: pd.DataFrame,
-                      tf_target_keys: Tuple[str, str] = ('TF', 'target')) -> pd.DataFrame:
+def remove_self_loops(
+        grn: pd.DataFrame,
+        tf_target_keys: Tuple[str, str] = ('TF', 'target')
+) -> pd.DataFrame:
+
     tfs = grn[tf_target_keys[0]].to_numpy()
     targets = grn[tf_target_keys[1]].to_numpy()
 

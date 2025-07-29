@@ -1,9 +1,11 @@
 
-import scanpy as sc
-import pandas as pd
-import math
-import glob
 import os
+import glob
+import math
+
+import pandas as pd
+import scanpy as sc
+
 
 from grn_inf.grn_inference import pyscenic_pipeline, combine_grns
 
@@ -37,16 +39,18 @@ def main_endocrine():
         for i in range(n_grns):
             # Run GRN inference on all genes
             res_dir = os.path.join(base_res_p, cell_type)
-            pyscenic_pipeline(adata=adata.copy(),
-                              layer_key='scaled_log1p_norm',
-                              tf_file=tf_file,
-                              result_folder=res_dir,
-                              database_path=db_file,
-                              motif_annotations_path=anno_file,
-                              grn_inf_method='grnboost2',
-                              fn_prefix=f'{i:02d}_{cell_type}_',
-                              verbosity=1,
-                              plot=False)
+            pyscenic_pipeline(
+                adata=adata.copy(),
+                layer_key='scaled_log1p_norm',
+                tf_file=tf_file,
+                result_folder=res_dir,
+                database_path=db_file,
+                motif_annotations_path=anno_file,
+                grn_inf_method='grnboost2',
+                fn_prefix=f'{i:02d}_{cell_type}_',
+                verbosity=1,
+                plot=False
+            )
 
     # ### Combine the 18 individual Scenic GRNs into one
     # Edges that occur in >= n_occurrence_threshold individual GRNs are retained
@@ -61,11 +65,13 @@ def main_endocrine():
         for csv_file in csv_files:
             grn_list.append(pd.read_csv(csv_file, index_col=[0]))
 
-        combine_grns(grn_list=grn_list,
-                     n_occurrence_thresh=n_occurrence_threshold,
-                     result_folder=res_dir,
-                     verbosity=1,
-                     fn_prefix=f'ngrnthresh{n_occurrence_threshold}_{cell_type}_pyscenic_')
+        combine_grns(
+            grn_list=grn_list,
+            n_occurrence_thresh=n_occurrence_threshold,
+            result_folder=res_dir,
+            verbosity=1,
+            fn_prefix=f'ngrnthresh{n_occurrence_threshold}_{cell_type}_pyscenic_'
+        )
 
     # ### Combine GrnBoost2 GRNs into one (not needed afterwards)
     print('### Combining Grnboost2 GRNS')
@@ -80,11 +86,13 @@ def main_endocrine():
             top_1_perc = math.ceil(grn.shape[0] * 0.01)
             grn_list.append(grn[0:top_1_perc])
 
-        combine_grns(grn_list=grn_list,
-                     n_occurrence_thresh=n_occurrence_threshold,
-                     result_folder=res_dir,
-                     verbosity=1,
-                     fn_prefix=f'ngrnthresh{n_occurrence_threshold}_{cell_type}_grnboost_')
+        combine_grns(
+            grn_list=grn_list,
+            n_occurrence_thresh=n_occurrence_threshold,
+            result_folder=res_dir,
+            verbosity=1,
+            fn_prefix=f'ngrnthresh{n_occurrence_threshold}_{cell_type}_grnboost_'
+        )
 
 
 def main_hematopoiesis():
@@ -114,16 +122,18 @@ def main_hematopoiesis():
     n_grns = 18
 
     for i in range(n_grns):
-        pyscenic_pipeline(adata=adata.copy(),
-                          layer_key='scaled_log1p_norm',
-                          tf_file=tf_file,
-                          result_folder=base_res_p,
-                          database_path=db_file,
-                          motif_annotations_path=anno_file,
-                          grn_inf_method='grnboost2',
-                          fn_prefix=f'{i:02d}_erythrocytes_',
-                          verbosity=1,
-                          plot=False)
+        pyscenic_pipeline(
+            adata=adata.copy(),
+            layer_key='scaled_log1p_norm',
+            tf_file=tf_file,
+            result_folder=base_res_p,
+            database_path=db_file,
+            motif_annotations_path=anno_file,
+            grn_inf_method='grnboost2',
+            fn_prefix=f'{i:02d}_erythrocytes_',
+            verbosity=1,
+            plot=False
+        )
 
     # ### Combine the 18 individual Scenic GRNs into one
     # Edges that occur in >= n_occurrence_threshold individual GRNs are retained
@@ -135,11 +145,13 @@ def main_hematopoiesis():
     for csv_file in csv_files:
         grn_list.append(pd.read_csv(csv_file, index_col=[0]))
 
-    combine_grns(grn_list=grn_list,
-                 n_occurrence_thresh=n_occurrence_threshold,
-                 result_folder=base_res_p,
-                 verbosity=1,
-                 fn_prefix=f'ngrnthresh{n_occurrence_threshold}_erythrocytes_pyscenic_')
+    combine_grns(
+        grn_list=grn_list,
+        n_occurrence_thresh=n_occurrence_threshold,
+        result_folder=base_res_p,
+        verbosity=1,
+        fn_prefix=f'ngrnthresh{n_occurrence_threshold}_erythrocytes_pyscenic_'
+    )
 
     # ### Combine GrnBoost2 GRNs into one (not needed afterwards)
     print('### Combining Pyscenic GRNs')
@@ -152,17 +164,19 @@ def main_hematopoiesis():
         top_1_perc = math.ceil(grn.shape[0] * 0.01)
         grn_list.append(grn[0:top_1_perc])
 
-    combine_grns(grn_list=grn_list,
-                 n_occurrence_thresh=n_occurrence_threshold,
-                 result_folder=base_res_p,
-                 verbosity=1,
-                 fn_prefix=f'ngrnthresh{n_occurrence_threshold}_erythrocytes_grnboost_')
+    combine_grns(
+        grn_list=grn_list,
+        n_occurrence_thresh=n_occurrence_threshold,
+        result_folder=base_res_p,
+        verbosity=1,
+        fn_prefix=f'ngrnthresh{n_occurrence_threshold}_erythrocytes_grnboost_'
+    )
 
 
 if __name__ == '__main__':
 
-    main_endocrine()
+    # main_endocrine()
 
-    main_hematopoiesis()
+    # main_hematopoiesis()
 
     print('done')
