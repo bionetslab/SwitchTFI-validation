@@ -1,5 +1,6 @@
 
 import os
+import warnings
 import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
@@ -118,10 +119,13 @@ def compute_empirical_pvalues(adata: sc.AnnData,
     return grn
 
 
-def adjust_pvals(grn: pd.DataFrame,
-                 pval_key: str = 'pvals',
-                 alpha: float = 0.05,
-                 method: str = 'fdr_bh') -> pd.DataFrame:
+def adjust_pvals(
+        grn: pd.DataFrame,
+        pval_key: str = 'pvals',
+        method: str = 'fdr_bh',
+        alpha: Union[float, None] = None,
+) -> pd.DataFrame:
+
     # For FWER control use
     # - 'bonferroni': very conservative, no assumptions ...
     # - 'sidak': one-step correction, independence (or others e.g. normality of test statistics of individual tests)
@@ -134,16 +138,27 @@ def adjust_pvals(grn: pd.DataFrame,
     # - 'fdr_by' : Benjamini/Yekutieli, independence or negative correlation
     # - 'fdr_tsbh' : two stage fdr correction, independence or non-negative correlation, uses alpha
     # - 'fdr_tsbky' : two stage fdr correction, independence or non-negative correlation, uses alpha
+
     # NOTE: alpha is only used for two-stage procedures!
+
+    if alpha is None and method in {'fdr_tsbh', 'fdr_tsbky'}:
+        alpha = 0.05
+        warnings.warn(
+            f'The selected method {method} requires alpha to be set. A default of 0.05 is used.',
+            UserWarning
+        )
 
     p_values = grn[pval_key].to_numpy()
 
-    reject, pvals_corrected, _, _ = multipletests(pvals=p_values,
-                                                  alpha=alpha,
-                                                  method=method,
-                                                  maxiter=1,
-                                                  is_sorted=False,
-                                                  returnsorted=False)
+    reject, pvals_corrected, _, _ = multipletests(
+        pvals=p_values,
+        alpha=alpha,
+        method=method,
+        maxiter=1,
+        is_sorted=False,
+        returnsorted=False
+    )
+
     grn[f'pvals_{method}'] = pvals_corrected
 
     return grn
@@ -161,7 +176,6 @@ def compute_corrected_pvalues(
         clustering_obs_key: str = 'clusters',
         plot: bool = False,
         pval_key: Union[str, None] = None,
-        alpha: Union[float, None] = None,
         fn_prefix: Union[str, None] = None
 ) -> pd.DataFrame:
     """
@@ -187,7 +201,6 @@ def compute_corrected_pvalues(
         plot (bool): Whether to generate a scatter plot of weights vs. p-values. Defaults to False.
         pval_key (str, optional): Column name for empirical p-values (not multiple testing corrected) in the GRN,
         if it exists. Defaults to None, i.e. empirical p-values are computed from scratch.
-        alpha (float, optional): FDR level for multiple testing correction. Only necessary for some of the methods.
         Defaults to None, i.e. is set to 0.05 internally.
         fn_prefix (str, optional): Optional filename prefix for saving results. Defaults to None.
 
@@ -200,13 +213,16 @@ def compute_corrected_pvalues(
         raise ValueError("Method must be one of: 'wy', 'bonferroni', 'sidak', 'fdr_bh', 'fdr_by'")
 
     if method == 'wy':
-        grn = compute_westfall_young_adjusted_pvalues(adata=adata,
-                                                      grn=grn,
-                                                      n_permutations=n_permutations,
-                                                      weight_key=weight_key,
-                                                      cell_bool_key=cell_bool_key,
-                                                      clustering_dt_reg_key=clustering_dt_reg_key,
-                                                      clustering_obs_key=clustering_obs_key)
+        grn = compute_westfall_young_adjusted_pvalues(
+            adata=adata,
+            grn=grn,
+            n_permutations=n_permutations,
+            weight_key=weight_key,
+            cell_bool_key=cell_bool_key,
+            clustering_dt_reg_key=clustering_dt_reg_key,
+            clustering_obs_key=clustering_obs_key
+        )
+
     else:
         if pval_key is None:
             grn = compute_empirical_pvalues(adata=adata,
@@ -218,12 +234,12 @@ def compute_corrected_pvalues(
                                             clustering_obs_key=clustering_obs_key)
             pval_key = 'emp_pvals'
 
-        if alpha is None:
-            alpha = 0.05
-        grn = adjust_pvals(grn=grn,
-                           pval_key=pval_key,
-                           alpha=alpha,
-                           method=method)
+        grn = adjust_pvals(
+            grn=grn,
+            pval_key=pval_key,
+            method=method,
+            alpha=None,
+        )
 
     if result_folder is not None:
         if fn_prefix is None:
@@ -232,15 +248,23 @@ def compute_corrected_pvalues(
         grn.to_json(grn_p)
 
     if plot:
-        if alpha is None:
-            alpha = 0.05
+
+        if result_folder is not None:
+            plot_folder = result_folder
+        else:
+            plot_folder = os.getcwd()
+
         weights = grn[weight_key].to_numpy()
         pvals = grn[f'pvals_{method}'].to_numpy()
-        plt.scatter(weights, pvals, color='deepskyblue', marker='o', alpha=0.8)
-        plt.xlabel('weight')
-        plt.ylabel(f'{method} p-value')
-        plt.axhline(y=alpha, color='red', label=f'alpha: {alpha}')
-        plt.show()
+        fig, ax = plt.subplots(dpi=300)
+        ax.scatter(weights, pvals, color='deepskyblue', marker='o', alpha=0.8)
+        ax.set_xlabel('weight')
+        ax.set_ylabel(f'{method} corrected p-value')
+        ax.axhline(y=0.05, color='red', label='alpha=0.05')
+        ax.axhline(y=0.01, color='orange', label='alpha=0.01')
+        plt.legend()
+        fig.savefig(os.path.join(plot_folder, f'weight_vs_{method}_corrected_pvalues.png'))
+        plt.close(fig)
 
     return grn
 
