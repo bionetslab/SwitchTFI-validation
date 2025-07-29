@@ -22,12 +22,13 @@ from pyscenic.aucell import aucell
 
 def pyscenic_pipeline(
         adata: sc.AnnData,
-        layer_key: Union[None, str],
-        tf_file: Union[None, str],
-        result_folder: Union[None, str],
         database_path: str,
         motif_annotations_path: str,
         grn_inf_method: str = 'grnboost2',
+        tf_file: Union[str, None]= None,
+        additional_tfs: Union[List[str], None] = None,
+        layer_key: Union[str, None] = None,
+        result_folder: Union[str, None] = None,
         fn_prefix: Union[None, str] = None,
         verbosity: int = 0,
         plot: bool = False
@@ -44,13 +45,14 @@ def pyscenic_pipeline(
 
     Args:
         adata (sc.AnnData): The AnnData object containing the single-cell gene expression data.
-        layer_key (Union[None, str]): The layer in `adata` to use for gene expression values. If None, the main matrix is used.
-        tf_file (Union[None, str]): File containing transcription factor (TF) names. If None, all genes are considered as potential TFs.
-        result_folder (Union[None, str]): Folder to save results such as intermediate files and GRN outputs. If None, results are not saved.
         database_path (str): Path to the databases required for cis-regulatory analysis (RcisTarget).
         motif_annotations_path (str): Path to motif annotations used in cis-regulatory analysis.
         grn_inf_method (str, optional): The method for GRN inference ('grnboost2' or 'genie3'). Defaults to 'grnboost2'.
-        fn_prefix (Union[None, str], optional): Optional prefix for filenames when saving results. Defaults to None.
+        tf_file (str, optional): File containing transcription factor (TF) names. If None, all genes are considered as potential TFs.
+        additional_tfs (list[str], optional): List of additional TFs to include in GRN inference.
+        layer_key (str, optional): The layer in `adata` to use for gene expression values. If None, the main matrix is used.
+        result_folder (str, optional): Folder to save results such as intermediate files and GRN outputs. If None, results are not saved.
+        fn_prefix (str, optional): Optional prefix for filenames when saving results. Defaults to None.
         verbosity (int, optional): Level of logging for detailed output. Defaults to 0.
         plot (bool, optional): Whether to generate plots during the pipeline stages. Defaults to False.
 
@@ -68,6 +70,10 @@ def pyscenic_pipeline(
     # Load list of TFs
     if tf_file is not None:
         tf_names = load_tf_names(tf_file)
+
+        if additional_tfs is not None:
+            tf_names.extend(additional_tfs)
+
         check_tf_gene_set_intersection(
             tf_names=np.array(tf_names),
             gene_names=adata.var_names.to_numpy(),
