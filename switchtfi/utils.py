@@ -48,8 +48,8 @@ def labels_to_bool(clustering: np.ndarray) -> np.ndarray:
     return cluster_bool
 
 
-def solve_lsap(clust1: np.ndarray,
-               clust2: np.ndarray) -> float:
+def solve_lsap(clust1: np.ndarray, clust2: np.ndarray) -> float:
+
     # Solve (trivial, only 2 possible cases) LSAP problem => Similarity score for the 2 clusterings
     # Case 1: L-C1, R-C2
     case1_ji1 = calc_ji(a=clust1, b=clust2)
@@ -66,8 +66,8 @@ def solve_lsap(clust1: np.ndarray,
     return weight
 
 
-def calc_ji(a: np.ndarray,
-            b: np.ndarray) -> float:
+def calc_ji(a: np.ndarray, b: np.ndarray) -> float:
+
     # JI(A, B) = #(A \cap B) / #(A \cup B) \in [0,1]
     # True entries in vector indicate that cell is contained in set
     assert a.dtype == 'bool' and b.dtype == 'bool', 'Arrays must be bool arrays'
