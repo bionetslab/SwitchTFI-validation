@@ -198,8 +198,8 @@ def main_tox():
     ]
 
     base_res_p = './results/01_grn_inf/tox'
-    n_grns = 2  #  18  # Todo
-    n_occurrence_threshold = 2  # 9  # Todo
+    n_grns = 18
+    n_occurrence_threshold = 9
 
     for filename in data_filenames:
         # ### Load AnnData wist scRNA-seq data
@@ -215,16 +215,6 @@ def main_tox():
 
         for i in range(n_grns):
             print(f'# ### GRN inference, iteration {i}')
-
-            # Todo: start
-            import numpy as np
-            np.random.seed(42)
-            cells = np.random.choice(list(range(0, toxdata.shape[0])), 10)
-            genes = np.random.choice(list(range(0, toxdata.shape[1])), 600)
-            tox_indices = [i for i, name in enumerate(toxdata.var_names) if name in tox_genes]
-            genes = np.unique(np.concatenate([genes, tox_indices]))
-            toxdata = toxdata[cells, genes].copy()
-            # Todo: end
 
             pyscenic_pipeline(
                 adata=toxdata.copy(),
