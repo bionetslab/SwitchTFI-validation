@@ -17,7 +17,7 @@ from .plotting import plot_grn
 def fit_model(
         adata: sc.AnnData,
         grn: pd.DataFrame,
-        layer_key: Union[str, None] = 'magic_imputed',  # Todo
+        layer_key: Union[str, None] = None,
         result_folder: Union[str, None] = None,
         weight_key: str = 'weight',
         n_cell_pruning_params: Union[Tuple[str, float], None] = ('percent', 0.2),
