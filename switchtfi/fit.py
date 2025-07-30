@@ -2,12 +2,12 @@
 import os
 import warnings
 
-import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 import scanpy as sc
 
 from typing import *
+from .utils import align_anndata_grn
 from .weight_fitting import calculate_weights
 from .pvalue_calculation import compute_corrected_pvalues, remove_insignificant_edges
 from .tf_ranking import rank_tfs
@@ -162,35 +162,4 @@ def fit_model(
 
     return grn, ranked_tfs
 
-
-# Auxiliary ############################################################################################################
-def align_anndata_grn(
-        adata: sc.AnnData,
-        grn: pd.DataFrame,
-        tf_target_keys: Tuple[str, str] = ('TF', 'target')
-) -> Tuple[sc.AnnData, pd.DataFrame]:
-    """
-    Aligns the tabular scRNA-seq data with the input GRN such that only genes that are present in both remain.
-    Args:
-        adata (sc.AnnData): The input AnnData object containing gene expression data.
-        grn (pd.DataFrame): The GRN DataFrame containing TF-target gene pairs.
-        tf_target_keys (Tuple[str, str]): Column names for TFs and targets in the GRN. Defaults to ('TF', 'target').
-    Returns:
-        Tuple[sc.AnnData, pd.DataFrame]: The aligned AnnData and DataFrame.
-    """
-
-    adata_genes = adata.var_names.to_numpy()
-    grn_genes = np.unique(grn[list(tf_target_keys)].to_numpy())
-
-    # Subset adata to genes that appear in GRN
-    b = np.isin(adata_genes, grn_genes)
-    adata = adata[:, b].copy()
-
-    # Subset GRN to genes that appear in adata
-    tf_bool = np.isin(grn[tf_target_keys[0]].to_numpy(), adata_genes)
-    target_bool = np.isin(grn[tf_target_keys[1]].to_numpy(), adata_genes)
-    grn_bool = tf_bool * target_bool
-    grn = grn[grn_bool].copy()
-
-    return adata, grn
 
