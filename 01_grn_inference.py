@@ -193,8 +193,8 @@ def main_tox():
                 'motifs-v10nr_clust-nr.mgi-m0.001-o0.0.tbl'
 
     data_filenames = [
-        # 'toxdata_tissue_spleen_time_d10_genotype_wt_cluster_12_processed.h5ad',   # Todo
-        'toxdata_tissue_spleen_time_d10_genotype_ko_cluster_12_processed.h5ad'
+        'toxdata_tissue_spleen_time_d10_genotype_wt_cluster_12_processed.h5ad',
+        # 'toxdata_tissue_spleen_time_d10_genotype_ko_cluster_12_processed.h5ad'
     ]
 
     base_res_p = './results/01_grn_inf/tox'
