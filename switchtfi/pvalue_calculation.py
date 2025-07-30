@@ -155,12 +155,14 @@ def adjust_pvals(
 
     # NOTE: alpha is only used for two-stage procedures!
 
-    if alpha is None and method in {'fdr_tsbh', 'fdr_tsbky'}:
+    if alpha is None:
         alpha = 0.05
-        warnings.warn(
-            f'The selected method {method} requires alpha to be set. A default of 0.05 is used.',
-            UserWarning
-        )
+
+        if method in {'fdr_tsbh', 'fdr_tsbky'}:
+            warnings.warn(
+                f'The selected method {method} requires alpha to be set. A default of 0.05 is used.',
+                UserWarning
+            )
 
     p_values = grn[pval_key].to_numpy()
 
