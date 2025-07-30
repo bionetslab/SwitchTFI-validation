@@ -269,14 +269,29 @@ def compute_corrected_pvalues(
         weights = grn[weight_key].to_numpy()
         pvals = grn[f'pvals_{method}'].to_numpy()
         fig, ax = plt.subplots(dpi=300)
-        ax.scatter(weights, pvals, color='deepskyblue', marker='o', alpha=0.8)
+        ax.scatter(
+            weights,
+            pvals,
+            color='deepskyblue',
+            marker='o',
+            s=20,
+            alpha=0.8,
+            edgecolors='gray',
+            linewidth=0.5,
+        )
         ax.set_xlabel('weight')
         ax.set_ylabel(f'{method} corrected p-value')
         ax.axhline(y=0.05, color='red', label='alpha=0.05')
         ax.axhline(y=0.01, color='orange', label='alpha=0.01')
         plt.legend()
+
+        if fn_prefix is None:
+            fn_prefix = ''
+
+        if result_folder is not None:
+            fig.savefig(os.path.join(result_folder, f'{fn_prefix}weight_vs_{method}_corrected_pvalues.png'))
+
         fig.savefig(os.path.join(result_folder, f'weight_vs_{method}_corrected_pvalues.png'))
-        plt.close(fig)
 
     else:
         warnings.warn('Saving of plot not possible if result_folder is not specified.', UserWarning)

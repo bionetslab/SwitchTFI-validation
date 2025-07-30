@@ -33,7 +33,6 @@ def fit_model(
         clustering_obs_key: str = 'clusters',
         tf_target_keys: Tuple[str, str] = ('TF', 'target'),
         verbosity: int = 0,
-        plot: bool = False,
         save_intermediate: bool = False,
         fn_prefix: Union[str, None] = None,
         **kwargs
@@ -78,11 +77,11 @@ def fit_model(
     if fn_prefix is None:
         fn_prefix = ''
 
-    if save_intermediate and result_folder is not None:
-        interm_folder = result_folder
-    else:
-        interm_folder = None
+    interm_folder = result_folder if save_intermediate and result_folder else None
+    if save_intermediate and result_folder is None:
         warnings.warn('No result_folder provided, cannot save intermediate results.', UserWarning)
+
+    plot = True if save_intermediate else False
 
     adata, grn = align_anndata_grn(
         adata=adata,
@@ -100,7 +99,7 @@ def fit_model(
         clustering_obs_key=clustering_obs_key,
         tf_target_keys=tf_target_keys,
         verbosity=verbosity,
-        plot=plot
+        plot=False
     )
 
     grn = compute_corrected_pvalues(
