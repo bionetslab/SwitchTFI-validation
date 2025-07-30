@@ -97,8 +97,8 @@ conda activate switchtfi_val
 python 04_plotting.py
 ```
 **Note:**
-- SwitchTFI provides the preprocessed data via the functions *switchtfi.data.preendocrine_alpha()/preendocrine_beta()/erythrocytes()*. To skip the preprocessing step comment in this option in the scripts for the later steps.
-- The GRNs used to produce the results are provided in *switchtfi_val/results/01_grn_inf*. The GRN inference step can be omitted.
+- SwitchTFI provides the preprocessed data via the functions *switchtfi.data.preendocrine_alpha()/preendocrine_beta()/erythrocytes()*.
+- The GRNs used to produce the results are provided in *switchtfi_val/results/01_grn_inf*.
 - The results of the SwitchTFI analyses are provided in *switchtfi_val/results/02_switchtfi*.
 - The results of the validation procedures are provided in *switchtfi_val/results/02_validation*.
 - The plots are provided in *switchtfi_val/results/03_plots*.
