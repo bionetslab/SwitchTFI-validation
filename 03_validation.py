@@ -233,16 +233,15 @@ def main_save_cellrank_driver_genes():
 
     eryres_df.to_csv(os.path.join(res_p, 'ery_cellrank_driver_genes.csv'))
 
+# Todo ...
 
 def main_save_splicejac_driver_genes():
     # ### Script for computing and saving transition driver genes with the spliceJAC method
     from validation.splicejac_workflow import get_splicejac_driver_genes, extract_splicejac_grn
+
     # ### Load the previously preprocessed scRNA-seq data stored as an AnnData object
-    # (also available via the SwitchTFI functions)
     adata = sc.read_h5ad('./data/anndata/pre-endocrine_alpha.h5ad')
     bdata = sc.read_h5ad('./data/anndata/pre-endocrine_beta.h5ad')
-    # adata = preendocrine_alpha()
-    # bdata = preendocrine_beta()
 
     # ### Start spliceJAC analysis
     # Define upper bound (= 0.9 * number of cells in cluster) for the number of genes
@@ -251,23 +250,30 @@ def main_save_splicejac_driver_genes():
     # print(bdata.obs['clusters'].value_counts())
     # pre-e, alpha: 565, 339 -> 0.9 * 339 = 305,1;  pre-e, beta: 556, 446 -> 0.9 * 446 = 401,4
     # See tutorial: https://splicejac.readthedocs.io/en/latest/notebooks/GRN%20Inference.html (07.10.2024)
+
     atop_n_jacobian = 300
     btop_n_jacobian = 400
 
-    atop_k_list, ares_df, adata = get_splicejac_driver_genes(adata=adata,
-                                                             top_k=None,
-                                                             top_n_jacobian=atop_n_jacobian,
-                                                             layer_key=None,
-                                                             splicejac_pp=True,
-                                                             compute_velocity=True,
-                                                             cluster_pair=('Pre-endocrine', 'Alpha'))
-    btop_k_list, bres_df, bdata = get_splicejac_driver_genes(adata=bdata,
-                                                             top_k=None,
-                                                             top_n_jacobian=btop_n_jacobian,
-                                                             layer_key=None,
-                                                             splicejac_pp=True,
-                                                             compute_velocity=True,
-                                                             cluster_pair=('Pre-endocrine', 'Beta'))
+    atop_k_list, ares_df, adata = get_splicejac_driver_genes(
+        adata=adata,
+        top_k=None,
+        top_n_jacobian=atop_n_jacobian,
+        layer_key=None,
+        splicejac_pp=True,
+        compute_velocity=True,
+        cluster_pair=('Pre-endocrine', 'Alpha')
+    )
+
+    btop_k_list, bres_df, bdata = get_splicejac_driver_genes(
+        adata=bdata,
+        top_k=None,
+        top_n_jacobian=btop_n_jacobian,
+        layer_key=None,
+        splicejac_pp=True,
+        compute_velocity=True,
+        cluster_pair=('Pre-endocrine', 'Beta')
+    )
+
     print('### Alpha')
     print(atop_k_list)
     print('### Beta')
@@ -278,19 +284,25 @@ def main_save_splicejac_driver_genes():
 
     # ### Extract GRN from spliceJACs results
     for q in [0.1, 0.25, 0.5, 0.75, 0.95]:
-        agrn = extract_splicejac_grn(adata=adata,
-                                     grn_adj_uns_key='average_jac',
-                                     clusters=('Pre-endocrine', 'Alpha'),
-                                     weight_quantile=q)
-        bgrn = extract_splicejac_grn(adata=bdata,
-                                     grn_adj_uns_key='average_jac',
-                                     clusters=('Pre-endocrine', 'Beta'),
-                                     weight_quantile=q)
+        agrn = extract_splicejac_grn(
+            adata=adata,
+            grn_adj_uns_key='average_jac',
+            clusters=('Pre-endocrine', 'Alpha'),
+            weight_quantile=q
+        )
+        bgrn = extract_splicejac_grn(
+            adata=bdata,
+            grn_adj_uns_key='average_jac',
+            clusters=('Pre-endocrine', 'Beta'),
+            weight_quantile=q
+        )
 
         grn_res_p = './results/03_validation/driver_genes/spjc_grns'
         agrn.to_csv(os.path.join(grn_res_p, f'alpha_q{q}_spjc_grn.csv'))
         bgrn.to_csv(os.path.join(grn_res_p, f'beta_q{q}_spjc_grn.csv'))
 
+
+# Todo ...
 
 def main_save_drivaer_driver_genes():
     # ### Script for computing and saving transition driver genes with the DrivAER method
