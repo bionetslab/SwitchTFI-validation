@@ -1,7 +1,7 @@
 
-import scanpy as sc
 import numpy as np
 import pandas as pd
+import scanpy as sc
 import mellon as ml
 import jax
 
@@ -12,13 +12,15 @@ from pygam import LinearGAM, s
 from switchtfi.utils import anndata_to_numpy
 
 
-def calculate_pygam_gene_trends(adata: sc.AnnData,
-                                gene_names: Union[List[str], None] = None,
-                                n_splines: int = 4,
-                                spline_order: int = 2,
-                                pseudotime_obs_key: str = 'palantir_pseudotime',
-                                trend_resolution: int = 200,
-                                layer_key: Union[str, None] = None) -> sc.AnnData:
+def calculate_pygam_gene_trends(
+        adata: sc.AnnData,
+        gene_names: Union[List[str], None] = None,
+        n_splines: int = 4,
+        spline_order: int = 2,
+        pseudotime_obs_key: str = 'palantir_pseudotime',
+        trend_resolution: int = 200,
+        layer_key: Union[str, None] = None
+) -> sc.AnnData:
     """
     Calculate gene expression trends over pseudotime using PyGAM.
 
@@ -60,9 +62,11 @@ def calculate_pygam_gene_trends(adata: sc.AnnData,
 
     for gene in gene_names:
         expression_vec = anndata_to_numpy(adata[:, gene], layer_key=layer_key).flatten()
-        gam = LinearGAM(s(0, n_splines=n_splines, spline_order=spline_order)).fit(X=pt_vec.reshape(-1, 1),
-                                                                                  y=expression_vec,
-                                                                                  weights=None)
+        gam = LinearGAM(s(0, n_splines=n_splines, spline_order=spline_order)).fit(
+            X=pt_vec.reshape(-1, 1),
+            y=expression_vec,
+            weights=None
+        )
         gene_trends[gene] = gam.predict(X=pt_grid.reshape(-1, 1))
 
         # Calculate confidence intervals of prediction
@@ -76,10 +80,12 @@ def calculate_pygam_gene_trends(adata: sc.AnnData,
     return adata
 
 
-def calculate_mellon_gene_trends(adata: sc.AnnData,
-                                 pseudotime_obs_key: str = 'palantir_pseudotime',
-                                 trend_resolution: int = 200,
-                                 layer_key: Union[str, None] = None) -> sc.AnnData:
+def calculate_mellon_gene_trends(
+        adata: sc.AnnData,
+        pseudotime_obs_key: str = 'palantir_pseudotime',
+        trend_resolution: int = 200,
+        layer_key: Union[str, None] = None
+) -> sc.AnnData:
     # Get pseudotime-vector and expression matrix, initialize pseudotime-grid
     pt_vec = adata.obs[pseudotime_obs_key].to_numpy()
     expressions = anndata_to_numpy(adata=adata, layer_key=layer_key)
@@ -87,9 +93,11 @@ def calculate_mellon_gene_trends(adata: sc.AnnData,
 
     # Initialize mellon model
     model = ml.FunctionEstimator(sigma=1, ls=1)
-    trends = model.fit_predict(x=pt_vec,
-                               y=expressions,
-                               Xnew=pt_grid)  # (pt_grid.shape[0], expressions.shape[1])
+    trends = model.fit_predict(
+        x=pt_vec,
+        y=expressions,
+        Xnew=pt_grid
+    )  # (pt_grid.shape[0], expressions.shape[1])
     adata.uns['pt_grid'] = pt_grid
     adata.varm['mellon_gene_trends'] = jax.device_get(trends.T)
 

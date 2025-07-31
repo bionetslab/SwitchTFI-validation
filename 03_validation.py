@@ -10,7 +10,6 @@ import json
 from pathlib import Path
 from typing import *
 
-from switchtfi.data import preendocrine_alpha, preendocrine_beta, erythrocytes
 from switchtfi.utils import load_grn_json
 
 
@@ -19,13 +18,9 @@ def main_pseudotime_inference():
     from validation.pseudotime_inference import calculate_palantir_pt
     from switchtfi.utils import csr_to_numpy
     # ### Load the previously preprocessed scRNA-seq data stored as an AnnData object
-    # (also available via the SwitchTFI functions)
-    # adata = sc.read_h5ad('./data/anndata/pre-endocrine_alpha.h5ad')
-    # bdata = sc.read_h5ad('./data/anndata/pre-endocrine_beta.h5ad')
-    # cdata = sc.read_h5ad('./data/anndata/erythrocytes.h5ad')
-    adata = preendocrine_alpha()
-    bdata = preendocrine_beta()
-    erydata = erythrocytes()
+    adata = sc.read_h5ad('./data/anndata/pre-endocrine_alpha.h5ad')
+    bdata = sc.read_h5ad('./data/anndata/pre-endocrine_beta.h5ad')
+    erydata = sc.read_h5ad('./data/anndata/erythrocytes.h5ad')
 
     # ### Determine the root cells for pseudotime inference by the expression of well known marker genes
     # - Pre-endocrine alpha cell transition data: high expression of Fev
@@ -93,19 +88,25 @@ def main_switchde_analysis():
     fn_list = ['pre-endocrine_alpha', 'pre-endocrine_beta', 'erythrocytes']
     for i in [0, 1, 2]:
 
-        resdata, res = calculate_switch_de_pvalues(adata=data_list[i].copy(),
-                                                   zero_inflated=False,
-                                                   layer_key='magic_imputed',
-                                                   verbosity=1)
+        # Imputed data, no zero inflation
+        resdata, res = calculate_switch_de_pvalues(
+            adata=data_list[i].copy(),
+            zero_inflated=False,
+            layer_key='magic_imputed',
+            verbosity=1
+        )
         res.to_csv(
             f'./results/03_validation/anndata/switchde_magic_nozeroinflated_{fn_list[i]}.csv')
         resdata.write_h5ad(Path(
             f'./results/03_validation/anndata/switchde_magic_nozeroinflated_{fn_list[i]}.h5ad'))
 
-        resdata, res = calculate_switch_de_pvalues(adata=data_list[i].copy(),
-                                                   zero_inflated=True,
-                                                   layer_key='log1p_norm',
-                                                   verbosity=1)
+        # Non-imputed data, zero inflation
+        resdata, res = calculate_switch_de_pvalues(
+            adata=data_list[i].copy(),
+            zero_inflated=True,
+            layer_key='log1p_norm',
+            verbosity=1
+        )
         res.to_csv(
             f'./results/03_validation/anndata/switchde_log1p_norm_zeroinflated_{fn_list[i]}.csv')
         resdata.write_h5ad(Path(
@@ -121,28 +122,34 @@ def main_trend_calculation():
     bdata = sc.read_h5ad('./results/03_validation/anndata/pt_pre-endocrine_beta.h5ad')
     erydata = sc.read_h5ad('./results/03_validation/anndata/pt_erythrocytes.h5ad')
 
-    # ### Calculate gene trends in pseudotime with the pygam implementation of generative additive models (GAMs)
-    adata = calculate_pygam_gene_trends(adata=adata,
-                                        gene_names=None,
-                                        n_splines=4,
-                                        spline_order=2,
-                                        pseudotime_obs_key='palantir_pseudotime',
-                                        trend_resolution=200,
-                                        layer_key='magic_imputed')
-    bdata = calculate_pygam_gene_trends(adata=bdata,
-                                        gene_names=None,
-                                        n_splines=4,
-                                        spline_order=2,
-                                        pseudotime_obs_key='palantir_pseudotime',
-                                        trend_resolution=200,
-                                        layer_key='magic_imputed')
-    erydata = calculate_pygam_gene_trends(adata=erydata,
-                                          gene_names=None,
-                                          n_splines=4,
-                                          spline_order=2,
-                                          pseudotime_obs_key='palantir_pseudotime',
-                                          trend_resolution=200,
-                                          layer_key='magic_imputed')
+    # ### Calculate gene trends in pseudotime with the pygam implementation of generalized additive models (GAMs)
+    adata = calculate_pygam_gene_trends(
+        adata=adata,
+        gene_names=None,
+        n_splines=4,
+        spline_order=2,
+        pseudotime_obs_key='palantir_pseudotime',
+        trend_resolution=200,
+        layer_key='magic_imputed'
+    )
+    bdata = calculate_pygam_gene_trends(
+        adata=bdata,
+        gene_names=None,
+        n_splines=4,
+        spline_order=2,
+        pseudotime_obs_key='palantir_pseudotime',
+        trend_resolution=200,
+        layer_key='magic_imputed'
+    )
+    erydata = calculate_pygam_gene_trends(
+        adata=erydata,
+        gene_names=None,
+        n_splines=4,
+        spline_order=2,
+        pseudotime_obs_key='palantir_pseudotime',
+        trend_resolution=200,
+        layer_key='magic_imputed'
+    )
 
     adata.write_h5ad(Path('./results/03_validation/anndata/trend_pre-endocrine_alpha.h5ad'))
     bdata.write_h5ad(Path('./results/03_validation/anndata/trend_pre-endocrine_beta.h5ad'))
@@ -824,8 +831,7 @@ def main_store_anndata():
     import pickle
     import lzma
 
-    def helper(ad: sc.AnnData,
-               filename: str):
+    def helper(ad: sc.AnnData, filename: str):
         if isinstance(ad.X, np.ndarray):
             ad.X = csr_matrix(ad.X)
         for layer_key in ad.layers.keys():
@@ -1158,7 +1164,7 @@ def main_get_targets():
 
 if __name__ == '__main__':
 
-    validation = True
+    validation = False
     if validation:
 
         np.random.seed(1725149318)  # Random seed only relevant to robustness analysis
@@ -1199,5 +1205,25 @@ if __name__ == '__main__':
     # main_get_basegrn_sizes()
     # main_transition_grn_val()
     # main_get_targets()
+
+    from switchtfi import erythrocytes_grn, preendocrine_alpha_grn, preendocrine_beta_grn
+
+    erydata = erythrocytes()
+    erygrn = erythrocytes_grn()
+
+    adata = preendocrine_alpha()
+    agrn = preendocrine_alpha_grn()
+
+    bdata = preendocrine_beta()
+    bgrn = preendocrine_beta_grn()
+
+    print(erydata)
+    print(adata)
+    print(bdata)
+
+
+    print(erygrn)
+    print(agrn)
+    print(bgrn)
 
     print('done')
