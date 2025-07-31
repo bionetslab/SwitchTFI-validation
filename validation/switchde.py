@@ -13,11 +13,13 @@ from typing import *
 from switchtfi.utils import anndata_to_numpy
 
 
-def calculate_switch_de_pvalues(adata: sc.AnnData,
-                                zero_inflated: bool = False,
-                                pt_obs_key: str = 'palantir_pseudotime',
-                                layer_key: str = 'log1p_norm',
-                                verbosity: int = 0) -> Tuple[sc.AnnData, pd.DataFrame]:
+def calculate_switch_de_pvalues(
+        adata: sc.AnnData,
+        zero_inflated: bool = False,
+        pt_obs_key: str = 'palantir_pseudotime',
+        layer_key: str = 'log1p_norm',
+        verbosity: int = 0
+) -> Tuple[sc.AnnData, pd.DataFrame]:
     """
     Calculate switchde p-values for analysis of differential expression over pseudotime.
 
@@ -67,9 +69,11 @@ def calculate_switch_de_pvalues(adata: sc.AnnData,
     # Annotate AnnData with SwitchDE output
     adata.var['switchde_pval'] = out['pval'].to_numpy()
     adata.var['switchde_qval'] = out['qval'].to_numpy()  # BH corrected p-values
-    adata.varm['switchde_params'] = np.vstack([2 * out['mu0'].to_numpy(),  # see paper, def sigmoid
-                                               out['k'].to_numpy(),
-                                               out['t0'].to_numpy()]).T
+    adata.varm['switchde_params'] = np.vstack(
+        [2 * out['mu0'].to_numpy(),  # see paper, def sigmoid
+        out['k'].to_numpy(),
+        out['t0'].to_numpy()]
+    ).T
 
     # Sort genes by q-value
     out.sort_values(by='qval', ascending=True, inplace=True)
