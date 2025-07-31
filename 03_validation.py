@@ -52,12 +52,15 @@ def main_pseudotime_inference():
     eryroot = int(np.argmin(mep_gata1_expression))
 
     # ### Calculate cell wise pseudotime values with the Palantir method
-    adata = calculate_palantir_pt(adata=adata, root=aroot, layer_key='log1p_norm',
-                                  cluster_obs_key='clusters', plot=plot)
-    bdata = calculate_palantir_pt(adata=bdata, root=broot, layer_key='log1p_norm',
-                                  cluster_obs_key='clusters', plot=plot)
-    erydata = calculate_palantir_pt(adata=erydata, root=eryroot, layer_key='log1p_norm',
-                                  cluster_obs_key='prog_off', plot=plot)
+    adata = calculate_palantir_pt(
+        adata=adata, root=aroot, layer_key='log1p_norm', cluster_obs_key='clusters', plot=plot
+    )
+    bdata = calculate_palantir_pt(
+        adata=bdata, root=broot, layer_key='log1p_norm', cluster_obs_key='clusters', plot=plot
+    )
+    erydata = calculate_palantir_pt(
+        adata=erydata, root=eryroot, layer_key='log1p_norm', cluster_obs_key='prog_off', plot=plot
+    )
 
     # ### Save results
     adata.write_h5ad(filename=Path('./results/03_validation/anndata/pt_pre-endocrine_alpha.h5ad'))
@@ -158,33 +161,36 @@ def main_trend_calculation():
 
 def main_save_cellrank_driver_genes():
     # ### Script for computing and saving transition driver genes with the CellRank method
-    from validation.cellrank_workflow import get_cellrank_driver_genes
+    import cellrank as cr
+    from validation.cellrank_workflow import (
+        get_cellrank_driver_genes, identify_initial_terminal_states, estimate_fate_probabilities, uncover_driver_genes
+    )
 
     # ### Load the previously preprocessed scRNA-seq data stored as an AnnData object
-    # (also available via the SwitchTFI functions)
     adata = sc.read_h5ad('./data/anndata/pre-endocrine_alpha.h5ad')
     bdata = sc.read_h5ad('./data/anndata/pre-endocrine_beta.h5ad')
     erydata = sc.read_h5ad('./results/03_validation/anndata/pt_erythrocytes.h5ad')
-    # adata = preendocrine_alpha()
-    # bdata = preendocrine_beta()
-    # erydata = erythrocytes()
 
     # ### Start analysis with CellRank
     plot = True
-    atop_k_list, ares_df = get_cellrank_driver_genes(adata=adata,
-                                                     top_k=None,
-                                                     compute_velocity=True,
-                                                     scvelo_pp=True,
-                                                     layer_key=None,
-                                                     initial_terminal_state=('Pre-endocrine', 'Alpha'),
-                                                     plot=plot)
-    btop_k_list, bres_df = get_cellrank_driver_genes(adata=bdata,
-                                                     top_k=None,
-                                                     compute_velocity=True,
-                                                     scvelo_pp=True,
-                                                     layer_key=None,
-                                                     initial_terminal_state=('Pre-endocrine', 'Beta'),
-                                                     plot=plot)
+    atop_k_list, ares_df = get_cellrank_driver_genes(
+        adata=adata,
+        top_k=None,
+        compute_velocity=True,
+        scvelo_pp=True,
+        layer_key=None,
+        initial_terminal_state=('Pre-endocrine', 'Alpha'),
+        plot=plot
+    )
+    btop_k_list, bres_df = get_cellrank_driver_genes(
+        adata=bdata,
+        top_k=None,
+        compute_velocity=True,
+        scvelo_pp=True,
+        layer_key=None,
+        initial_terminal_state=('Pre-endocrine', 'Beta'),
+        plot=plot
+    )
     print('### Alpha')
     print(atop_k_list)
     print('### Beta')
@@ -197,9 +203,6 @@ def main_save_cellrank_driver_genes():
 
     # ### For the erythrocytes dataset there are no un-/spliced counts available,
     # use CellRank pseudotime kernel instead
-    import cellrank as cr
-    from validation.cellrank_workflow import identify_initial_terminal_states, estimate_fate_probabilities, \
-        uncover_driver_genes
 
     # Set log transformed data, set as main data matrix of anndata, keep only 2000 highly variable genes
     erydata.layers['dummy'] = erydata.X.copy()
@@ -211,8 +214,12 @@ def main_save_cellrank_driver_genes():
     pk.plot_projection(basis='X_umap', color='palantir_pseudotime', legend_loc='right')
 
     # Compute terminal and initial states using CellRanks Generalized Perron Cluster Cluster Analysis (GPCCA) estimator
-    gpcca_estimator = identify_initial_terminal_states(cr_kernel=pk, cluster_obs_key='prog_off',
-                                                       initial_terminal_state=('prog', 'off'), plot=plot)
+    gpcca_estimator = identify_initial_terminal_states(
+        cr_kernel=pk,
+        cluster_obs_key='prog_off',
+        initial_terminal_state=('prog', 'off'),
+        plot=plot
+    )
 
     # Compute fate probabilities, correlate fate probabilities with gene expression => Driver genes
     gpcca_estimator = estimate_fate_probabilities(cr_estimator=gpcca_estimator, plot=plot)
@@ -1205,25 +1212,5 @@ if __name__ == '__main__':
     # main_get_basegrn_sizes()
     # main_transition_grn_val()
     # main_get_targets()
-
-    from switchtfi import erythrocytes_grn, preendocrine_alpha_grn, preendocrine_beta_grn
-
-    erydata = erythrocytes()
-    erygrn = erythrocytes_grn()
-
-    adata = preendocrine_alpha()
-    agrn = preendocrine_alpha_grn()
-
-    bdata = preendocrine_beta()
-    bgrn = preendocrine_beta_grn()
-
-    print(erydata)
-    print(adata)
-    print(bdata)
-
-
-    print(erygrn)
-    print(agrn)
-    print(bgrn)
 
     print('done')

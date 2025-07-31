@@ -8,13 +8,16 @@ import pandas as pd
 from typing import *
 
 from cellrank.kernels import CytoTRACEKernel
-from validation.cellrank_workflow import compute_rna_velocity, compute_rna_velo_transition_matrix, \
-    identify_initial_terminal_states, get_root_cell
+from validation.cellrank_workflow import (
+    compute_rna_velocity, compute_rna_velo_transition_matrix, identify_initial_terminal_states, get_root_cell
+)
 
 
-def calculate_cytotrace_pt(adata: sc.AnnData,
-                           cluster_obs_key: str = 'clusters',
-                           plot: bool = False) -> sc.AnnData:
+def calculate_cytotrace_pt(
+        adata: sc.AnnData,
+        cluster_obs_key: str = 'clusters',
+        plot: bool = False
+) -> sc.AnnData:
 
     # Store original spliced counts elsewhere
     if 'spliced' in adata.layers.keys() and 'unspliced' in adata.layers.keys():
@@ -37,10 +40,12 @@ def calculate_cytotrace_pt(adata: sc.AnnData,
     return adata
 
 
-def calculate_diffusion_pt(adata: sc.AnnData,
-                           root: Union[int, None] = None,
-                           cluster_obs_key: str = 'clusters',
-                           plot: bool = False) -> sc.AnnData:
+def calculate_diffusion_pt(
+        adata: sc.AnnData,
+        root: Union[int, None] = None,
+        cluster_obs_key: str = 'clusters',
+        plot: bool = False
+) -> sc.AnnData:
 
     # Get root cell if one was passed
     if root is not None:
@@ -68,11 +73,14 @@ def calculate_diffusion_pt(adata: sc.AnnData,
     return adata
 
 
-def calculate_palantir_pt(adata: sc.AnnData,
-                          root: Union[int, None] = None,
-                          layer_key: Union[str, None] = None,
-                          cluster_obs_key: str = 'clusters',
-                          plot: bool = False) -> sc.AnnData:
+def calculate_palantir_pt(
+        adata: sc.AnnData,
+        root: Union[int, None] = None,
+        layer_key: Union[str, None] = None,
+        cluster_obs_key: str = 'clusters',
+        plot: bool = False
+) -> sc.AnnData:
+
     """
     Calculate cell wise pseudotime values using the Palantir method.
 
@@ -144,20 +152,30 @@ def calculate_palantir_pt(adata: sc.AnnData,
     return adata
 
 
-def find_initial_cell(adata: sc.AnnData,
-                      initial_terminal_state: Union[Tuple[str, str], None] = None,
-                      plot: bool = False):
+def find_initial_cell(
+        adata: sc.AnnData,
+        initial_terminal_state: Union[Tuple[str, str], None] = None,
+        plot: bool = False
+):
     # Compute RNA-velocity and transition matrix computed based on RNA-velocity
-    adata = compute_rna_velocity(adata=adata,
-                                 scvelo_pp=True,
-                                 layer_key=None,
-                                 plot=plot)
-    vk = compute_rna_velo_transition_matrix(adata=adata,
-                                            layer_key=None,
-                                            plot=plot)
+    adata = compute_rna_velocity(
+        adata=adata,
+        scvelo_pp=True,
+        layer_key=None,
+        plot=plot
+    )
+    vk = compute_rna_velo_transition_matrix(
+        adata=adata,
+        layer_key=None,
+        plot=plot
+    )
     # Compute terminal and initial states using the Generalized Perron Cluster Cluster Analysis (GPCCA) estimator
-    gpcca_estimator = identify_initial_terminal_states(cr_kernel=vk, plot=plot, allow_overlap=False,
-                                                       initial_terminal_state=initial_terminal_state)
+    gpcca_estimator = identify_initial_terminal_states(
+        cr_kernel=vk,
+        plot=plot,
+        allow_overlap=False,
+        initial_terminal_state=initial_terminal_state
+    )
     # Annotate adata, root cell = cell with highest terminal state probability
     adata, root = get_root_cell(adata=adata, verbosity=1)
 

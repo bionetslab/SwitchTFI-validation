@@ -7,16 +7,17 @@ import pandas as pd
 import scanpy as sc
 import scvelo as scv
 import cellrank as cr
-import scipy.stats as st
 
 from typing import *
 from switchtfi.utils import anndata_to_numpy
 
 
-def compute_rna_velocity(adata: sc.AnnData,
-                         scvelo_pp: bool = True,
-                         layer_key: Union[str, None] = None,
-                         plot: bool = False) -> sc.AnnData:
+def compute_rna_velocity(
+        adata: sc.AnnData,
+        scvelo_pp: bool = True,
+        layer_key: Union[str, None] = None,
+        plot: bool = False
+) -> sc.AnnData:
     # Plot percentages of un-/spiced reads
     if plot:
         scv.pl.proportions(adata)
@@ -49,11 +50,14 @@ def compute_rna_velocity(adata: sc.AnnData,
     return adata
 
 
-def compute_rna_velo_transition_matrix(adata: sc.AnnData,
-                                       layer_key: Union[str, None] = 'log1p_norm',
-                                       result_folder: Union[str, None] = None,
-                                       plot: bool = False,
-                                       **kwargs) -> cr.kernels.Kernel:
+def compute_rna_velo_transition_matrix(
+        adata: sc.AnnData,
+        layer_key: Union[str, None] = 'log1p_norm',
+        result_folder: Union[str, None] = None,
+        plot: bool = False,
+        **kwargs
+) -> cr.kernels.Kernel:
+
     if layer_key is not None:
         # Change main data layer to passed layer
         adata.layers['dummy'] = adata.X.copy()
@@ -131,11 +135,13 @@ def compute_rna_velo_transition_matrix2(adata: sc.AnnData,
     return vk
 
 
-def identify_initial_terminal_states(cr_kernel: cr.kernels.Kernel,
-                                     cluster_obs_key: str = 'clusters',
-                                     allow_overlap: bool = False,
-                                     initial_terminal_state: Union[Tuple[str, str], None] = None,
-                                     plot: bool = False) -> cr.estimators.GPCCA:
+def identify_initial_terminal_states(
+        cr_kernel: cr.kernels.Kernel,
+        cluster_obs_key: str = 'clusters',
+        allow_overlap: bool = False,
+        initial_terminal_state: Union[Tuple[str, str], None] = None,
+        plot: bool = False
+) -> cr.estimators.GPCCA:
     # Initialize estimator
     gpcca = cr.estimators.GPCCA(cr_kernel)
 
@@ -165,10 +171,14 @@ def identify_initial_terminal_states(cr_kernel: cr.kernels.Kernel,
     return gpcca
 
 
-def estimate_fate_probabilities(cr_estimator: cr.estimators.GPCCA,
-                                plot: bool = False):
+def estimate_fate_probabilities(
+        cr_estimator: cr.estimators.GPCCA,
+        plot: bool = False
+) -> cr.estimators.GPCCA:
+
     # Initial and terminal states must have been identified beforehand ..
     cr_estimator.compute_fate_probabilities()
+
     if plot:
         cr_estimator.plot_fate_probabilities(same_plot=False)
         cr_estimator.plot_fate_probabilities(same_plot=True)
@@ -176,11 +186,13 @@ def estimate_fate_probabilities(cr_estimator: cr.estimators.GPCCA,
     return cr_estimator
 
 
-def uncover_driver_genes(cr_estimator: cr.estimators.GPCCA,
-                         verbosity: int = 0) -> Tuple[pd.DataFrame, cr.estimators.GPCCA]:
+def uncover_driver_genes(
+        cr_estimator: cr.estimators.GPCCA,
+        verbosity: int = 0
+) -> Tuple[pd.DataFrame, cr.estimators.GPCCA]:
 
     cr_estimator.compute_eigendecomposition()
-    res_df = cr_estimator.compute_lineage_drivers(cluster_key="clusters")
+    res_df = cr_estimator.compute_lineage_drivers(cluster_key='clusters')
     if verbosity >= 1:
         print('###### Top-10 putative driver genes: ######')
         print(res_df[0:10])
@@ -188,150 +200,15 @@ def uncover_driver_genes(cr_estimator: cr.estimators.GPCCA,
     return res_df, cr_estimator
 
 
-def visualize_expression_trends(adata: sc.AnnData,
-                                genes: list[str]):
-    # Driver genes must have been inferred beforehand
-    # Initialize model for GAM fitting
-    model = cr.models.GAMR(adata, n_knots=6, smoothing_penalty=10.0)
-
-    cr.pl.gene_trends(
-        adata,
-        model=model,
-        data_key='log1p_norm',
-        genes=genes,
-        same_plot=True,
-        ncols=2,
-        time_key="palantir_pseudotime",
-        hide_cells=False,
-        weight_threshold=(1e-3, 1e-3),
-    )
-    plt.show()
-
-    return
-
-
-def visualize_expression_trends2(adata: sc.AnnData,
-                                 genes: list[str]):
-
-    for gene in genes:
-        bdata = adata[anndata_to_numpy(adata[:, gene]) != 0, :]
-        model = cr.models.GAMR(bdata, n_knots=6, smoothing_penalty=10.0)
-        cr.pl.gene_trends(
-            bdata,
-            model=model,
-            data_key='log1p_norm',
-            genes=[gene],
-            same_plot=True,
-            ncols=2,
-            time_key="palantir_pseudotime",
-            hide_cells=False,
-            weight_threshold=(1e-3, 1e-3),
-        )
-        plt.show()
-
-    return
-
-
-def visualize_expression_trends3(adata: sc.AnnData,
-                                 genes: list[str]):
-
-    for gene in genes:
-        bdata = adata[anndata_to_numpy(adata[:, gene]) != 0, :]
-        model = cr.models.GAM(bdata, n_knots=6, smoothing_penalty=10.0)
-        cr.pl.gene_trends(
-            bdata,
-            model=model,
-            data_key='log1p_norm',
-            genes=[gene],
-            same_plot=True,
-            ncols=2,
-            time_key="palantir_pseudotime",
-            hide_cells=False,
-            weight_threshold=(1e-3, 1e-3),
-        )
-
-        print(model.x_test)
-        print(model.y_test)
-        plt.plot(model.x_test.flatten(), model.y_test.flatten(), color='red')
-        plt.show()
-
-    return
-
-
-def visualize_expression_cascades_via_heatmaps(adata: sc.AnnData,
-                                               driver_genes_df: pd.DataFrame):
-    # Driver genes must have been inferred beforehand
-    # Initialize model for GAM fitting
-    model = cr.models.GAMR(adata, n_knots=6, smoothing_penalty=10.0)
-
-    # plot heatmap
-    cr.pl.heatmap(
-        adata,
-        model=model,
-        cluster_key="clusters",
-        show_fate_probabilities=True,
-        data_key="log1p_norm",
-        genes=driver_genes_df.head(40).index,
-        time_key="palantir_pseudotime",
-        figsize=(12, 10),
-        show_all_genes=True,
-        weight_threshold=(1e-3, 1e-3),
-    )
-    plt.show()
-
-    return
-
-
-def cluster_gene_expression_trends(adata: sc.AnnData,
-                                   genes: Union[list[str], None] = None):
-    # Initialize model for GAM fitting
-    model = cr.models.GAMR(adata, n_knots=6, smoothing_penalty=10.0)
-
-    if genes is None:
-        genes = adata.var_names
-
-    cr.pl.cluster_trends(
-        adata,
-        model=model,
-        data_key="log1p_norm",
-        genes=genes,
-        lineage='Beta',
-        time_key="palantir_pseudotime",
-        weight_threshold=(1e-3, 1e-3),
-        n_jobs=32,
-        random_state=0,
-        clustering_kwargs={"resolution": 0.2, "random_state": 0},
-        neighbors_kwargs={"random_state": 0},
-    )
-    plt.show()
-
-    # Get Anndata object of shape genes x ?
-    gdata = adata.uns["lineage_Beta_trend"].copy()
-    print(gdata)
-    print(gdata.X)
-
-    # Merge annotations
-    cols = ["means", "dispersions"]
-    gdata.obs = gdata.obs.merge(
-        right=adata.var[cols], how="left", left_index=True, right_index=True
-    )
-    print(gdata)
-
-    # Analyze gene clusters
-    sc.tl.umap(gdata, random_state=0)
-    sc.pl.embedding(gdata, basis="umap", color=["clusters", "means"], vmax="p95")
-    plt.show()
-
-    return
-
-
-def get_cellrank_driver_genes(adata: sc.AnnData,
-                              top_k: Union[int, None] = 10,
-                              compute_velocity: bool = True,
-                              scvelo_pp: bool = True,
-                              layer_key: Union[str, None] = None,
-                              initial_terminal_state: Union[tuple[str, str], None] = None,
-                              plot: bool = False) -> Tuple[list[str], pd.DataFrame]:
+def get_cellrank_driver_genes(
+        adata: sc.AnnData,
+        top_k: Union[int, None] = 10,
+        compute_velocity: bool = True,
+        scvelo_pp: bool = True,
+        layer_key: Union[str, None] = None,
+        initial_terminal_state: Union[tuple[str, str], None] = None,
+        plot: bool = False
+) -> Tuple[list[str], pd.DataFrame]:
     """
     Identify driver genes associated with cell fate transitions using CellRank.
 
@@ -361,8 +238,11 @@ def get_cellrank_driver_genes(adata: sc.AnnData,
     vk = compute_rna_velo_transition_matrix(adata=adata, layer_key=layer_key, plot=plot)
 
     # Compute terminal and initial states using the Generalized Perron Cluster Cluster Analysis (GPCCA) estimator
-    gpcca_estimator = identify_initial_terminal_states(cr_kernel=vk,
-                                                       initial_terminal_state=initial_terminal_state, plot=plot)
+    gpcca_estimator = identify_initial_terminal_states(
+        cr_kernel=vk,
+        initial_terminal_state=initial_terminal_state,
+        plot=plot
+    )
 
     # Compute fate probabilities, correlate fate probabilities with gene expression => Driver genes
     gpcca_estimator = estimate_fate_probabilities(cr_estimator=gpcca_estimator, plot=plot)
@@ -377,49 +257,18 @@ def get_cellrank_driver_genes(adata: sc.AnnData,
 
 
 # Auxiliary ############################################################################################################
-def get_root_cell(adata: sc.AnnData,
-                  verbosity: int = 0) -> Tuple[sc.AnnData, int]:
+def get_root_cell(
+        adata: sc.AnnData,
+        verbosity: int = 0
+) -> Tuple[sc.AnnData, int]:
+
     # Cellranks 'identify_initial_terminal_states()' must have been run before
     root = np.argmax(adata.obs['init_states_fwd_probs'].to_numpy())
     print(adata.obs['init_states_fwd_probs'].to_numpy())
     adata.uns['iroot'] = root
     if verbosity >= 1:
         print(f'# The cell with the highest initial state probability is {root}')
+
     return adata, int(root)
 
-
-def cellrank_full_workflow(adata: sc.AnnData,
-                           verbosity: int = 0,
-                           plot: bool = False):
-
-    # Compute RNA-velocity and transition matrix computed based on RNA-velocity
-    adata = compute_rna_velocity(adata=adata, plot=plot)
-    vk = compute_rna_velo_transition_matrix(adata=adata, plot=plot)
-
-    # Compute terminal and initial states using the Generalized Perron Cluster Cluster Analysis (GPCCA) estimator
-    gpcca_estimator = identify_initial_terminal_states(cr_kernel=vk, plot=plot)
-
-    # Compute fate probabilities, correlate fate probabilities with gene expression => Driver genes
-    gpcca_estimator = estimate_fate_probabilities(cr_estimator=gpcca_estimator, plot=plot)
-    res_df, gpcca_estimator = uncover_driver_genes(cr_estimator=gpcca_estimator, verbosity=verbosity)
-
-    # Compute PALANTIR pseudo-time using the cell with the highest initial state probability as the root
-    from .pseudotime_inference import calculate_palantir_pt
-    get_root_cell(adata=adata, verbosity=verbosity)
-    adata = calculate_palantir_pt(adata=adata, root=None, plot=plot)
-
-    # Compute and plot gene expression trends in pseudo-time
-    visualize_expression_trends(adata=adata, genes=["Pax4", "Pdx1", "Fev", 'Nkx6-1', 'Elf3', 'Foxa3', 'Fos', "Rpl18a"])
-    # visualize_expression_trends2(adata=adata, genes=["Pax4", "Pdx1", "Fev", 'Nkx6-1',
-    #                                                  'Elf3', 'Foxa3', 'Fos', "Rpl18a"])
-    # visualize_expression_trends(adata=adata, genes=["Pax4", "Pdx1"])
-    # visualize_expression_trends2(adata=adata, genes=["Pax4"])
-    # visualize_expression_trends3(adata=adata, genes=["Pax4"])
-
-    visualize_expression_cascades_via_heatmaps(adata=adata, driver_genes_df=res_df)
-    # cluster_gene_expression_trends(adata=adata,
-    #                                genes=["Pax4", "Pdx1", "Fev", 'Nkx6-1', 'Elf3', 'Foxa3', 'Fos', "Rpl18a"])
-
-    cluster_gene_expression_trends(adata=adata,
-                                   genes=res_df.head(40).index.to_list())
 
