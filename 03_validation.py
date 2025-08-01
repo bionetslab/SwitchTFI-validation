@@ -233,7 +233,7 @@ def main_save_cellrank_driver_genes():
 
     eryres_df.to_csv(os.path.join(res_p, 'ery_cellrank_driver_genes.csv'))
 
-# Todo ...
+# Todo: continue reformating ...
 
 def main_save_splicejac_driver_genes():
     # ### Script for computing and saving transition driver genes with the spliceJAC method
@@ -318,11 +318,13 @@ def main_save_drivaer_driver_genes():
     # 2) Set flag 'save_new_to_np' to False, 'load_np_save_old' and 'drivaer_analysis' to True
     #    Run with drivaer environment (drivaer.yml)
 
-    def save_new_anndata_as_np(ad: sc.AnnData,
-                               layer: Union[str, None] = None,
-                               cluster_obs_key: str = 'clusters',
-                               prefix: str = 'alpha',
-                               rp: Union[str, None] = './results/03_validation/driver_genes_drivaer_aux_data'):
+    def save_new_anndata_as_np(
+            ad: sc.AnnData,
+            layer: Union[str, None] = None,
+            cluster_obs_key: str = 'clusters',
+            prefix: str = 'alpha',
+            rp: Union[str, None] = './results/03_validation/driver_genes_drivaer_aux_data'
+    ):
 
         if layer is None:
             data_mtrx = ad.X
@@ -341,16 +343,20 @@ def main_save_drivaer_driver_genes():
         if layer is None:
             layer = 'raw'
 
-        np.savez(os.path.join(rp, f'np_{prefix}_{layer}.npz'),
-                 data_mtrx=data_mtrx,
-                 cell_anno_names=cell_anno_names,
-                 cell_anno_cluster=cell_anno_cluster,
-                 # cell_anno_pt=cell_anno_pt,
-                 gene_anno_names=gene_anno_names)
+        np.savez(
+            os.path.join(rp, f'np_{prefix}_{layer}.npz'),
+            data_mtrx=data_mtrx,
+            cell_anno_names=cell_anno_names,
+            cell_anno_cluster=cell_anno_cluster,
+            # cell_anno_pt=cell_anno_pt,
+            gene_anno_names=gene_anno_names
+        )
 
-    def load_np_save_old_anndata(layer: Union[str, None] = None,
-                                 prefix: str = 'alpha',
-                                 rp: Union[str, None] = './results/03_validation/driver_genes_drivaer_aux_data'):
+    def load_np_save_old_anndata(
+            layer: Union[str, None] = None,
+            prefix: str = 'alpha',
+            rp: Union[str, None] = './results/03_validation/driver_genes_drivaer_aux_data'
+    ):
 
         if layer is None:
             layer = 'raw'
@@ -372,8 +378,11 @@ def main_save_drivaer_driver_genes():
 
         ad.write_h5ad(filename=Path(os.path.join(rp, f'ad_{prefix}_{layer}.h5ad')))
 
-    def correct_dtype(ad: sc.AnnData,
-                      cluster_obs_key: str = 'clusters') -> sc.AnnData:
+    def correct_dtype(
+            ad: sc.AnnData,
+            cluster_obs_key: str = 'clusters'
+    ) -> sc.AnnData:
+
         ad.var_names = np.array([byte.decode('ascii') for byte in ad.var_names.to_numpy()])
         ad.obs[cluster_obs_key] = np.array([byte.decode('ascii') for byte in ad.obs[cluster_obs_key].to_numpy()])
 
@@ -388,9 +397,7 @@ def main_save_drivaer_driver_genes():
         adata = sc.read_h5ad('./data/anndata/pre-endocrine_alpha.h5ad')
         bdata = sc.read_h5ad('./data/anndata/pre-endocrine_beta.h5ad')
         erydata = sc.read_h5ad('./data/anndata/erythrocytes.h5ad')
-        # adata = preendocrine_alpha()
-        # bdata = preendocrine_beta()
-        # cdata = erythrocytes()
+
         save_new_anndata_as_np(ad=adata, layer=None, prefix='alpha', rp=data_p)
         save_new_anndata_as_np(ad=bdata, layer=None, prefix='beta', rp=data_p)
         save_new_anndata_as_np(ad=erydata, layer=None, cluster_obs_key='prog_off', prefix='ery', rp=data_p)
@@ -415,12 +422,18 @@ def main_save_drivaer_driver_genes():
         ad_list = [adata, bdata, erydata]
 
         # Load GRNs
-        agrn = pd.read_csv('./results/01_grn_inf/endocrine/alpha/ngrnthresh9_alpha_pyscenic_combined_grn.csv',
-                           index_col=[0])
-        bgrn = pd.read_csv('./results/01_grn_inf/endocrine/beta/ngrnthresh9_beta_pyscenic_combined_grn.csv',
-                           index_col=[0])
-        erygrn = pd.read_csv('./results/01_grn_inf/hematopoiesis/ngrnthresh9_erythrocytes_pyscenic_combined_grn.csv',
-                             index_col=[0])
+        agrn = pd.read_csv(
+            './results/01_grn_inf/endocrine/alpha/ngrnthresh9_alpha_pyscenic_combined_grn.csv',
+            index_col=[0]
+        )
+        bgrn = pd.read_csv(
+            './results/01_grn_inf/endocrine/beta/ngrnthresh9_beta_pyscenic_combined_grn.csv',
+            index_col=[0]
+        )
+        erygrn = pd.read_csv(
+            './results/01_grn_inf/hematopoiesis/ngrnthresh9_erythrocytes_pyscenic_combined_grn.csv',
+            index_col=[0]
+        )
 
         grn_list = [agrn, bgrn, erygrn]
 
@@ -428,11 +441,13 @@ def main_save_drivaer_driver_genes():
 
         for i in [0, 1, 2]:
 
-            top_k_list, res_df, drivaer_out = get_drivaer_driver_genes(adata=ad_list[i],
-                                                                       grn=grn_list[i],
-                                                                       top_k=None,
-                                                                       dim_red_method='dca',
-                                                                       verbosity=1)
+            top_k_list, res_df, drivaer_out = get_drivaer_driver_genes(
+                adata=ad_list[i],
+                grn=grn_list[i],
+                top_k=None,
+                dim_red_method='dca',
+                verbosity=1
+            )
 
             print(top_k_list)
 
