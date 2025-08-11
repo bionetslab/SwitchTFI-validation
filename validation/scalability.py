@@ -382,48 +382,50 @@ def scalability_drivaer():
 
 if __name__ == '__main__':
 
-    preliminary = True
-
-    # ### Generate the simulated data
-    if preliminary:
-
-        generate_data()
-
     # ### Perform scalability analysis
+
+    parser = argparse.ArgumentParser(description='Run scalability analysis for selected method.')
+
+    parser.add_argument(
+        '-m', '--method',
+        type=str,
+        choices=['pre', 'grn_inf', 'switchtfi', 'cellrank', 'splicejac', 'drivaer'],
+        default='switchtfi',
+        help='Method for which to run the analysis for: "grn_inf", "switchtfi", "splicejac", or "drivaer"'
+    )
+
+    args = parser.parse_args()
+
+    if args.method in {'grn_inf', 'switchtfi', 'cellrank', 'splicejac', 'drivaer'}:
+        p = SAVE_PATH / 'data'
+        if (
+                not p.exists()
+                or not p.is_dir()
+                or not (any(f.name[0] != '.' for f in p.iterdir()))
+        ):
+            raise RuntimeError(f'Run data generation before running "{args.method}"')
+
+    if args.method in {'switchtfi', 'drivaer'}:
+        p = SAVE_PATH / 'grn_inf'
+        if (
+                not p.exists()
+                or not p.is_dir()
+                or not (any(f.name[0] != '.' for f in p.iterdir()))
+        ):
+            raise RuntimeError(f'Run GRN inference before running "{args.method}"')
+
+    if args.method == 'pre':
+        generate_data()
+    elif args.method == 'grn_inf':
+        scalability_grn_inf()
+    elif args.method == 'switchtfi':
+        scalability_switchtfi()
+    elif args.method == 'cellrank':
+        scalability_cellrank()
+    elif args.method == 'splicejac':
+        scalability_splicejac()
     else:
-
-        parser = argparse.ArgumentParser(description='Run scalability analysis for selected method.')
-
-        parser.add_argument(
-            '-m', '--method',
-            type=str,
-            choices=['grn_inf', 'switchtfi', 'cellrank', 'splicejac', 'drivaer'],
-            default='switchtfi',
-            help='Method for which to run the analysis for: "grn_inf", "switchtfi", "splicejac", or "drivaer"'
-        )
-
-        args = parser.parse_args()
-
-        if args.method in {'switchtfi', 'drivaer'}:
-            p = SAVE_PATH / 'grn_inf'
-            if (
-                    not p.exists()
-                    or not p.is_dir()
-                    or not (any(f.name[0] != '.' for f in p.iterdir()))
-            ):
-                raise RuntimeError(f'Run GRN inference before running "{args.method}"')
-
-
-        if args.method == 'grn_inf':
-            scalability_grn_inf()
-        elif args.method == 'switchtfi':
-            scalability_switchtfi()
-        elif args.method == 'cellrank':
-            scalability_cellrank()
-        elif args.method == 'splicejac':
-            scalability_splicejac()
-        else:
-            scalability_drivaer()
+        scalability_drivaer()
 
 
     print('done')
