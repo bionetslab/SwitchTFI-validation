@@ -19,6 +19,7 @@ import pandas as pd
 import scanpy as sc
 
 from pathlib import Path
+from typing import Callable, Dict, Tuple, Union, Any
 
 
 SAVE_PATH = Path.cwd().parent / 'results/05_revision/scalability'
@@ -97,44 +98,84 @@ def add_prog_off_annotations(simdata: sc.AnnData) -> sc.AnnData:
     return  simdata
 
 
-def track_memory(interval=0.1):
+def get_cpu_memory_mb(process: psutil.Process) -> float:
+    total_mem = 0
+    try:
+        with process.oneshot():
+            children = process.children(recursive=True)
+            all_procs = [process] + children
+            for proc in all_procs:
+
+                try:
+                    if proc.is_running():
+                        total_mem += proc.memory_info().rss
+
+                except (psutil.NoSuchProcess, psutil.AccessDenied):
+                    continue
+
+    except Exception as e:
+        print(f'CPU memory tracking failed with error:\n{e}')
+
+    total_mem /= 1024 ** 2
+
+    return total_mem
+
+
+def track_memory_cpu(interval=0.1):
     """
     Tracks total memory (RSS) of the current process + children.
     Returns a list of memory samples (in MB).
     """
 
-    memory_samples = []
     process = psutil.Process(os.getpid())
+    memory_samples = [get_cpu_memory_mb(process=process)]
     stop_event = threading.Event()
 
+    # Initial sample
     def poll():
         while not stop_event.is_set():
-            try:
-                children = process.children(recursive=True)
-                all_procs = [process] + children
-                total_mem = sum(p.memory_info().rss for p in all_procs if p.is_running()) / 1024**2
-                memory_samples.append(total_mem)
-            except psutil.NoSuchProcess:
-                pass
-            time.sleep(interval)
+            mem = get_cpu_memory_mb(process=process)
+            memory_samples.append(mem)
+            stop_event.wait(interval)
 
-    thread = threading.Thread(target=poll)
+    thread = threading.Thread(target=poll, daemon=True)
     thread.start()
+
     return memory_samples, stop_event, thread
 
 
-def get_gpu_memory_mb() -> int:
-    """Get current memory usage for GPU 0 in MB using nvidia-smi."""
-    try:
-        output = subprocess.check_output(
-            ['nvidia-smi', '--query-gpu=memory.used', '--format=csv,nounits,noheader'],
-            stderr=subprocess.DEVNULL
-        )
-        mem = int(output.decode().split('\n')[0].strip())
-        return mem
-    except Exception as e:
-        print(f'GPU memory tracking failed with error:\n{e}')
-        return 0  # fallback if nvidia-smi fails or no GPU present
+# def get_gpu_memory_mb() -> int:
+#     """Get current memory usage for GPU 0 in MB using nvidia-smi."""
+#     try:
+#         output = subprocess.check_output(
+#             ['nvidia-smi', '--query-gpu=memory.used', '--format=csv,nounits,noheader'],
+#             stderr=subprocess.DEVNULL
+#         )
+#         mem = int(output.decode().split('\n')[0].strip())
+#         return mem
+#     except Exception as e:
+#         print(f'GPU memory tracking failed with error:\n{e}')
+#         return 0  # fallback if nvidia-smi fails or no GPU present
+
+
+# def track_memory_gpu(interval=0.1):
+#     """
+#     Tracks GPU 0 memory usage over time in a background thread.
+#     Returns (samples_list, stop_event, thread).
+#     """
+#     memory_samples = [get_gpu_memory_mb()]
+#     stop_event = threading.Event()
+#
+#     def poll():
+#         while not stop_event.is_set():
+#             mem = get_gpu_memory_mb()
+#             memory_samples.append(mem)
+#             stop_event.wait(interval)
+#
+#     thread = threading.Thread(target=poll)
+#     thread.start()
+#
+#     return memory_samples, stop_event, thread
 
 
 def track_memory_gpu(interval=0.1):
@@ -145,16 +186,127 @@ def track_memory_gpu(interval=0.1):
     memory_samples = []
     stop_event = threading.Event()
 
-    def poll():
-        while not stop_event.is_set():
-            mem = get_gpu_memory_mb()
-            memory_samples.append(mem)
-            time.sleep(interval)
+    interval_ms = max(1, int(interval * 1000))
 
-    thread = threading.Thread(target=poll)
+    # Start a persistent nvidia-smi process
+    proc = subprocess.Popen(
+        [
+            "nvidia-smi",
+            "-i", "0",  # Pin 1st GPU
+            f"-lms", str(interval_ms),  # Sampling interval in ms
+            "--query-gpu=memory.used",
+            "--format=csv,nounits,noheader"
+        ],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+        text=True,
+        bufsize=1
+    )
+
+    # Get first sample
+    first = 0
+    if proc.stdout is not None:
+        try:
+            first_line = proc.stdout.readline().strip()
+
+            if first_line:
+                first = int(first_line)
+
+        except Exception as e:
+            pass
+
+    memory_samples.append(first)
+
+    def poll():
+        try:
+            for line in proc.stdout:
+                try:
+                    mem = int(line.strip())
+                except ValueError:
+                    continue
+
+                memory_samples.append(mem)
+
+                if stop_event.is_set():
+                    break
+        finally:
+            # Clean up process when stopping
+            try:
+                proc.terminate()
+                try:
+                    proc.wait(timeout=1.5)
+                except subprocess.TimeoutExpired:
+                    proc.kill()
+            except Exception as e:
+                pass
+
+    thread = threading.Thread(target=poll, daemon=True)
     thread.start()
 
     return memory_samples, stop_event, thread
+
+
+def scalability_wrapper(
+        function: Callable,
+        function_params: Dict[str, Any],
+        track_gpu: bool = False,
+        res_dir: Union[str, None] = None,
+        res_filename: Union[str, None] = None,
+) -> Tuple[pd.DataFrame, Any]:
+
+    # Start memory tracking
+    memory_samples_cpu, stop_event_cpu, tracker_thread_cpu = track_memory_cpu(interval=0.1)
+    if track_gpu:
+        memory_samples_gpu, stop_event_gpu, tracker_thread_gpu = track_memory_gpu(interval=0.1)
+
+    wall_start = time.perf_counter()
+
+    try:
+
+        function_output = function(**function_params)
+
+    finally:
+
+        wall_end = time.perf_counter()
+
+        # Stop memory tracker
+        stop_event_cpu.set()
+        tracker_thread_cpu.join()
+
+        if track_gpu:
+            stop_event_gpu.set()
+            tracker_thread_gpu.join()
+
+    # Analyze results
+    wall_time = wall_end - wall_start
+
+    memory_peak_cpu = max(memory_samples_cpu)
+    memory_average_cpu = sum(memory_samples_cpu) / len(memory_samples_cpu)
+
+    if track_gpu:
+        memory_peak_gpu = max(memory_samples_gpu)
+        memory_average_gpu = sum(memory_samples_gpu) / len(memory_samples_gpu)
+    else:
+        memory_peak_gpu = None
+        memory_average_gpu = None
+
+    res = {
+        'wall_time': wall_time,
+        'mem_peak_cpu': memory_peak_cpu,
+        'mem_avg_cpu': memory_average_cpu,
+        'mem_peak_gpu': memory_peak_gpu,
+        'samples_cpu': len(memory_samples_cpu),
+        'mem_avg_gpu': memory_average_gpu,
+        'samples_gpu': len(memory_samples_gpu) if track_gpu else None,
+    }
+    res_df = pd.DataFrame([res])
+
+    if res_dir is not None:
+        if res_filename is None:
+            res_filename = 'scalability_results.csv'
+        res_df.to_csv(os.path.join(res_dir, res_filename))
+
+    return res_df, function_output
 
 
 def scalability_grn_inf():
@@ -173,74 +325,39 @@ def scalability_grn_inf():
     tf_names = simdata.var_names.tolist()[0:1500]
 
     # Run GRN inference varying numbers of cells
-    wall_times = []
-    mem_peaks_cpu = []
-    mem_peaks_gpu = []
-    mem_avgs_cpu = []
-    mem_avgs_gpu = []
-
+    res_dfs = []
     for n in NUM_CELLS:
 
         # Subset the data
         simdata_df_subset = simdata_df.iloc[0:n, :].copy()
 
-        # Start memory tracking
-        memory_samples_cpu, stop_event_cpu, tracker_thread_cpu = track_memory(interval=0.01)
-        memory_samples_gpu, stop_event_gpu, tracker_thread_gpu = track_memory_gpu(interval=0.01)
+        fn_kwargs = {
+            'expression_data': simdata_df_subset,
+            'gene_names': None,
+            'tf_names': tf_names,
+            'seed': 42,
+            'verbose': False,
+        }
 
-        wall_start = time.perf_counter()
-
-        # Run GRN inference
-        grn = grnboost2(
-            expression_data=simdata_df_subset,
-            gene_names=None,
-            tf_names=tf_names,
-            seed=42,
-            verbose=False,
+        res_df, grn = scalability_wrapper(
+            function=grnboost2,
+            function_params=fn_kwargs,
+            track_gpu=False,
+            res_dir=None,
+            res_filename=None,
         )
 
-        wall_end = time.perf_counter()
-
-        # Stop memory tracker
-        stop_event_cpu.set()
-        tracker_thread_cpu.join()
-        stop_event_gpu.set()
-        tracker_thread_gpu.join()
-
-        # Analyze results
-        wall_time = wall_end - wall_start
-
-        memory_peak_cpu = max(memory_samples_cpu)
-        memory_average_cpu = sum(memory_samples_cpu) / len(memory_samples_cpu)
-
-        memory_peak_gpu = max(memory_samples_gpu)
-        memory_average_gpu = sum(memory_samples_gpu) / len(memory_samples_gpu)
-
-        wall_times.append(wall_time)
-        mem_peaks_cpu.append(memory_peak_cpu)
-        mem_peaks_gpu.append(memory_peak_gpu)
-        mem_avgs_cpu.append(memory_average_cpu)
-        mem_avgs_gpu.append(memory_average_gpu)
+        res_dfs.append(res_df)
 
         grn.to_csv(os.path.join(save_path, f'grn_num_cells_{n}.csv'))
 
-    res_df = pd.DataFrame(
-        {
-            'wall_time': wall_times,
-            'mem_peak_cpu': mem_peaks_cpu,
-            'mem_avg_cpu': mem_avgs_cpu,
-            'mem_peak_gpu': mem_peaks_gpu,
-            'mem_avg_gpu': mem_avgs_gpu,
-        },
-        index=NUM_CELLS
-    )
-
+    res_df = pd.concat(res_dfs, axis=0, ignore_index=True)
+    res_df.index=NUM_CELLS
     res_df.index.name = 'num_cells'
 
     res_df.to_csv(os.path.join(SAVE_PATH, f'grn_inf.csv'))
 
     print(res_df)
-
 
 
 def scalability_switchtfi():
