@@ -17,7 +17,7 @@ import time
 import psutil
 import threading
 import subprocess
-import socket
+
 
 import numpy as np
 import pandas as pd
@@ -28,9 +28,7 @@ from pathlib import Path
 from typing import Callable, Dict, Tuple, Union, Any
 
 
-# Set the save path
-hostname = socket.gethostname()
-if 'woody' in hostname.lower():
+if Path('/home/woody/iwbn/iwbn107h').is_dir():
     SAVE_PATH = Path('/home/woody/iwbn/iwbn107h/scalability')
 else:
     SAVE_PATH = Path.cwd().parent / 'results/05_revision/scalability'
