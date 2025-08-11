@@ -17,6 +17,7 @@ import time
 import psutil
 import threading
 import subprocess
+import socket
 
 import numpy as np
 import pandas as pd
@@ -27,13 +28,18 @@ from pathlib import Path
 from typing import Callable, Dict, Tuple, Union, Any
 
 
-SAVE_PATH = Path.cwd().parent / 'results/05_revision/scalability'
+# Set the save path
+hostname = socket.gethostname()
+if 'woody' in hostname.lower():
+    SAVE_PATH = Path('/home/woody/iwbn/iwbn107h/scalability')
+else:
+    SAVE_PATH = Path.cwd().parent / 'results/05_revision/scalability'
 os.makedirs(SAVE_PATH, exist_ok=True)
 
-NUM_CELLS_MAX = 100  # 200000
-NUM_GENES = 200  # 10000
+NUM_CELLS_MAX = 200000
+NUM_GENES = 10000
 
-NUM_CELLS = [60, 80, 100]  # [1000, 5000, 10000, 50000, 100000, 200000]
+NUM_CELLS = [1000, 5000, 10000, 50000, 100000, 200000]
 
 
 def generate_data():
@@ -511,11 +517,18 @@ def scalability_cellrank():
 
         res_df = pd.concat(res_dfs, axis=0, ignore_index=True)
 
-        res_df.to_csv(os.path.join(SAVE_PATH, 'cellrank.csv'))
+        res_df.to_csv(os.path.join(SAVE_PATH, 'cellrank_fine_grained.csv'))
 
-        summary_df = res_df.groupby(['n_cells'], as_index=False).sum(numeric_only=True)
+        # summary_df = res_df.groupby(['n_cells'], as_index=False).sum(numeric_only=True)
 
-        summary_df.to_csv(os.path.join(SAVE_PATH, 'cellrank_summary.csv'))
+        summary_df = (
+            res_df
+            .drop(columns=["alg_step"])
+            .groupby("n_cells", as_index=False)
+            .sum(min_count=1)
+        )
+
+        summary_df.to_csv(os.path.join(SAVE_PATH, 'cellrank.csv'))
 
         print(res_df)
 
@@ -524,9 +537,33 @@ def scalability_cellrank():
 
 def scalability_splicejac():
 
-    # Todo
+    import scvelo as scv
+    import splicejac as sj
 
-    pass
+
+    def compute_hvgs_and_subset(data: sc.AnnData) -> sc.AnnData:
+
+        # Set number of genes to retain (min(# cells in custer) = 0.5 * # cells)
+        num_genes = int(data.shape[0] / 2)
+
+        # Compute highly variable genes
+        scv.pp.filter_genes_dispersion(data, n_top_genes=num_genes, subset=True)
+
+        return
+
+    def compute_rna_velocity(data: sc.AnnData) -> sc.AnnData:
+
+        # Compute velocities
+        scv.tl.velocity(data)
+        scv.tl.velocity_graph(data)
+
+        data.uns['neighbors']['distances'] = data.obsp['distances']
+        data.uns['neighbors']['connectivities'] = data.obsp['connectivities']
+
+        return data
+
+
+    # Todo
 
 
 def scalability_drivaer():
