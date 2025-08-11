@@ -21,6 +21,7 @@ import subprocess
 import numpy as np
 import pandas as pd
 import scanpy as sc
+import scipy.sparse as sp
 
 from pathlib import Path
 from typing import Callable, Dict, Tuple, Union, Any
@@ -55,12 +56,22 @@ def generate_data():
 
     simdata = scv.datasets.simulation(n_obs=n_obs, n_vars=n_vars, random_seed=42)
 
+    # Convert to float32 and sparse
+    x_unspliced = sp.csr_matrix(simdata.layers['unspliced'].astype(np.float32))
+    x_spliced = sp.csr_matrix(simdata.layers['spliced'].astype(np.float32))
+
+    # Replace dense matrices in AnnData object
+    simdata.X = x_spliced
+    simdata.layers['unspliced'] = x_unspliced
+    simdata.layers['spliced'] = x_spliced
+
     # Save AnnData object
-    simdata.write_h5ad(os.path.join(save_path, 'simdata.h5ad'))
+    simdata.write_h5ad(os.path.join(save_path, 'simdata.h5ad'), compression='gzip')
 
     # Save individual data matrices and relevant annotations
-    np.save(os.path.join(save_path, 'unspliced.npy'), simdata.layers['unspliced'])
-    np.save(os.path.join(save_path, 'spliced.npy'), simdata.layers['spliced'])
+    sp.save_npz(os.path.join(save_path, 'unspliced.npz'), x_unspliced)
+    sp.save_npz(os.path.join(save_path, 'spliced.npz'), x_spliced)
+
     np.save(os.path.join(save_path, 'cell_names.npy'), simdata.obs_names.to_numpy())
     np.save(os.path.join(save_path, 'gene_names.npy'), simdata.var_names.to_numpy())
 
@@ -75,8 +86,8 @@ def load_data() -> sc.AnnData:
         )
 
     # Load npy files to avoid errors caused by incompatible Scanpy versions
-    x_unspliced = np.load(os.path.join(save_path, 'unspliced.npy'))
-    x_spliced = np.load(os.path.join(save_path, 'spliced.npy'))
+    x_unspliced = sp.load_npz(os.path.join(save_path, 'unspliced.npz')).toarray().astype(np.float32)
+    x_spliced = sp.load_npz(os.path.join(save_path, 'spliced.npz')).toarray().astype(np.float32)
     cell_names = np.load(os.path.join(save_path, 'cell_names.npy'), allow_pickle=True)
     gene_names = np.load(os.path.join(save_path, 'gene_names.npy'), allow_pickle=True)
 
@@ -380,7 +391,6 @@ def scalability_switchtfi():
 
 def scalability_cellrank():
 
-    import matplotlib.pyplot as plt
     import scvelo as scv
     import cellrank as cr
 
@@ -391,6 +401,7 @@ def scalability_cellrank():
     # Load the simulated data
     simdata = load_data()
     simdata_df = simdata.to_df(layer=None)
+
 
     def compute_rna_velocity(data: sc.AnnData) -> sc.AnnData:
 
@@ -416,6 +427,7 @@ def scalability_cellrank():
 
         return vk
 
+
     def identify_initial_terminal_states(cr_kernel: cr.kernels.Kernel) -> cr.estimators.GPCCA:
 
         # Initialize estimator
@@ -429,6 +441,73 @@ def scalability_cellrank():
         return gpcca
 
 
+    def estimate_fate_probabilities(cr_estimator: cr.estimators.GPCCA) -> cr.estimators.GPCCA:
+
+        # Initial and terminal states must have been identified beforehand ..
+        cr_estimator.compute_fate_probabilities()
+
+        return cr_estimator
+
+
+    def uncover_driver_genes(cr_estimator: cr.estimators.GPCCA) -> Tuple[pd.DataFrame, cr.estimators.GPCCA]:
+        cr_estimator.compute_eigendecomposition()
+        res_df = cr_estimator.compute_lineage_drivers(cluster_key='clusters')
+
+        print('###### Top-10 putative driver genes: ######')
+        print(res_df[0:10])
+
+        return res_df, cr_estimator
+
+    # Run cellrank inference on varying numbers of cells
+    res_dfs = []
+
+    for i, n in enumerate(NUM_CELLS):
+
+        # Subset the data
+        simdata_df_subset = simdata_df.iloc[0:n, :].copy()
+
+        res_df_rna_velo, simdata_df_subset_rna_velo = scalability_wrapper(
+            function=compute_rna_velocity,
+            function_params={'data': simdata_df_subset},
+        )
+
+        res_df_trans_matrix, velocity_kernel = scalability_wrapper(
+            function=compute_rna_velo_transition_matrix,
+            function_params={'data': simdata_df_subset_rna_velo},
+        )
+
+        res_df_terminal_states, cr_estim = scalability_wrapper(
+            function=identify_initial_terminal_states,
+            function_params={'cr_kernel': velocity_kernel},
+        )
+
+        res_df_fate_probs, cr_estimator_fate_probs = scalability_wrapper(
+            function=estimate_fate_probabilities,
+            function_params={'cr_estimator': cr_estim},
+        )
+
+        res_df_driver_genes, _ = scalability_wrapper(
+            function=uncover_driver_genes,
+            function_params={'cr_estimator': cr_estimator_fate_probs},
+        )
+
+        res_df_subs = [
+            res_df_rna_velo, res_df_trans_matrix, res_df_terminal_states, res_df_fate_probs, res_df_driver_genes
+        ]
+        res_df_sub = pd.concat(res_df_subs, axis=0, ignore_index=True)
+
+        res_df_sub['n_cells'] = [n] * 5
+
+        res_df_sub['alg_step'] = ['rna_velo', 'trans_matrix', 'terminal_states', 'fate_probs', 'driver_genes']
+
+        res_dfs.append(res_df_sub)
+
+
+        res_df = pd.concat(res_dfs, axis=0, ignore_index=True)
+
+        res_df.to_csv(os.path.join(SAVE_PATH, f'cellrank.csv'))
+
+        print(res_df)
 
 
 def scalability_splicejac():
