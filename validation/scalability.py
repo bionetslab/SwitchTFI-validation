@@ -347,7 +347,7 @@ def scalability_grn_inf():
             'gene_names': None,
             'tf_names': tf_names,
             'seed': 42,
-            'verbose': False,
+            'verbose': True,
         }
 
         res_df, grn = scalability_wrapper(
@@ -376,7 +376,78 @@ def scalability_switchtfi():
 
 
 def scalability_cellrank():
-    pass
+
+    import matplotlib.pyplot as plt
+    import scvelo as scv
+    import cellrank as cr
+
+    # Define path where results are saved
+    save_path = SAVE_PATH / 'cellrank'
+    os.makedirs(save_path, exist_ok=True)
+
+    # Load the simulated data
+    simdata = load_data()
+    simdata_df = simdata.to_df(layer=None)
+
+    def compute_rna_velocity(data: sc.AnnData) -> sc.AnnData:
+
+        sc.tl.pca(data)
+        sc.pp.neighbors(data, n_pcs=30, n_neighbors=30, random_state=42)
+
+        # Compute moments
+        scv.pp.moments(data, n_pcs=None, n_neighbors=None)
+        # Estimate model parameters
+        scv.tl.recover_dynamics(data, n_jobs=16)
+        # Compute velocities
+        scv.tl.velocity(data, mode='dynamical')
+
+        return data
+
+
+    def compute_rna_velo_transition_matrix(data: sc.AnnData) -> cr.kernels.Kernel:
+
+        # Set up velocity kernel
+        vk = cr.kernels.VelocityKernel(data)
+        # Compute (cel-cell) transition matrix
+        vk.compute_transition_matrix()
+
+        return vk
+
+    def identify_initial_terminal_states(
+            cr_kernel: cr.kernels.Kernel,
+            cluster_obs_key: str = 'clusters',
+            allow_overlap: bool = False,
+            initial_terminal_state: Union[Tuple[str, str], None] = None,
+            plot: bool = False
+    ) -> cr.estimators.GPCCA:
+        # Initialize estimator
+        gpcca = cr.estimators.GPCCA(cr_kernel)
+
+        if initial_terminal_state is None:
+            print('########################')
+            # Fit estimator -> soft assignment of cells to macrostates, transition probabilities mtrx among these macrostates
+            gpcca.fit(cluster_key=cluster_obs_key, n_states=2)
+            # Predict terminal states
+            gpcca.predict_terminal_states(allow_overlap=allow_overlap)
+            # Predict initial states
+            gpcca.predict_initial_states(allow_overlap=allow_overlap)
+
+        else:
+            gpcca.compute_schur()
+            gpcca.compute_macrostates(cluster_key=cluster_obs_key, n_states=2)
+            gpcca.set_terminal_states(states=initial_terminal_state[1])
+            gpcca.set_initial_states(states=initial_terminal_state[0])
+
+        if plot:
+            gpcca.plot_macrostates(which="all", discrete=True, legend_loc="on data", s=100)
+            gpcca.plot_macrostates(which="terminal", legend_loc="on data", s=100)
+            # Plot terminal state that cell most likely belongs to != fate probability
+            gpcca.plot_macrostates(which="terminal", discrete=False)
+            # Plot initial state that cell most likely belongs to != fate probability
+            gpcca.plot_macrostates(which="initial", legend_loc="on data", s=100)
+
+        return gpcca
+
 
 
 def scalability_splicejac():
