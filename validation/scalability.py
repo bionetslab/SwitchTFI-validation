@@ -337,7 +337,7 @@ def scalability_grn_inf():
 
     # Run GRN inference varying numbers of cells
     res_dfs = []
-    for n in NUM_CELLS:
+    for i, n in enumerate(NUM_CELLS):
 
         # Subset the data
         simdata_df_subset = simdata_df.iloc[0:n, :].copy()
@@ -362,13 +362,13 @@ def scalability_grn_inf():
 
         grn.to_csv(os.path.join(save_path, f'grn_num_cells_{n}.csv'))
 
-    res_df = pd.concat(res_dfs, axis=0, ignore_index=True)
-    res_df.index=NUM_CELLS
-    res_df.index.name = 'num_cells'
+        res_df = pd.concat(res_dfs, axis=0, ignore_index=True)
+        res_df.index=NUM_CELLS[0:i]
+        res_df.index.name = 'num_cells'
 
-    res_df.to_csv(os.path.join(SAVE_PATH, f'grn_inf.csv'))
+        res_df.to_csv(os.path.join(SAVE_PATH, f'grn_inf.csv'))
 
-    print(res_df)
+        print(res_df)
 
 
 def scalability_switchtfi():
