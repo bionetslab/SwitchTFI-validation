@@ -259,7 +259,7 @@ def track_memory_gpu(interval=0.1):
 
 def scalability_wrapper(
         function: Callable,
-        function_params: Dict[str, Any],
+        function_params: Union[Dict[str, Any], None]= None,
         track_gpu: bool = False,
         res_dir: Union[str, None] = None,
         res_filename: Union[str, None] = None,
@@ -274,7 +274,10 @@ def scalability_wrapper(
 
     try:
 
-        function_output = function(**function_params)
+        if function_params is not None:
+            function_output = function(**function_params)
+        else:
+            function_output = function()
 
     finally:
 
@@ -413,40 +416,18 @@ def scalability_cellrank():
 
         return vk
 
-    def identify_initial_terminal_states(
-            cr_kernel: cr.kernels.Kernel,
-            cluster_obs_key: str = 'clusters',
-            allow_overlap: bool = False,
-            initial_terminal_state: Union[Tuple[str, str], None] = None,
-            plot: bool = False
-    ) -> cr.estimators.GPCCA:
+    def identify_initial_terminal_states(cr_kernel: cr.kernels.Kernel) -> cr.estimators.GPCCA:
+
         # Initialize estimator
         gpcca = cr.estimators.GPCCA(cr_kernel)
 
-        if initial_terminal_state is None:
-            print('########################')
-            # Fit estimator -> soft assignment of cells to macrostates, transition probabilities mtrx among these macrostates
-            gpcca.fit(cluster_key=cluster_obs_key, n_states=2)
-            # Predict terminal states
-            gpcca.predict_terminal_states(allow_overlap=allow_overlap)
-            # Predict initial states
-            gpcca.predict_initial_states(allow_overlap=allow_overlap)
-
-        else:
-            gpcca.compute_schur()
-            gpcca.compute_macrostates(cluster_key=cluster_obs_key, n_states=2)
-            gpcca.set_terminal_states(states=initial_terminal_state[1])
-            gpcca.set_initial_states(states=initial_terminal_state[0])
-
-        if plot:
-            gpcca.plot_macrostates(which="all", discrete=True, legend_loc="on data", s=100)
-            gpcca.plot_macrostates(which="terminal", legend_loc="on data", s=100)
-            # Plot terminal state that cell most likely belongs to != fate probability
-            gpcca.plot_macrostates(which="terminal", discrete=False)
-            # Plot initial state that cell most likely belongs to != fate probability
-            gpcca.plot_macrostates(which="initial", legend_loc="on data", s=100)
+        gpcca.compute_schur()
+        gpcca.compute_macrostates(cluster_key='prog_off', n_states=2)
+        gpcca.set_initial_states(states='prog')
+        gpcca.set_terminal_states(states='off')
 
         return gpcca
+
 
 
 
