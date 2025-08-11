@@ -40,6 +40,13 @@ def generate_data():
     import scvelo as scv
 
     save_path = SAVE_PATH / 'data'
+
+    # Check whether data generation was run beforehand
+    if save_path.is_dir() and any(f.name[0] != '.' for f in save_path.iterdir()):
+        raise RuntimeError(
+            f'Data generation was already run. Remove existing files in "{save_path}" before running again.'
+        )
+
     os.makedirs(save_path, exist_ok=True)
 
     # Generate data
