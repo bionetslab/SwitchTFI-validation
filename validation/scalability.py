@@ -30,10 +30,10 @@ from typing import Callable, Dict, Tuple, Union, Any
 SAVE_PATH = Path.cwd().parent / 'results/05_revision/scalability'
 os.makedirs(SAVE_PATH, exist_ok=True)
 
-NUM_CELLS_MAX = 200000
-NUM_GENES = 10000
+NUM_CELLS_MAX = 100  # 200000
+NUM_GENES = 200  # 10000
 
-NUM_CELLS = [1000, 5000, 10000, 50000, 100000, 200000]
+NUM_CELLS = [60, 80, 100]  # [1000, 5000, 10000, 50000, 100000, 200000]
 
 
 def generate_data():
@@ -386,6 +386,9 @@ def scalability_grn_inf():
 
 
 def scalability_switchtfi():
+
+    # Todo
+
     pass
 
 
@@ -393,14 +396,6 @@ def scalability_cellrank():
 
     import scvelo as scv
     import cellrank as cr
-
-    # Define path where results are saved
-    save_path = SAVE_PATH / 'cellrank'
-    os.makedirs(save_path, exist_ok=True)
-
-    # Load the simulated data
-    simdata = load_data()
-    simdata_df = simdata.to_df(layer=None)
 
 
     def compute_rna_velocity(data: sc.AnnData) -> sc.AnnData:
@@ -453,10 +448,20 @@ def scalability_cellrank():
         cr_estimator.compute_eigendecomposition()
         res_df = cr_estimator.compute_lineage_drivers(cluster_key='clusters')
 
-        print('###### Top-10 putative driver genes: ######')
-        print(res_df[0:10])
-
         return res_df, cr_estimator
+
+    # Load the simulated data
+    simdata = load_data()
+
+    # Warmup run to compile functions before the initial run
+    simdata_warmup = simdata[0:100, :].copy()
+    simdata_warmup_annotated = add_prog_off_annotations(simdata=simdata_warmup)
+
+    simdata_warmup_velo = compute_rna_velocity(data=simdata_warmup_annotated)
+    velo_kernel = compute_rna_velo_transition_matrix(data=simdata_warmup_velo)
+    estimator = identify_initial_terminal_states(cr_kernel=velo_kernel)
+    estimator_prob = estimate_fate_probabilities(cr_estimator=estimator)
+    uncover_driver_genes(cr_estimator=estimator_prob)
 
     # Run cellrank inference on varying numbers of cells
     res_dfs = []
@@ -464,11 +469,12 @@ def scalability_cellrank():
     for i, n in enumerate(NUM_CELLS):
 
         # Subset the data
-        simdata_df_subset = simdata_df.iloc[0:n, :].copy()
+        simdata_subset = simdata[0:n, :].copy()
+        simdata_subset_annotated = add_prog_off_annotations(simdata=simdata_subset)
 
         res_df_rna_velo, simdata_df_subset_rna_velo = scalability_wrapper(
             function=compute_rna_velocity,
-            function_params={'data': simdata_df_subset},
+            function_params={'data': simdata_subset_annotated},
         )
 
         res_df_trans_matrix, velocity_kernel = scalability_wrapper(
@@ -505,16 +511,28 @@ def scalability_cellrank():
 
         res_df = pd.concat(res_dfs, axis=0, ignore_index=True)
 
-        res_df.to_csv(os.path.join(SAVE_PATH, f'cellrank.csv'))
+        res_df.to_csv(os.path.join(SAVE_PATH, 'cellrank.csv'))
+
+        summary_df = res_df.groupby(['n_cells'], as_index=False).sum(numeric_only=True)
+
+        summary_df.to_csv(os.path.join(SAVE_PATH, 'cellrank_summary.csv'))
 
         print(res_df)
 
+        print(summary_df)
+
 
 def scalability_splicejac():
+
+    # Todo
+
     pass
 
 
 def scalability_drivaer():
+
+    # Todo
+
     pass
 
 
