@@ -1,11 +1,15 @@
 
 
 # Todo:
-#  - Define grid of (n_cells, n_genes)
-#  - For each grid entry run grn_inf, cellrank , and splicejac
-#  - For a selection of GRN sizes (n_edges for switchtfi, n_tfs for drivaer; or just n_edges) run switchtfi and drivaer
-#  - Sensible Track runtime, cpu time (are any of them parallelized?), memory
-#  - Run on HPC
+#  - Comparison strategy:
+#    - Define grid of n_cells
+#    - Fix n_genes to sensible value, e.g. 10000 (typical number of genes that remain after peprocessing)
+#    - For each n_cells run grn_inf, cellrank, spliceJAC, DrivAER, SwitchTFI
+#      (for DrivAER, SwitchTFI use GRN inferred for this n_cells)
+#    - SpliceJAC can only be run on # cells in cluster many genes -> run cellrank, DrivAER, SwitchTFI also on this many genes
+#    - Additional study: SwitchTFI, DrivAER scales in n-edges (GRN-size), pick fixed number of cells (e.g. 10000) and remove random edges
+#  - Run everything on HPC
+
 
 import os
 import argparse
@@ -25,10 +29,10 @@ from typing import Callable, Dict, Tuple, Union, Any
 SAVE_PATH = Path.cwd().parent / 'results/05_revision/scalability'
 os.makedirs(SAVE_PATH, exist_ok=True)
 
-NUM_CELLS_MAX = 50  # 200000
-NUM_GENES = 100  # 10000
+NUM_CELLS_MAX = 200000
+NUM_GENES = 10000
 
-NUM_CELLS = [20, 50]  # [1000, 5000, 10000, 50000, 100000, 200000]
+NUM_CELLS = [1000, 5000, 10000, 50000, 100000, 200000]
 
 
 def generate_data():
@@ -294,8 +298,8 @@ def scalability_wrapper(
         'wall_time': wall_time,
         'mem_peak_cpu': memory_peak_cpu,
         'mem_avg_cpu': memory_average_cpu,
-        'mem_peak_gpu': memory_peak_gpu,
         'samples_cpu': len(memory_samples_cpu),
+        'mem_peak_gpu': memory_peak_gpu,
         'mem_avg_gpu': memory_average_gpu,
         'samples_gpu': len(memory_samples_gpu) if track_gpu else None,
     }
@@ -378,7 +382,7 @@ def scalability_drivaer():
 
 if __name__ == '__main__':
 
-    preliminary = False
+    preliminary = True
 
     # ### Generate the simulated data
     if preliminary:
@@ -420,7 +424,6 @@ if __name__ == '__main__':
             scalability_splicejac()
         else:
             scalability_drivaer()
-
 
 
     print('done')
