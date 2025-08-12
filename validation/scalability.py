@@ -34,10 +34,12 @@ else:
     SAVE_PATH = Path.cwd().parent / 'results/05_revision/scalability'
 os.makedirs(SAVE_PATH, exist_ok=True)
 
-NUM_CELLS_MAX = 200000
-NUM_GENES = 10000
+test = False
 
-NUM_CELLS = [1000, 5000, 10000, 50000, 100000, 200000]
+NUM_CELLS_MAX = 200000 if not test else 100
+NUM_GENES = 10000 if not test else 200
+
+NUM_CELLS = [1000, 5000, 10000, 50000, 100000, 200000] if not test else [60, 70, 100]
 
 
 def generate_data():
@@ -376,17 +378,17 @@ def scalability_grn_inf():
             res_filename=None,
         )
 
+        res_df['n_cells'] = [n] * res_df.shape[0]
+
         res_dfs.append(res_df)
 
         grn.to_csv(os.path.join(save_path, f'grn_num_cells_{n}.csv'))
 
-        res_df = pd.concat(res_dfs, axis=0, ignore_index=True)
-        res_df.index=NUM_CELLS[0:i]
-        res_df.index.name = 'num_cells'
+        res_df_joint = pd.concat(res_dfs, axis=0, ignore_index=True)
 
-        res_df.to_csv(os.path.join(SAVE_PATH, f'grn_inf.csv'))
+        res_df_joint.to_csv(os.path.join(SAVE_PATH, f'grn_inf.csv'))
 
-        print(res_df)
+        print(res_df_joint)
 
 
 def scalability_switchtfi():
