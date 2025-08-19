@@ -34,12 +34,12 @@ else:
     SAVE_PATH = Path.cwd().parent / 'results/05_revision/scalability'
 os.makedirs(SAVE_PATH, exist_ok=True)
 
-test = False
+TEST = True
 
-NUM_CELLS_MAX = 200000 if not test else 100
-NUM_GENES = 10000 if not test else 200
+NUM_CELLS_MAX = 200000 if not TEST else 100
+NUM_GENES = 10000 if not TEST else 200
 
-NUM_CELLS = [1000, 5000, 10000, 50000, 100000, 200000] if not test else [60, 70, 100]
+NUM_CELLS = [1000, 5000, 10000, 50000, 100000, 200000] if not TEST else [60, 70, 100]
 
 
 def generate_data():
@@ -457,10 +457,13 @@ def scalability_cellrank():
         return res_df, cr_estimator
 
     # Load the simulated data
-    simdata = load_data()
+    if not TEST:
+        simdata = load_data()
+    else:
+        simdata = scv.datasets.simulation(n_obs=NUM_CELLS_MAX, n_vars=NUM_GENES, random_seed=42)
 
     # Warmup run to compile functions before the initial run
-    simdata_warmup = simdata[0:100, :].copy()
+    simdata_warmup = simdata[0:200, :].copy()
     simdata_warmup_annotated = add_prog_off_annotations(simdata=simdata_warmup)
 
     simdata_warmup_velo = compute_rna_velocity(data=simdata_warmup_annotated)
