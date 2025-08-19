@@ -1256,32 +1256,34 @@ def main_tcell_grn_inference():
     from grn_inf.grn_inference import pyscenic_pipeline, combine_grns
 
 
-    # ### Define paths to files where TFs are stored
+    # Define paths to files where TFs are stored
     tf_file = './data/tf/mus_musculus/allTFs_mm.txt'
-
-    # ### Define paths to auxiliary annotation files needed for GRN inference with Scenic
+    # Define paths to auxiliary annotation files needed for GRN inference with Scenic
     db_file = (
         './data/scenic_aux_data/databases/mouse/mm10/mc_v10_clust/'
         'mm10_10kbp_up_10kbp_down_full_tx_v10_clust.genes_vs_motifs.rankings.feather'
     )
     anno_file = './data/scenic_aux_data/motif2tf_annotations/motifs-v10nr_clust-nr.mgi-m0.001-o0.0.tbl'
 
+
     tissues = ['spleen', 'liver']
     time = 'd10'
     clusters = ['345', '35']
-
-    base_res_p = './results/01_grn_inf/tcell'
     n_grns = 18
     edge_count_threshold = 9
 
     inference = True
+
+    data_p = './data/anndata/tcell'
+    base_res_p = './results/01_grn_inf/tcell'
+
 
     for tissue in tissues:
         for cluster_keys in clusters:
 
             # Load data
             id_str = f'{tissue}_{time}_{cluster_keys}'
-            filepath = os.path.join(base_res_p, f'tdata_{id_str}.h5ad')
+            filepath = os.path.join(data_p, f'tdata_{id_str}.h5ad')
             tdata = sc.read_h5ad(filepath)
 
             res_p = os.path.join(base_res_p, id_str)
@@ -1346,10 +1348,6 @@ def main_tcell_grn_inference():
                 verbosity=1,
                 fn_prefix=f'edge_count_threshold_{edge_count_threshold}_grnboost_'
             )
-
-
-
-
 
 
 if __name__ == '__main__':
