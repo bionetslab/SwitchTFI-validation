@@ -793,6 +793,216 @@ def main_no_imputation_results():
         plt.savefig(os.path.join(res_path, f'{trafo}_weights_vs_num_cells.png'), dpi=300)
 
 
+def main_additional_tf_target_scatter_plots():
+
+    import os
+    import numpy as np
+    import matplotlib.pyplot as plt
+    import matplotlib.transforms as mtransforms
+    import scanpy as sc
+
+    from switchtfi.utils import load_grn_json, csr_to_numpy
+
+    res_subdir = './results/05_revision/tf_target_scatter_plots'
+    os.makedirs(res_subdir, exist_ok=True)
+
+    datasets  = ['beta', 'alpha', 'ery']
+
+    ds_to_ds_name = {'beta': 'Beta', 'alpha': 'Alpha', 'ery': 'Ery'}
+
+    layer_key = 'magic_imputed'
+
+    num_plot_per_row = 5
+    num_plots_in_total = 30
+
+    panel_layout = [
+        [str(i) for i in range(start, min(start + num_plot_per_row, num_plots_in_total + 1))]
+        for start in range(1, num_plots_in_total + 1, num_plot_per_row)
+    ]
+
+    fig = plt.figure(figsize=(11, 13), constrained_layout=True, dpi=300)
+    axd = fig.subplot_mosaic(
+        panel_layout,
+    )
+
+    i = 0
+    for dataset in datasets:
+
+        # Load the anndata object with the data and the precomputed GRN
+        if dataset == 'ery':
+            data = sc.read_h5ad('./data/anndata/erythrocytes.h5ad')
+            grn = load_grn_json('./results/02_switchtfi/hematopoiesis/grn.json')
+            cell_anno_key = 'prog_off'
+
+        elif dataset == 'beta':
+            data = sc.read_h5ad('./data/anndata/pre-endocrine_beta.h5ad')
+            grn = load_grn_json('./results/02_switchtfi/endocrine/beta/grn.json')
+            cell_anno_key = 'clusters'
+
+        else:
+            data = sc.read_h5ad('./data/anndata/pre-endocrine_alpha.h5ad')
+            grn = load_grn_json('./results/02_switchtfi/endocrine/beta/grn.json')
+            cell_anno_key = 'clusters'
+
+        grn = grn.sort_values(by=['weight'], axis=0, ascending=False)
+        grn = grn.reset_index(drop=True)
+
+        labels = data.obs[cell_anno_key].to_numpy()
+
+        if dataset == 'beta':
+            # Keep the original muted orange and green
+            label_to_color = {
+                'Pre-endocrine': '#fdd49e',  # muted peach/orange
+                'Beta': '#c7e9c0'  # muted light green
+            }
+
+        elif dataset == 'alpha':
+            # Use muted coral and muted lavender — no overlap with beta
+            label_to_color = {
+                'Pre-endocrine': '#fcbba1',  # muted coral
+                'Alpha': '#807dba'  # muted lavender-purple
+            }
+
+        else:  # ery
+            # Use muted gold and soft plum — no overlap with beta or alpha
+            label_to_color = {
+                'prog': '#fddc84',  # muted gold
+                'off': '#bcbddc'  # muted plum/lilac
+            }
+
+        if dataset == 'beta':
+            # Keep original slightly muted orange and green
+            label_to_color = {
+                'Pre-endocrine': '#fdae6b',  # warmer orange-peach
+                'Beta': '#a1d99b'  # fresher light green
+            }
+
+        elif dataset == 'alpha':
+            label_to_color = {
+                'Pre-endocrine': '#fb6a4a',  # more saturated coral
+                'Alpha': '#6a51a3'  # deeper lavender-purple
+            }
+
+        else:  # ery
+            label_to_color = {
+                'prog': '#fddc00',  # saturated golden yellow
+                'off': '#9e9ac8'  # soft but clear violet-gray
+            }
+
+        legend_handles = [
+            plt.Line2D([], [], marker='o', color='w', label=label.capitalize(), markerfacecolor=color, markersize=6)
+            for label, color in label_to_color.items()
+        ]
+
+
+        # Plot the highest weighted edges
+        ax_keys_hi = panel_layout[i]
+        for j, ax_key in enumerate(ax_keys_hi):
+
+            tf = grn.loc[j, 'TF']
+            target = grn.loc[j, 'target']
+            weight = grn.loc[j, 'weight']
+            threshold = grn.loc[j, 'threshold']
+            pred_l = grn.loc[j, 'pred_l']
+            pred_r = grn.loc[j, 'pred_r']
+
+            x = csr_to_numpy(data[:, tf].layers[layer_key]).flatten()
+            y = csr_to_numpy(data[:, target].layers[layer_key]).flatten()
+
+            x_bool = (x != 0)
+            y_bool = (y != 0)
+            keep_bool = np.logical_and(x_bool, y_bool)
+
+            x = x[keep_bool]
+            y = y[keep_bool]
+            labels_plot = labels[keep_bool]
+
+            colors = [label_to_color[label] for label in labels_plot]
+
+            ax = axd[ax_key]
+
+            ax.scatter(
+                x,
+                y,
+                c=colors,
+                alpha=0.9,
+                edgecolors='none',
+                s=10,
+            )
+
+            min_x, max_x = x.min(), x.max()
+
+            ax.plot([min_x, threshold], [pred_l, pred_l], color='red', zorder=2)
+            ax.scatter([threshold], [pred_l], color='red', marker='o', zorder=3)
+            ax.plot([threshold, max_x], [pred_r, pred_r], color='red', zorder=2)
+            ax.scatter([threshold], [pred_r], color='red', marker='o', facecolor='white', zorder=3)
+            ax.axvline(x=threshold, color='red', linestyle='--', zorder=1)
+            ax.set_title(fr'{ds_to_ds_name[dataset]}, $w = {round(weight, 3)}$')
+            ax.set_xlabel(tf)
+            ax.set_ylabel(target)
+
+            ax.legend(handles=legend_handles)
+
+        i += 1
+
+        # Plot the lowest weighted edges
+        ax_keys_lo = panel_layout[i]
+        for j, ax_key in enumerate(ax_keys_lo):
+
+            tf = grn.loc[(grn.shape[0] - 1) - j, 'TF']
+            target = grn.loc[(grn.shape[0] - 1) - j, 'target']
+            weight = grn.loc[(grn.shape[0] - 1) - j, 'weight']
+            threshold = grn.loc[(grn.shape[0] - 1) - j, 'threshold']
+            pred_l = grn.loc[(grn.shape[0] - 1) - j, 'pred_l']
+            pred_r = grn.loc[(grn.shape[0] - 1) - j, 'pred_r']
+
+            x = csr_to_numpy(data[:, tf].layers[layer_key]).flatten()
+            y = csr_to_numpy(data[:, target].layers[layer_key]).flatten()
+            labels = data.obs[cell_anno_key].to_numpy()
+
+            x_bool = (x != 0)
+            y_bool = (y != 0)
+            keep_bool = np.logical_and(x_bool, y_bool)
+
+            x = x[keep_bool]
+            y = y[keep_bool]
+            labels_plot = labels[keep_bool]
+
+            colors = [label_to_color[label] for label in labels_plot]
+
+            ax = axd[ax_key]
+
+            ax.scatter(
+                x,
+                y,
+                c=colors,
+                alpha=0.9,
+                edgecolors='none',
+                s=10,
+            )
+
+            min_x, max_x = x.min(), x.max()
+
+            ax.plot([min_x, threshold], [pred_l, pred_l], color='red', zorder=2)
+            ax.scatter([threshold], [pred_l], color='red', marker='o', zorder=3)
+            ax.plot([threshold, max_x], [pred_r, pred_r], color='red', zorder=2)
+            ax.scatter([threshold], [pred_r], color='red', marker='o', facecolor='white', zorder=3)
+            ax.axvline(x=threshold, color='red', linestyle='--', zorder=1)
+            ax.set_title(fr'{ds_to_ds_name[dataset]}, $w = {round(weight, 3)}$')
+            ax.set_xlabel(tf)
+            ax.set_ylabel(target)
+
+            ax.legend(handles=legend_handles)
+
+        i += 1
+
+    # Annotate subplot mosaic tiles with labels
+    for label, ax in axd.items():
+        trans = mtransforms.ScaledTranslation(-20 / 72, 7 / 72, fig.dpi_scale_trans)
+        ax.text(0.0, 0.95, label, transform=ax.transAxes + trans,
+                fontsize=12, va='bottom', fontfamily='sans-serif', fontweight='bold')
+
+    fig.savefig(os.path.join(res_subdir, 'tf_target_scatter_plots.png'), dpi=fig.dpi)
 
 
 
@@ -801,19 +1011,56 @@ if __name__ == '__main__':
 
     # main_no_imputation_results()
 
-    # main()
+    # main_additional_tf_target_scatter_plots()
 
-    # main_visualize_results()
+    '''
+    data_dir = './data_dummy'
+    os.makedirs(data_dir, exist_ok=True)
 
-    import scanpy as sc
+    scv.settings.data_path = data_dir
 
-    erydata = sc.read_h5ad('./data/anndata/erythrocytes.h5ad')
-    adata = sc.read_h5ad('./data/anndata/pre-endocrine_alpha.h5ad')
-    bdata = sc.read_h5ad('./data/anndata/pre-endocrine_beta.h5ad')
+    adata = scv.datasets.pancreas(os.path.join(data_dir, 'endocrinogenesis_day15.h5ad'))
+    print(f'# ### Pancreas: {adata.n_obs} cells, {adata.n_vars} genes')
 
-    print(erydata.X)
-    print(adata.X)
-    print(bdata.X)
+    adata = scv.datasets.dentategyrus(os.path.join(data_dir, 'dentategyrus.h5ad'))
+    print(f'# ### Dentategyrus: {adata.n_obs} cells, {adata.n_vars} genes')
+
+    # adata = scv.datasets.forebrain()  # os.path.join(data_dir, 'forebrain.loom'))
+    # print(f'# ### Forebrain: {adata.n_obs} cells, {adata.n_vars} genes')
+
+    # adata = scv.datasets.dentategyrus_lamanno()  # os.path.join(data_dir, 'dentategyrus_lamanno.h5ad'))
+    # print(f'# ### Dentategyrus_lamanno: {adata.n_obs} cells, {adata.n_vars} genes')
+
+    adata = scv.datasets.gastrulation(os.path.join(data_dir, 'gastrulation.h5ad'))
+    print(f'# ### Gastrulation: {adata.n_obs} cells, {adata.n_vars} genes')
+
+    adata = scv.datasets.gastrulation_e75(os.path.join(data_dir, 'gastrulation_e75.h5ad'))
+    print(f'# ### Gastrulation_e75: {adata.n_obs} cells, {adata.n_vars} genes')
+
+    adata = scv.datasets.gastrulation_erythroid(os.path.join(data_dir, 'gastrulation_erythroid.h5ad'))
+    print(f'# ### Gastrulation_erythroid: {adata.n_obs} cells, {adata.n_vars} genes')
+
+    adata = scv.datasets.bonemarrow(os.path.join(data_dir, 'bonemarrow.h5ad'))
+    print(f'# ### Bonemarrow: {adata.n_obs} cells, {adata.n_vars} genes')
+
+    adata = scv.datasets.pbmc68k(os.path.join(data_dir, 'pbmc68k.h5ad'))
+    print(f'# ### pbmc68k: {adata.n_obs} cells, {adata.n_vars} genes')
+
+    simdata = scv.datasets.simulation(n_obs=1000, n_vars=10000, switches=3, random_seed=42)
+
+    print(simdata)
+
+    # print(simdata.X)
+
+    sc.pp.pca(simdata)
+    sc.pp.neighbors(simdata)
+
+    # Step 3: Compute UMAP
+    sc.tl.umap(simdata)
+
+    # Step 4: Plot UMAP
+    sc.pl.umap(simdata, color='true_t')
+    '''
 
     print('done')
 
