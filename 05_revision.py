@@ -1,6 +1,6 @@
 
 
-def main():
+def main_no_imputation_deprecated():
 
     import os
 
@@ -312,7 +312,7 @@ def main():
         print(res_df)
 
 
-def main_visualize_results():
+def main_visualize_no_imputation_results_deprecated():
 
     import os
     import numpy as np
@@ -1005,6 +1005,367 @@ def main_additional_tf_target_scatter_plots():
     fig.savefig(os.path.join(res_subdir, 'tf_target_scatter_plots.png'), dpi=fig.dpi)
 
 
+def main_tcell_data_exploration():
+
+    import os
+
+    import matplotlib.pyplot as plt
+    import scanpy as sc
+
+    data_dir = './data/anndata/tcell'
+
+    plot_dir = './data/anndata/tcell/plots'
+    os.makedirs(plot_dir, exist_ok=True)
+
+    load_full_dataset = True
+
+    # ### Load full dataset and subset (tissue spleen, day 10)
+    if load_full_dataset:
+
+        full_dataset_filename = 'ga_an0602_10x_smarta_doc_arm_liver_spleen_d10_d28_mgd_ts_filtered_int_inf_tp_rp_convert.h5ad'
+        tdata = sc.read_h5ad(os.path.join(data_dir, full_dataset_filename))
+
+        tdata.raw = None  # Delete the raw to avoid error when saving
+
+        # Relabel cluster labels from 0-9 to 1-10
+        new_labels = [int(label + 1) for label in tdata.obs['cluster']]
+        tdata.obs['cluster'] = new_labels
+
+        print(f'# ### AnnData:\n{tdata}')
+        print(f'# ### Data matrix:\n{tdata.X}')
+        print(f'# ### Clusters:\n{tdata.obs["cluster"]}')
+        print(f'# ### Unique cluster labels:\n{set(tdata.obs["cluster"].tolist())}')
+
+        # ### Subset to the tissue and time point:
+        # Tissue: spleen = 0, liver = 1
+        # Time point: 0 = day 10, 1 = day 28
+
+        tissue_name_to_label = {'spleen': 0, 'liver': 1}
+        time_name_to_label = {'d10': 0, 'd28': 1}
+        infection_label_to_name = {0: 'chronic (doc)', 1: 'acute (arm)'}
+
+        for tissue in ['spleen', 'liver']:
+            for time in ['d10', 'd28']:
+
+                print(f'\n# ### Tissue: {tissue}, Time point: {time}')
+
+                # Subset to tissue and time; save AnnData
+                keep_bool_tissue = tdata.obs['tissue'] == tissue_name_to_label[tissue]
+                keep_bool_time = tdata.obs['time'] == time_name_to_label[time]
+                keep_bool = keep_bool_tissue & keep_bool_time
+
+                tdata_subset = tdata[keep_bool, :].copy()
+                tdata_subset.write(os.path.join(data_dir, f'tdata_{tissue}_{time}.h5ad'))
+                tdata_tissue_time = tdata[keep_bool_tissue & keep_bool_time, :].copy()
+
+                # Subset w.r.t. infection status and visualize the population sizes:
+                # - docile = chronic = 0
+                # - armstrong = acute = 1
+
+                # keep_bool_doc = (tdata.obs['infection'] == 0).to_numpy()
+                # tdata_doc = tdata[keep_bool_doc, :].copy()
+
+                # keep_bool_arm = (tdata.obs['infection'] == 1).to_numpy()
+                # tdata_arm = tdata[keep_bool_arm, :].copy()
+
+                # Visualize population sizes of clusters 3, 4, 5 depending on infection status
+                count_df = tdata_tissue_time.obs.groupby(['cluster', 'infection']).size().unstack(fill_value=0)
+                count_df.rename(columns=infection_label_to_name, inplace=True)
+                count_df.to_csv(os.path.join(plot_dir, f'population_sizes_{tissue}_{time}.csv'))
+                print(f'# Number of cells per cluster:\n{count_df}')
+
+                fig, ax = plt.subplots(dpi=300)
+                count_df.plot(kind='bar', ax=ax)
+                ax.set_ylabel('# cells')
+                ax.set_title(f'Tissue: {tissue}, Time: {time}')
+                for container in ax.containers:
+                    for bar in container:
+                        height = bar.get_height()
+                        if height > 0:
+                            ax.text(
+                                bar.get_x() + bar.get_width() / 2,
+                                height,
+                                f'{int(height)}',
+                                ha='center',
+                                va='bottom',
+                                fontsize=6
+                            )
+                fig.savefig(os.path.join(plot_dir, f'population_sizes_{tissue}_{time}.png'), dpi=300)
+                plt.close(fig)
+
+                # Normalize the counts by the total cells in the group (chronic vs. acute) across all clusters
+                norm_df = count_df.div(count_df.sum(axis=0), axis=1)
+                print(f'# Normalized number of cells per cluster:\n{norm_df}')
+                norm_df.to_csv(os.path.join(plot_dir, f'relative_population_sizes_{tissue}_{time}.csv'))
+
+                fig, ax = plt.subplots(dpi=300)
+                norm_df.plot(kind='bar', ax=ax)
+                ax.set_ylabel('# cells (normalized)')
+                ax.set_title(f'Tissue: {tissue}, Time: {time}')
+                for container in ax.containers:
+                    for bar in container:
+                        height = bar.get_height()
+                        if height > 0:
+                            ax.text(
+                                bar.get_x() + bar.get_width() / 2,
+                                height,
+                                f'{round(height, 4)}',
+                                ha='center',
+                                va='bottom',
+                                fontsize=6
+                            )
+                fig.savefig(
+                    os.path.join(plot_dir, f'relative_population_sizes_{tissue}_{time}.png'),
+                    dpi=300
+                )
+                plt.close(fig)
+
+    # Analyze cluster structure of clusters of interest Clusters:
+    # - 3 = Th1 progenitors
+    # - 4 = Th1 intermediate state
+    # - 5 = Th1 terminally differentiated
+
+    prog_off_labels = {3: 'prog', 4: 'prog', 5: 'off'}
+
+    for tissue in ['spleen', 'liver']:
+        for time in ['d10', 'd28']:
+
+            # Load data
+            tdata = sc.read_h5ad(os.path.join(data_dir, f'tdata_{tissue}_{time}.h5ad'))
+
+            # Subset to populations of interest
+            keep_bool_cluster = tdata.obs['cluster'].isin(list(prog_off_labels.keys()))
+            tdata = tdata[keep_bool_cluster, :].copy()
+
+            # Add progenitor, offspring annotations
+            cluster_labels = tdata.obs['cluster'].tolist()
+            prog_off_anno = [prog_off_labels[cluster] for cluster in cluster_labels]
+            tdata.obs['prog_off'] = prog_off_anno
+
+            fig, axs = plt.subplots(1, 2, figsize=(12, 6), dpi=300)
+
+            for ax, label_key in zip(axs, ['cluster', 'prog_off']):
+
+                labels = tdata.obs[label_key]
+                unique_labels = labels.unique()
+                cmap=plt.get_cmap('Set2')
+                label_to_color = {label: cmap(i) for i, label in enumerate(unique_labels)}
+                colors = labels.map(label_to_color).tolist()
+
+                ax.scatter(
+                    x=tdata.obsm['X_iumap'][:, 0],
+                    y=tdata.obsm['X_iumap'][:, 1],
+                    c=colors,
+                    s=10,
+                    edgecolors='grey',
+                    linewidths=0.5,
+                )
+
+                ax.set_xlabel('UMAP1')
+                ax.set_ylabel('UMAP2')
+                ax.set_title(f'Tissue: {tissue}, Time: {time}')
+
+                for label in unique_labels:
+                    ax.scatter([], [], color=label_to_color[label], label=label)
+                ax.legend(title=label_key)
+
+            plt.tight_layout()
+            fig.savefig(os.path.join(plot_dir, f'umap_{tissue}_{time}.png'), dpi=300)
+            plt.close(fig)
+
+
+def main_tcell_data_processing():
+
+    # ### Note:
+    # Based on analyzing the relative cell population sizes, it seems like clusters 3, 4 are 5 is the offspring.
+    # -> For d10, spleen and liver, cells do not reach cluster 4 in the chronic case.
+    # => Run analysis with prog = 3,4 and proj = 3 for d10, spleen and liver
+
+    import os
+
+    import matplotlib.pyplot as plt
+    import scanpy as sc
+    import scanpy.external as scex
+
+    data_dir = './data/anndata/tcell'
+
+    tissues = ['spleen', 'liver']
+    time = 'd10'
+    clusters = [[3, 4, 5], [3, 5]]
+    prog_off_labels = {3: 'prog', 4: 'prog', 5: 'off'}
+
+
+    for tissue in tissues:
+        for cluster_keys in clusters:
+
+            # Load data
+            tdata = sc.read_h5ad(os.path.join(data_dir, f'tdata_{tissue}_{time}.h5ad'))
+
+            # Subset to populations of interest
+            keep_bool_cluster = tdata.obs['cluster'].isin(cluster_keys)
+            tdata = tdata[keep_bool_cluster, :].copy()
+
+            # Add progenitor, offspring annotations
+            cluster_labels = tdata.obs['cluster'].tolist()
+            prog_off_anno = [prog_off_labels[cluster] for cluster in cluster_labels]
+            tdata.obs['prog_off'] = prog_off_anno
+
+            # Convert sparse to dense
+            tdata.X = tdata.X.toarray()
+
+            # Basic count based QC on the gene level
+            sc.pp.filter_genes(tdata, min_cells=20)
+
+            # MAGIC imputation
+            tdata_dummy = tdata.copy()
+            scex.pp.magic(
+                adata=tdata_dummy,
+                name_list='all_genes',
+                knn=5,
+                decay=1,
+                knn_max=None,
+                t=1,
+                n_pca=100,
+                solver='exact',
+                knn_dist='euclidean',
+                random_state=42,
+                n_jobs=None,
+                verbose=True,
+                copy=None,
+            )
+            tdata.layers['magic_imputed'] = tdata_dummy.X.copy()
+
+            # Scale to unit variance for GRN inference
+            tdata.layers['unit_variance'] = sc.pp.scale(tdata.X.copy(), zero_center=False, copy=True)
+
+            # Save
+            cluster_str = ''.join(str(i) for i in cluster_keys)
+            tdata.write(os.path.join(data_dir, f'tdata_{tissue}_{time}_{cluster_str}.h5ad'))
+
+
+def main_tcell_grn_inference():
+
+    import scanpy as sc
+
+    # ### Define paths to files where TFs are stored
+    tf_file = './data/tf/mus_musculus/allTFs_mm.txt'
+
+    # ### Define paths to auxiliary annotation files needed for GRN inference with Scenic
+
+    # ## Old (deprecated): 'mm9_mc9nr'
+    # db_file = ./data/scenic_aux_data/databases/mouse/mm9/' \
+    #           "mm9-*.mc9nr.genes_vs_motifs.rankings.feather"
+    # anno_file = ./data/scenic_aux_data/motif2tf_annotations/' \
+    #             'motifs-v9-nr.mgi-m0.001-o0.0.tbl'
+
+    # New (recent): 'mm10_mc_v10_clust'
+    db_file = './data/scenic_aux_data/databases/mouse/mm10/' \
+              'mc_v10_clust/mm10_10kbp_up_10kbp_down_full_tx_v10_clust.genes_vs_motifs.rankings.feather'
+    anno_file = './data/scenic_aux_data/motif2tf_annotations/' \
+                'motifs-v10nr_clust-nr.mgi-m0.001-o0.0.tbl'
+
+    data_filenames = [
+        'toxdata_tissue_spleen_time_d10_genotype_wt_cluster_12_processed.h5ad',
+        # 'toxdata_tissue_spleen_time_d10_genotype_ko_cluster_12_processed.h5ad'
+    ]
+
+    base_res_p = './results/01_grn_inf/tox'
+    n_grns = 18
+    n_occurrence_threshold = 9
+
+    for filename in data_filenames:
+        # ### Load AnnData wist scRNA-seq data
+        toxdata = sc.read_h5ad(os.path.join('./data/anndata', filename))
+
+        # ### Set parameters and perform GRN inference with Scenic
+        res_p = os.path.join(base_res_p, filename[:-5])
+        os.makedirs(res_p, exist_ok=True)
+
+        gene_names = toxdata.var_names.tolist()
+        tox_genes = [v for v in gene_names if v.startswith('Tox') or v.startswith('tox')]
+        print('# ### Genes of the Tox family that are expressed in the dataset are added to the TFs:\n', tox_genes)
+
+        for i in range(n_grns):
+            print(f'# ### GRN inference, iteration {i}')
+
+            pyscenic_pipeline(
+                adata=toxdata.copy(),
+                layer_key='scaled_log1p_norm',
+                tf_file=tf_file,
+                result_folder=res_p,
+                database_path=db_file,
+                motif_annotations_path=anno_file,
+                grn_inf_method='grnboost2',
+                fn_prefix=f'{i:02d}_tox_',
+                verbosity=1,
+                plot=False
+            )
+
+        # ### Combine the 18 individual Scenic GRNs into one
+        # Edges that occur in >= n_occurrence_threshold individual GRNs are retained
+        print('### Combining Pyscenic GRNs')
+        grn_list = []
+        # Get list of paths to csv files
+        csv_files = glob.glob(res_p + '/*_tox_pruned_grn.csv')
+        for csv_file in csv_files:
+            grn_list.append(pd.read_csv(csv_file, index_col=[0]))
+
+        combined_grn_scenic = combine_grns(
+            grn_list=grn_list,
+            n_occurrence_thresh=n_occurrence_threshold,
+            result_folder=res_p,
+            verbosity=1,
+            fn_prefix=f'ngrnthresh{n_occurrence_threshold}_tox_pyscenic_'
+        )
+
+        # ### Combine GrnBoost2 GRNs into one (not needed afterwards)
+        print('### Combining Pyscenic GRNs')
+        grn_list = []
+        csv_files = glob.glob(res_p + '/*_tox_basic_grn.csv')
+
+        for csv_file in csv_files:
+            grn = pd.read_csv(csv_file, sep='\t')
+            # Extract top 1% of important edges
+            top_1_perc = math.ceil(grn.shape[0] * 0.01)
+            grn_list.append(grn[0:top_1_perc])
+
+        combined_grn_grnboost2 = combine_grns(
+            grn_list=grn_list,
+            n_occurrence_thresh=n_occurrence_threshold,
+            result_folder=res_p,
+            verbosity=1,
+            fn_prefix=f'ngrnthresh{n_occurrence_threshold}_tox_grnboost_'
+        )
+
+        # Check whether Tox family genes appear as TFs or targets
+        res_dfs = []
+        gene_col = []
+        for tox_gene in tox_genes:
+            tfs_scenic = combined_grn_scenic['TF'].tolist()
+            n_occ_tf_scenic = sum([1 if gene == tox_gene else 0 for gene in tfs_scenic])
+            targets_scenic = combined_grn_scenic['target'].tolist()
+            n_occ_target_scenic = sum([1 if gene == tox_gene else 0 for gene in targets_scenic])
+
+            tfs_grnboost2 = combined_grn_grnboost2['TF'].tolist()
+            n_occ_tf_grnboost2 = sum([1 if gene == tox_gene else 0 for gene in tfs_grnboost2])
+            targets_grnboost2 = combined_grn_grnboost2['target'].tolist()
+            n_occ_target_grnboost2 = sum([1 if gene == tox_gene else 0 for gene in targets_grnboost2])
+
+            res_df = pd.DataFrame(
+                data=[[n_occ_tf_scenic, n_occ_tf_grnboost2], [n_occ_target_scenic, n_occ_target_grnboost2]],
+                index=['TF', 'target'],
+                columns=['SCENIC', 'GRNboost2']
+            )
+
+            res_dfs.append(res_df)
+            gene_col.extend([tox_gene, tox_gene])
+
+            print(f'# ### Gene {tox_gene} occurs in the output GRN:\n{res_df}')
+
+        res_df = pd.concat(res_dfs)
+        res_df['Tox gene'] = gene_col
+        res_df.to_csv(os.path.join(res_p, 'tox_genes_in_grns.csv'))
+
 
 
 if __name__ == '__main__':
@@ -1012,6 +1373,15 @@ if __name__ == '__main__':
     # main_no_imputation_results()
 
     # main_additional_tf_target_scatter_plots()
+
+    main_tcell_data_exploration()
+
+    main_tcell_data_processing()
+
+
+
+
+
 
     '''
     data_dir = './data_dummy'
