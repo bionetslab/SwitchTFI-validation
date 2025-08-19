@@ -463,7 +463,8 @@ def scalability_cellrank():
         simdata = scv.datasets.simulation(n_obs=NUM_CELLS_MAX, n_vars=NUM_GENES, random_seed=42)
 
     # Warmup run to compile functions before the initial run
-    simdata_warmup = simdata[0:200, :].copy()
+    warmup_size = min(200, simdata.n_obs)
+    simdata_warmup = simdata[0:warmup_size, :].copy()
     simdata_warmup_annotated = add_prog_off_annotations(simdata=simdata_warmup)
 
     simdata_warmup_velo = compute_rna_velocity(data=simdata_warmup_annotated)
