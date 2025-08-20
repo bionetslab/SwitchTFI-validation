@@ -1,4 +1,3 @@
-import os
 
 
 def main_no_imputation_deprecated():
@@ -1246,10 +1245,11 @@ def main_tcell_data_processing():
 
 def main_tcell_grn_inference():
 
+    import os
     import glob
-    import math
 
     import pandas as pd
+    import matplotlib.pyplot as plt
     import scanpy as sc
 
     from typing import List
@@ -1272,11 +1272,10 @@ def main_tcell_grn_inference():
     n_grns = 18
     edge_count_threshold = 9
 
-    inference = True
+    inference = False
 
     data_p = './data/anndata/tcell'
     base_res_p = './results/01_grn_inf/tcell'
-
 
     for tissue in tissues:
         for cluster_keys in clusters:
@@ -1308,46 +1307,82 @@ def main_tcell_grn_inference():
 
             # ### Combine the 18 individual Scenic GRNs into one
             # Edges that occur in >= n_occurrence_threshold individual GRNs are retained
-            print('### Combining Pyscenic GRNs')
-            grn_list = []
-            # Get list of paths to csv files
-            csv_files = glob.glob(res_p + '/*_pruned_grn.csv')
-            for csv_file in csv_files:
-                grn_list.append(pd.read_csv(csv_file, index_col=[0]))
+            def aggregate_grns(grns: List[pd.DataFrame]) -> pd.DataFrame:
+
+                # Concatenate GRNs
+                stacked = pd.concat(grns, ignore_index=True)
+
+                # Group by unique edges ->
+                aggregated_grn = (
+                    stacked
+                    .groupby(['TF', 'target'], as_index=False)
+                    .agg(
+                        weight=('weight', 'mean'),
+                        importance=('importance', 'mean'),
+                        support=('TF', 'sum')
+                    )
+                )
+
+                return aggregated_grn
+
+            print('### Combining GRNs ...')
+            csv_files_grnboost2 = sorted(glob.glob(res_p + '/*_basic_grn.csv'))
+            csv_files_scenic = sorted(glob.glob(res_p + '/*_pruned_grn.csv'))
+            grn_list_grnboost2 = []
+            grn_list_scenic = []
+            for fn_grnboost2, fn_scenic in zip(csv_files_grnboost2, csv_files_scenic):
+
+                grn_grnboost2 = pd.read_csv(fn_grnboost2, sep='\t')
+                grn_scenic = pd.read_csv(fn_scenic, index_col=0)
+
+                # Add importance column to scenic GRN
+                grn_scenic = grn_scenic.merge(
+                    grn_grnboost2,
+                    on=['TF', 'target'],
+                    how='left'  # Keep all rows of grn_scenic
+                )
+
+                grn_list_grnboost2.append(grn_grnboost2)
+                grn_list_scenic.append(grn_scenic)
+
+            # Aggregate and threshold GRNboost2
+            aggregated_grn_grnboost2 = aggregate_grns(grns=grn_list_grnboost2)
+            core_grn_grnboost2 = aggregated_grn_grnboost2[
+                aggregated_grn_grnboost2['support'] >= edge_count_threshold
+                ].copy()
+            fn_grnboost2_grn = f'edge_count_threshold_{edge_count_threshold}_grnboost2_aggregated_grn.csv'
+            core_grn_grnboost2.to_csv(os.path.join(res_p, fn_grnboost2_grn))
+
+            fig, axs = plt.subplots(1, 2, figsize=(6, 3), dpi=300)
+            colors = ['lightblue', 'lightcoral']
+            for i, col in enumerate(['importance', 'support']):
+                ax = axs[i]
+                ax.hist(aggregated_grn_grnboost2[col], bins=100, color=colors[i], edgecolor='grey')
+                ax.set_xlabel(col)
+                ax.set_xlabel('Count')
+                ax.set_title(col.capitalize())
+            fig.savefig(os.path.join(res_p, 'histograms_grnboost2.png'), fpi=fig.dpi)
+            plt.close(fig)
+
+            # Aggregate and threshold SCENIC
+            aggregated_grn_scenic = aggregate_grns(grns=grn_list_scenic)
+            core_grn_scenic = aggregated_grn_scenic[aggregated_grn_scenic['support'] >= edge_count_threshold].copy()
+            fn_scenic_grn = f'edge_count_threshold_{edge_count_threshold}_scenic_aggregated_grn.csv'
+            core_grn_scenic.to_csv(os.path.join(res_p, fn_scenic_grn))
+
+            fig, axs = plt.subplots(1, 3, figsize=(9, 3), dpi=300)
+            colors = ['lightblue', 'lightgreen', 'lightcoral']
+            for i, col in enumerate(['importance', 'scenic_weight', 'support']):
+                ax = axs[i]
+                ax.hist(aggregated_grn_scenic[col], bins=100, color=colors[i], edgecolor='grey')
+                ax.set_xlabel(col)
+                ax.set_xlabel('Count')
+                ax.set_title(col.capitalize())
+            fig.savefig(os.path.join(res_p, 'histograms_scenic.png'), fpi=fig.dpi)
+            plt.close(fig)
 
 
-            # def combine_grns(
-            #         grns: List[pd.DataFrame],
-            # ):
-            # Todo: preserve average importance
-            #     return
 
-            combined_grn_scenic = combine_grns(
-                grn_list=grn_list,
-                n_occurrence_thresh=edge_count_threshold,
-                result_folder=res_p,
-                verbosity=1,
-                fn_prefix=f'edge_count_threshold_{edge_count_threshold}_pyscenic_'
-            )
-
-            # ### Combine GrnBoost2 GRNs into one (not needed afterwards)
-            print('### Combining Pyscenic GRNs')
-            grn_list = []
-            csv_files = glob.glob(res_p + '/*_basic_grn.csv')
-
-            for csv_file in csv_files:
-                grn = pd.read_csv(csv_file, sep='\t')
-                # Extract top 1% of important edges
-                top_1_perc = math.ceil(grn.shape[0] * 0.01)
-                grn_list.append(grn[0:top_1_perc])
-
-            combined_grn_grnboost2 = combine_grns(
-                grn_list=grn_list,
-                n_occurrence_thresh=edge_count_threshold,
-                result_folder=res_p,
-                verbosity=1,
-                fn_prefix=f'edge_count_threshold_{edge_count_threshold}_grnboost_'
-            )
 
 
 if __name__ == '__main__':
@@ -1415,4 +1450,3 @@ if __name__ == '__main__':
     '''
 
     print('done')
-
