@@ -1312,16 +1312,26 @@ def main_tcell_grn_inference():
                 # Concatenate GRNs
                 stacked = pd.concat(grns, ignore_index=True)
 
-                # Group by unique edges ->
-                aggregated_grn = (
-                    stacked
-                    .groupby(['TF', 'target'], as_index=False)
-                    .agg(
-                        weight=('weight', 'mean'),
-                        importance=('importance', 'mean'),
-                        support=('TF', 'sum')
+                # Aggregate
+                if 'scenic_weight' in stacked.columns:
+                    aggregated_grn = (
+                        stacked
+                        .groupby(['TF', 'target'], as_index=False)
+                        .agg(
+                            scenic_weight=('scenic_weight', 'mean'),
+                            importance=('importance', 'mean'),
+                            support=('TF', 'sum')
+                        )
                     )
-                )
+                else:
+                    aggregated_grn = (
+                        stacked
+                        .groupby(['TF', 'target'], as_index=False)
+                        .agg(
+                            importance=('importance', 'mean'),
+                            support=('TF', 'sum')
+                        )
+                    )
 
                 return aggregated_grn
 
@@ -1380,7 +1390,6 @@ def main_tcell_grn_inference():
                 ax.set_title(col.capitalize())
             fig.savefig(os.path.join(res_p, 'histograms_scenic.png'), fpi=fig.dpi)
             plt.close(fig)
-
 
 
 
