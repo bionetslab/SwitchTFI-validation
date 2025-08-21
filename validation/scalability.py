@@ -36,11 +36,9 @@ os.makedirs(SAVE_PATH, exist_ok=True)
 
 TEST = True
 
-NUM_CELLS_MAX = 200000 if not TEST else 100
 NUM_GENES = 10000 if not TEST else 200
-
-NUM_CELLS = [1000, 5000, 10000, 50000, 100000, 200000] if not TEST else [60, 70, 100]
-
+NUM_CELLS_DATA_GEN = list(range(100, 1000, 100)) + list(range(1000, 10000, 1000)) + list(range(10000, 100001, 10000))
+NUM_CELLS = [100, 500, 1000, 5000, 10000, 50000, 100000] if not TEST else [60, 70, 100]
 
 def generate_data():
 
@@ -57,45 +55,46 @@ def generate_data():
     os.makedirs(save_path, exist_ok=True)
 
     # Generate data
-    n_obs = NUM_CELLS_MAX
-    n_vars = NUM_GENES
+    for n_obs in NUM_CELLS_DATA_GEN:
 
-    simdata = scv.datasets.simulation(n_obs=n_obs, n_vars=n_vars, random_seed=42)
+        n_vars = NUM_GENES
 
-    # Convert to float32 and sparse
-    x_unspliced = sp.csr_matrix(simdata.layers['unspliced'].astype(np.float32))
-    x_spliced = sp.csr_matrix(simdata.layers['spliced'].astype(np.float32))
+        simdata = scv.datasets.simulation(n_obs=n_obs, n_vars=n_vars, random_seed=42)
 
-    # Replace dense matrices in AnnData object
-    simdata.X = x_spliced
-    simdata.layers['unspliced'] = x_unspliced
-    simdata.layers['spliced'] = x_spliced
+        # Convert to float32 and sparse
+        x_unspliced = sp.csr_matrix(simdata.layers['unspliced'].astype(np.float32))
+        x_spliced = sp.csr_matrix(simdata.layers['spliced'].astype(np.float32))
 
-    # Save AnnData object
-    simdata.write_h5ad(os.path.join(save_path, 'simdata.h5ad'), compression='gzip')
+        # Replace dense matrices in AnnData object
+        simdata.X = x_spliced
+        simdata.layers['unspliced'] = x_unspliced
+        simdata.layers['spliced'] = x_spliced
 
-    # Save individual data matrices and relevant annotations
-    sp.save_npz(os.path.join(save_path, 'unspliced.npz'), x_unspliced)
-    sp.save_npz(os.path.join(save_path, 'spliced.npz'), x_spliced)
+        # Save AnnData object
+        simdata.write_h5ad(os.path.join(save_path, f'simdata_{n_obs}.h5ad'), compression='gzip')
 
-    np.save(os.path.join(save_path, 'cell_names.npy'), simdata.obs_names.to_numpy())
-    np.save(os.path.join(save_path, 'gene_names.npy'), simdata.var_names.to_numpy())
+        # Save individual data matrices and relevant annotations
+        sp.save_npz(os.path.join(save_path, f'unspliced_{n_obs}.npz'), x_unspliced)
+        sp.save_npz(os.path.join(save_path, f'spliced_{n_obs}.npz'), x_spliced)
+
+        np.save(os.path.join(save_path, f'cell_names_{n_obs}.npy'), simdata.obs_names.to_numpy())
+        np.save(os.path.join(save_path, f'gene_names_{n_obs}.npy'), simdata.var_names.to_numpy())
 
 
-def load_data() -> sc.AnnData:
+def load_data(n_obs: int) -> sc.AnnData:
 
     save_path = SAVE_PATH / 'data'
 
-    if not (save_path / 'simdata.h5ad').exists():
+    if not (save_path / f'simdata_{n_obs}.h5ad').exists():
         raise RuntimeError(
             f"Missing expected file 'simdata.h5ad'. Make sure generate_data() has been run first."
         )
 
     # Load npy files to avoid errors caused by incompatible Scanpy versions
-    x_unspliced = sp.load_npz(os.path.join(save_path, 'unspliced.npz')).toarray().astype(np.float32)
-    x_spliced = sp.load_npz(os.path.join(save_path, 'spliced.npz')).toarray().astype(np.float32)
-    cell_names = np.load(os.path.join(save_path, 'cell_names.npy'), allow_pickle=True)
-    gene_names = np.load(os.path.join(save_path, 'gene_names.npy'), allow_pickle=True)
+    x_unspliced = sp.load_npz(os.path.join(save_path, f'unspliced_{n_obs}.npz')).toarray().astype(np.float32)
+    x_spliced = sp.load_npz(os.path.join(save_path, f'spliced_{n_obs}.npz')).toarray().astype(np.float32)
+    cell_names = np.load(os.path.join(save_path, f'cell_names_{n_obs}.npy'), allow_pickle=True)
+    gene_names = np.load(os.path.join(save_path, f'gene_names_{n_obs}.npy'), allow_pickle=True)
 
     simdata = sc.AnnData(X=x_spliced)
 
@@ -348,22 +347,20 @@ def scalability_grn_inf():
     save_path = SAVE_PATH / 'grn_inf'
     os.makedirs(save_path, exist_ok=True)
 
-    # Load the simulated data
-    simdata = load_data()
-    simdata_df = simdata.to_df(layer=None)
-
-    # Define the 1500 gene names as TFs
-    tf_names = simdata.var_names.tolist()[0:1500]
-
     # Run GRN inference varying numbers of cells
     res_dfs = []
     for i, n in enumerate(NUM_CELLS):
 
-        # Subset the data
-        simdata_df_subset = simdata_df.iloc[0:n, :].copy()
+        # Load the simulated data
+        simdata = load_data(n_obs=n)
+        simdata_df = simdata.to_df(layer=None)
+
+        # Define the 1500 gene names as TFs
+        n_tfs = min(1500, simdata_df.shape[0])
+        tf_names = simdata.var_names.tolist()[0:n_tfs]
 
         fn_kwargs = {
-            'expression_data': simdata_df_subset,
+            'expression_data': simdata_df,
             'gene_names': None,
             'tf_names': tf_names,
             'seed': 42,
@@ -457,15 +454,9 @@ def scalability_cellrank():
         return res_df, cr_estimator
 
 
-    # Load the simulated data
-    if not TEST:
-        simdata = load_data()
-    else:
-        simdata = scv.datasets.simulation(n_obs=NUM_CELLS_MAX, n_vars=NUM_GENES, random_seed=42)
-
     # Warmup run to compile functions before the initial run
-    warmup_size = min(200, simdata.n_obs)
-    simdata_warmup = simdata[0:warmup_size, :].copy()
+    simdata_warmup = load_data(n_obs=200)
+    simdata_warmup = simdata_warmup[:, 0:400].copy()
     simdata_warmup_annotated = add_prog_off_annotations(simdata=simdata_warmup)
 
     simdata_warmup_velo = compute_rna_velocity(data=simdata_warmup_annotated)
@@ -478,6 +469,12 @@ def scalability_cellrank():
     res_dfs = []
 
     for i, n in enumerate(NUM_CELLS):
+
+        # Load the simulated data
+        if not TEST:
+            simdata = load_data(n_obs=n)
+        else:
+            simdata = scv.datasets.simulation(n_obs=n, n_vars=NUM_GENES, random_seed=42)
 
         # Subset the data
         simdata_subset = simdata[0:n, :].copy()
