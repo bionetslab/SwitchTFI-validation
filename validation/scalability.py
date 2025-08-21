@@ -412,7 +412,7 @@ def scalability_cellrank():
         # Compute moments
         scv.pp.moments(data, n_pcs=None, n_neighbors=None)
         # Estimate model parameters
-        scv.tl.recover_dynamics(data, n_jobs=16)
+        scv.tl.recover_dynamics(data, n_jobs=None)  # TODO: increase n_jobs if velocity estimation takes overly long
         # Compute velocities
         scv.tl.velocity(data, mode='dynamical')
 
@@ -455,6 +455,7 @@ def scalability_cellrank():
         res_df = cr_estimator.compute_lineage_drivers(cluster_key='clusters')
 
         return res_df, cr_estimator
+
 
     # Load the simulated data
     if not TEST:
@@ -518,7 +519,6 @@ def scalability_cellrank():
 
         res_dfs.append(res_df_sub)
 
-
         res_df = pd.concat(res_dfs, axis=0, ignore_index=True)
 
         res_df.to_csv(os.path.join(SAVE_PATH, 'cellrank_fine_grained.csv'))
@@ -527,8 +527,8 @@ def scalability_cellrank():
 
         summary_df = (
             res_df
-            .drop(columns=["alg_step"])
-            .groupby("n_cells", as_index=False)
+            .drop(columns=['alg_step'])
+            .groupby('n_cells', as_index=False)
             .sum(min_count=1)
         )
 
