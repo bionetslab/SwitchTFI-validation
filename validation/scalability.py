@@ -355,7 +355,7 @@ def scalability_grn_inf():
         simdata = load_data(n_obs=n)
         simdata_df = simdata.to_df(layer=None)
 
-        # Define the 1500 gene names as TFs
+        # Define the 1500 first gene names as TFs
         n_tfs = min(1500, simdata_df.shape[0])
         tf_names = simdata.var_names.tolist()[0:n_tfs]
 
@@ -476,18 +476,17 @@ def scalability_cellrank():
         else:
             simdata = scv.datasets.simulation(n_obs=n, n_vars=NUM_GENES, random_seed=42)
 
-        # Subset the data
-        simdata_subset = simdata[0:n, :].copy()
-        simdata_subset_annotated = add_prog_off_annotations(simdata=simdata_subset)
+        # Annotate the data
+        simdata_annotated = add_prog_off_annotations(simdata=simdata)
 
-        res_df_rna_velo, simdata_df_subset_rna_velo = scalability_wrapper(
+        res_df_rna_velo, simdata_df_rna_velo = scalability_wrapper(
             function=compute_rna_velocity,
-            function_params={'data': simdata_subset_annotated},
+            function_params={'data': simdata_annotated},
         )
 
         res_df_trans_matrix, velocity_kernel = scalability_wrapper(
             function=compute_rna_velo_transition_matrix,
-            function_params={'data': simdata_df_subset_rna_velo},
+            function_params={'data': simdata_df_rna_velo},
         )
 
         res_df_terminal_states, cr_estim = scalability_wrapper(
