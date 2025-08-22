@@ -1005,6 +1005,163 @@ def main_additional_tf_target_scatter_plots():
     fig.savefig(os.path.join(res_subdir, 'tf_target_scatter_plots.png'), dpi=fig.dpi)
 
 
+def main_revised_regulon_plot():
+    # ### Script for plotting Figure 5
+
+    import os
+    import numpy as np
+    import pandas as pd
+    import matplotlib.pyplot as plt
+    import matplotlib.transforms as mtransforms
+    import scanpy as sc
+
+    from validation.plotting import plot_enrichr_results, plot_gam_gene_trend_heatmap
+
+    from switchtfi.plotting import plot_regulon
+
+    # Load transition GRN of beta-cell transition
+    bgrn = pd.read_csv('./results/02_switchtfi/endocrine/beta/grn.csv', index_col=0)
+
+    # Load expression data with gene trends
+    bdata = sc.read_h5ad('./results/03_validation/anndata/trend_pre-endocrine_beta.h5ad')
+
+    # ### Load ENRICHR GSEA results for beta-cell transition driver TFs and targets of Ybx1
+    ybx1_gobp = pd.read_csv(
+        os.path.join(
+            os.getcwd(), 'results/03_validation/gsea_results/beta_ybx1_targets_GO_Biological_Process_2023_table.txt'),
+        delimiter='\t'
+    )
+    ybx1_gocc = pd.read_csv(
+        os.path.join(
+            os.getcwd(), 'results/03_validation/gsea_results/beta_ybx1_targets_GO_Cellular_Component_2023_table.txt'),
+        delimiter='\t'
+    )
+    ybx1_reactome = pd.read_csv(
+        os.path.join(
+            os.getcwd(), 'results/03_validation/gsea_results/beta_ybx1_targets_Reactome_2022_table.txt'),
+        delimiter='\t'
+    )
+
+    # Extract the Ybx1 regulon
+    keep_bool = np.isin(bgrn['TF'].to_numpy(), ['Ybx1'])
+    regulon = bgrn[keep_bool].copy().reset_index(drop=True)
+
+    # Compute score and sort
+    weights = regulon['weight'].to_numpy()
+    pvals = regulon['pvals_wy'].to_numpy()
+    pvals += np.finfo(np.float64).eps
+    regulon['score'] = -np.log10(pvals) * weights
+    regulon = regulon.sort_values('score', axis=0, ascending=False)
+
+    # Get top-k targets
+    top_k = 20
+    top_k_targets = regulon['target'].tolist()[0:top_k]
+
+    # ### Plot results for Beta dataset ### #
+    fig = plt.figure(figsize=(13, 12), constrained_layout=True, dpi=300)
+    mosaic = '''
+        A
+        B
+        C
+    '''
+
+
+    axd = fig.subplot_mosaic(
+        mosaic=mosaic,
+        # gridspec_kw={'height_ratios': [5, 6], }
+    )
+
+    # General
+    ax_fs = 16
+    letter_fs = 20
+    # Enrichr results plots
+    term_fs = 16
+    legend_fs = 16
+    # Regulon
+    nodes_size = 1000
+    gene_fs = 16
+
+    # ### Plot the top 20 targets of Ybx1
+    plot_regulon(
+        grn=bgrn,
+        tf='Ybx1',
+        sort_by='score',
+        top_k=top_k,
+        title=None,
+        edge_width=3.5,
+        font_size=gene_fs,
+        node_size=nodes_size,
+        dpi=300,
+        ax=axd['A']
+    )
+
+    # ### Plot the gene trends for the top 20 targets of Ybx1
+
+    # Subset to the top k targets
+    bdata_top_k_targets = bdata[:, top_k_targets].copy()
+
+    # Get expression trends
+    expression_trends = bdata_top_k_targets.varm['gam_gene_trends'].T
+
+    # Scale gene expressions trends to [0, 1] for comparability
+    mins = np.min(expression_trends, axis=0)
+    maxs = np.max(expression_trends, axis=0)
+    expression_trends_scaled = (expression_trends - mins) / (maxs - mins)
+
+    # Sort genes such that the ones with the earliest peak come first
+    argmaxs = np.argmax(expression_trends_scaled, axis=0)
+    sorting_idx = np.argsort(argmaxs)
+    expression_trends_scaled = expression_trends_scaled[:, sorting_idx]
+
+    # Also sort the gene names of the top k TFs
+    top_k_targets_sorted = np.array(top_k_targets)[sorting_idx].tolist()
+
+    # Get pt-vector
+    pt_vec = bdata_top_k_targets.obs['palantir_pseudotime'].to_numpy()
+
+    ax = axd['B']
+    trend_plot = ax.imshow(expression_trends_scaled.T, cmap='viridis', aspect='auto', interpolation='none')
+
+    ax.set_xlabel('Pseudotime', fontsize=ax_fs)
+
+    ax.set_frame_on(False)
+
+    ax.set_yticks(ticks=np.arange(top_k), labels=top_k_targets_sorted, fontsize=12)
+
+    x_tick_values = np.round(np.linspace(pt_vec.min(), pt_vec.max(), num=5), decimals=2)
+    x_tick_positions = np.linspace(0, expression_trends_scaled.shape[0] - 1, num=5).astype(int)
+    ax.set_xticks(x_tick_positions, x_tick_values)
+
+    # ax.set_title("Expression Trends of Ybx1's Targets" , fontsize=ax_fs)
+
+    cbar = plt.colorbar(trend_plot, ax=ax, location='right', pad=-0.1)
+    cbar.ax.set_ylabel('Scaled Expression', fontsize=ax_fs)
+
+    # ### Plot the GSEA results for the top 20 targets of Ybx1
+    plot_enrichr_results(
+        res_dfs=[ybx1_gobp, ybx1_reactome, ybx1_gocc],
+        x='Adjusted P-value',
+        top_k=[6, 3, 3],
+        reference_db_names=['GO_Biological_Process_2023', 'Reactome_2022', 'GO_Cellular_Component_2023'],
+        title=None,
+        title_fontsize=None,
+        term_fontsize=term_fs,
+        truncate_term_k=80,
+        ax_label_fontsize=ax_fs,
+        legend_fontsize=legend_fs,
+        axs=axd['C']
+    )
+
+    # Annotate subplot mosaic tiles with labels
+    for label, ax in axd.items():
+        trans = mtransforms.ScaledTranslation(-20 / 72, 7 / 72, fig.dpi_scale_trans)
+        ax.text(0.0, 1.0, label, transform=ax.transAxes + trans,
+                fontsize=letter_fs, va='bottom', fontfamily='sans-serif', fontweight='bold')
+
+    # plt.show()
+    plt.savefig('./results/04_plots/hypothesis_gen_ybx1_revised.png', dpi=fig.dpi)
+
+
 def main_tcell_data_exploration():
 
     import os
@@ -1055,7 +1212,7 @@ def main_tcell_data_exploration():
                 keep_bool = keep_bool_tissue & keep_bool_time
 
                 tdata_subset = tdata[keep_bool, :].copy()
-                tdata_subset.write(os.path.join(data_dir, f'tdata_{tissue}_{time}.h5ad'))
+                tdata_subset.write(os.path.join(plot_dir, f'tdata_{tissue}_{time}.h5ad'))
                 tdata_tissue_time = tdata[keep_bool_tissue & keep_bool_time, :].copy()
 
                 # Subset w.r.t. infection status and visualize the population sizes:
@@ -1131,7 +1288,7 @@ def main_tcell_data_exploration():
         for time in ['d10', 'd28']:
 
             # Load data
-            tdata = sc.read_h5ad(os.path.join(data_dir, f'tdata_{tissue}_{time}.h5ad'))
+            tdata = sc.read_h5ad(os.path.join(plot_dir, f'tdata_{tissue}_{time}.h5ad'))
 
             # Subset to populations of interest
             keep_bool_cluster = tdata.obs['cluster'].isin(list(prog_off_labels.keys()))
@@ -1183,7 +1340,6 @@ def main_tcell_data_processing():
 
     import os
 
-    import matplotlib.pyplot as plt
     import scanpy as sc
     import scanpy.external as scex
 
@@ -1191,56 +1347,77 @@ def main_tcell_data_processing():
 
     tissues = ['spleen', 'liver']
     time = 'd10'
+    infections = ['chronic', 'acute']
     clusters = [[3, 4, 5], [3, 5]]
-    prog_off_labels = {3: 'prog', 4: 'prog', 5: 'off'}
 
+    cluster_ids_to_prog_off_labels = {3: 'prog', 4: 'prog', 5: 'off'}
+
+    time_name_to_label = {'d10': 0, 'd28': 1}
+    tissue_name_to_label = {'spleen': 0, 'liver': 1}
+    infection_name_to_label = {'chronic': 0, 'acute': 1}
+
+    # Load the full dataset
+    full_dataset_filename = 'ga_an0602_10x_smarta_doc_arm_liver_spleen_d10_d28_mgd_ts_filtered_int_inf_tp_rp_convert.h5ad'
+    tdata = sc.read_h5ad(os.path.join(data_dir, full_dataset_filename))
+
+    # Delete the raw to avoid error when saving
+    tdata.raw = None
+
+    # Relabel cluster labels from 0-9 to 1-10
+    new_labels = [int(label + 1) for label in tdata.obs['cluster']]
+    tdata.obs['cluster'] = new_labels
+
+    # Convert sparse to dense
+    tdata.X = tdata.X.toarray()
 
     for tissue in tissues:
-        for cluster_keys in clusters:
+        for infection in infections:
+            for cluster_keys in clusters:
 
-            # Load data
-            tdata = sc.read_h5ad(os.path.join(data_dir, f'tdata_{tissue}_{time}.h5ad'))
+                # Subset to populations of interest
+                keep_bool_time = tdata.obs['time'] == time_name_to_label[time]
+                keep_bool_tissue = tdata.obs['tissue'] == tissue_name_to_label[tissue]
+                keep_bool_infection = tdata.obs['infection'] == infection_name_to_label[infection]
+                keep_bool_cluster = tdata.obs['cluster'].isin(cluster_keys)
 
-            # Subset to populations of interest
-            keep_bool_cluster = tdata.obs['cluster'].isin(cluster_keys)
-            tdata = tdata[keep_bool_cluster, :].copy()
+                keep_bool = keep_bool_time & keep_bool_tissue & keep_bool_infection & keep_bool_cluster
 
-            # Add progenitor, offspring annotations
-            cluster_labels = tdata.obs['cluster'].tolist()
-            prog_off_anno = [prog_off_labels[cluster] for cluster in cluster_labels]
-            tdata.obs['prog_off'] = prog_off_anno
+                tdata_subset = tdata[keep_bool, :].copy()
 
-            # Convert sparse to dense
-            tdata.X = tdata.X.toarray()
+                # Add progenitor-offspring annotations
+                cluster_labels = tdata_subset.obs['cluster'].tolist()
+                prog_off_anno = [cluster_ids_to_prog_off_labels[cluster] for cluster in cluster_labels]
+                tdata_subset.obs['prog_off'] = prog_off_anno
 
-            # Basic count based QC on the gene level
-            sc.pp.filter_genes(tdata, min_cells=20)
+                # Basic count based QC on the gene level
+                sc.pp.filter_genes(tdata_subset, min_cells=20)
 
-            # MAGIC imputation
-            tdata_dummy = tdata.copy()
-            scex.pp.magic(
-                adata=tdata_dummy,
-                name_list='all_genes',
-                knn=5,
-                decay=1,
-                knn_max=None,
-                t=1,
-                n_pca=100,
-                solver='exact',
-                knn_dist='euclidean',
-                random_state=42,
-                n_jobs=None,
-                verbose=True,
-                copy=None,
-            )
-            tdata.layers['magic_imputed'] = tdata_dummy.X.copy()
+                # MAGIC imputation
+                tdata_dummy = tdata_subset.copy()
+                scex.pp.magic(
+                    adata=tdata_dummy,
+                    name_list='all_genes',
+                    knn=5,
+                    decay=1,
+                    knn_max=None,
+                    t=1,
+                    n_pca=100,
+                    solver='exact',
+                    knn_dist='euclidean',
+                    random_state=42,
+                    n_jobs=None,
+                    verbose=True,
+                    copy=None,
+                )
+                tdata_subset.layers['magic_imputed'] = tdata_dummy.X.copy()
 
-            # Scale to unit variance for GRN inference
-            tdata.layers['unit_variance'] = sc.pp.scale(tdata.X.copy(), zero_center=False, copy=True)
+                # Scale to unit variance for GRN inference
+                tdata_subset.layers['unit_variance'] = sc.pp.scale(tdata_subset.X.copy(), zero_center=False, copy=True)
 
-            # Save
-            cluster_str = ''.join(str(i) for i in cluster_keys)
-            tdata.write(os.path.join(data_dir, f'tdata_{tissue}_{time}_{cluster_str}.h5ad'))
+                # Save
+                cluster_str = ''.join(str(i) for i in cluster_keys)
+                id_str = f'{tissue}_{time}_{infection}_{cluster_str}'
+                tdata_subset.write(os.path.join(data_dir, f'tdata_{id_str}.h5ad'))
 
 
 def main_tcell_grn_inference():
@@ -1253,7 +1430,7 @@ def main_tcell_grn_inference():
     import scanpy as sc
 
     from typing import List
-    from grn_inf.grn_inference import pyscenic_pipeline, combine_grns
+    from grn_inf.grn_inference import pyscenic_pipeline
 
 
     # Define paths to files where TFs are stored
@@ -1273,8 +1450,6 @@ def main_tcell_grn_inference():
     n_grns = 18
     edge_count_threshold = 9
 
-    infection_to_label = {'chronic': 0, 'acute': 1}
-
     inference = True
 
     data_p = './data/anndata/tcell'
@@ -1285,14 +1460,9 @@ def main_tcell_grn_inference():
             for infection in infections:
 
                 # Load data
-                id_str_data = f'{tissue}_{time}_{cluster_keys}'
-                filepath = os.path.join(data_p, f'tdata_{id_str_data}.h5ad')
-                tdata = sc.read_h5ad(filepath)
-
-                # Subset data to acute or chronic disease
-                tdata_grn_inf = tdata[tdata.obs['infection'] == infection_to_label[infection], :].copy()
-
                 id_str = f'{tissue}_{time}_{infection}_{cluster_keys}'
+                filepath = os.path.join(data_p, f'tdata_{id_str}.h5ad')
+                tdata = sc.read_h5ad(filepath)
 
                 res_p = os.path.join(base_res_p, id_str)
                 os.makedirs(res_p, exist_ok=True)
@@ -1302,7 +1472,7 @@ def main_tcell_grn_inference():
                         print(f'# ### GRN inference, {id_str}, iteration {i}/{n_grns}')
 
                         pyscenic_pipeline(
-                            adata=tdata_grn_inf,
+                            adata=tdata,
                             layer_key='unit_variance',
                             tf_file=tf_file,
                             result_folder=res_p,
@@ -1416,6 +1586,149 @@ def main_tcell_grn_inference():
                 plt.close(fig)
 
 
+def main_tcell_grn_exploration():
+    import os
+
+    import numpy as np
+    import pandas as pd
+
+    tissues = ['spleen', 'liver']
+    time = 'd10'
+    infection = 'acute'
+    clusters = ['345', '35']
+
+    grn_p = './results/01_grn_inf/tcell'
+
+    method_to_weight_key = {'grnboost2': 'importance', 'scenic': 'scenic_weight'}
+
+    for tissue in tissues:
+        for cluster_keys in clusters:
+
+            print(f'# ### {tissue}, {cluster_keys}, {infection} ### #')
+
+            # Load the precomputed GRNs
+            id_str = f'{tissue}_{time}_{infection}_{cluster_keys}'
+
+            for method in ['grnboost2', 'scenic']:
+
+                print(f'# ### {method}')
+
+                grn_path = os.path.join(grn_p, id_str, f'edge_count_threshold_9_{method}_aggregated_grn.csv')
+                grn = pd.read_csv(grn_path, index_col=0).reset_index()
+                grn = grn.sort_values(by=method_to_weight_key[method], ascending=False).reset_index(drop=True)
+
+                n_edges = grn.shape[0]
+                n_vertices = np.unique(grn[['TF', 'target']].to_numpy()).shape[0]
+
+                tfs = set(grn['TF'].tolist())
+                targets = set(grn['target'].tolist())
+
+                tf_target_intersection = tfs.intersection(targets)
+
+                print(f'# num nodes: {n_vertices}')
+                print(f'# num edges: {n_edges}')
+                print(f'# num tfs: {len(tfs)}')
+                print(f'# num targets: {len(targets)}')
+                print(f'# intersection size: {len(tf_target_intersection)}')
+
+                print(f'# GRN:\n{grn}')
+
+
+def main_tcell_switchtfi():
+
+    import os
+
+    import pandas as pd
+    import scanpy as sc
+
+    from switchtfi import fit_model, rank_tfs
+
+    tissues = ['spleen', 'liver']
+    time = 'd10'
+    infection = 'acute'
+    clusters = ['345', '35']
+
+    infection_to_label = {'chronic': 0, 'acute': 1}
+
+    data_p = './data/anndata/tcell'
+    grn_p = './results/01_grn_inf/tcell'
+    base_res_p = './results/02_switchtfi/tcell'
+
+    for tissue in tissues:
+        for cluster_keys in clusters:
+
+            # Load data
+            id_str_data = f'{tissue}_{time}_{cluster_keys}'
+            filepath = os.path.join(data_p, f'tdata_{id_str_data}.h5ad')
+            tdata = sc.read_h5ad(filepath)
+
+            # Subset data to acute infection
+            tdata_acute = tdata[tdata.obs['infection'] == infection_to_label[infection], :].copy()
+
+            # Load the precomputed GRN
+            id_str = f'{tissue}_{time}_{infection}_{cluster_keys}'
+            grn_path = os.path.join(grn_p, id_str, 'edge_count_threshold_9_scenic_aggregated_grn.csv')
+            grn = pd.read_csv(grn_path, index_col=0).reset_index()
+
+            # Create results directory
+            res_p = os.path.join(base_res_p, id_str)
+            os.makedirs(res_p, exist_ok=True)
+
+            transition_grn, ranked_tfs_pagerank = fit_model(
+                adata=tdata_acute,
+                grn=grn,
+                layer_key='magic_imputed',
+                clustering_obs_key='prog_off',
+                result_folder=res_p,
+                verbosity=2,
+                save_intermediate=True
+            )
+
+            ranked_tfs_outdegree = rank_tfs(
+                grn=transition_grn,
+                centrality_measure='out_degree',
+                reverse=False,
+                weight_key='score',
+                result_folder=res_p,
+                fn_prefix='outdegree_'
+            )
+
+
+def main_tcell_explore_results():
+
+    import os
+
+    import pandas as pd
+    import scanpy as sc
+
+
+    tissues = ['spleen', 'liver']
+    time = 'd10'
+    infection = 'acute'
+    clusters = ['345', '35']
+
+    infection_to_label = {'chronic': 0, 'acute': 1}
+
+    data_p = './data/anndata/tcell'
+    base_res_p = './results/02_switchtfi/tcell'
+
+    for tissue in tissues:
+        for cluster_keys in clusters:
+
+            # Load the data
+            id_str_data = f'{tissue}_{time}_{cluster_keys}'
+            filepath = os.path.join(data_p, f'tdata_{id_str_data}.h5ad')
+            tdata = sc.read_h5ad(filepath)
+
+            # Subset data to acute infection
+            tdata_acute = tdata[tdata.obs['infection'] == infection_to_label[infection], :].copy()
+
+            # Load the results
+            id_str = f'{tissue}_{time}_{infection}_{cluster_keys}'
+            transition_grn = pd.read_csv(os.path.join(base_res_p, id_str, 'grn.csv'), index_col=0)
+            ranked_tfs_pr = pd.read_csv(os.path.join(base_res_p, id_str, 'ranked_tfs.csv'), index_col=0)
+            ranked_tfs_od = pd.read_csv(os.path.join(base_res_p, id_str, 'outdeg_ranked_tfs.csv'), index_col=0)
+
 
 
 if __name__ == '__main__':
@@ -1424,13 +1737,19 @@ if __name__ == '__main__':
 
     # main_additional_tf_target_scatter_plots()
 
+    main_revised_regulon_plot()
+
     # main_tcell_data_exploration()
 
     # main_tcell_data_processing()
 
-    main_tcell_grn_inference()
+    # main_tcell_grn_inference()
 
+    # main_tcell_grn_exploration()
 
+    # main_tcell_switchtfi()
+
+    # main_tcell_explore_results()
 
 
     '''
