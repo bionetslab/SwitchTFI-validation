@@ -1,13 +1,40 @@
 
-import os
-import pickle
-import scanpy as sc
 import numpy as np
+import scanpy as sc
 import pandas as pd
 import DrivAER as dv
 
 from typing import *
-from switchtfi.utils import get_regulons
+
+
+def get_regulons(
+        grn: pd.DataFrame,
+        gene_names: Union[List[str], None] = None,
+        additional_info_keys: Union[List[str], None] = None,
+        tf_target_keys: Tuple[str, str] = ('TF', 'target')
+) -> Dict[str, Dict]:
+
+    # If no gene names are passed, compute regulons of all TFs
+    if gene_names is None:
+        gene_names = np.unique(grn[tf_target_keys[0]].to_numpy()).tolist()
+
+    regulon_dict = {}
+    for gene in gene_names:
+
+        gene_tf_bool = (grn[tf_target_keys[0]].to_numpy() == gene)
+
+        if gene_tf_bool.sum() == 0:
+            print(f'WARNING: Gene {gene} is not a TF in the given GRN')
+
+        dummy = {'targets': grn[tf_target_keys[1]].to_numpy()[gene_tf_bool].tolist()}
+
+        if additional_info_keys is not None:
+            for key in additional_info_keys:
+                dummy[key] = grn[key].to_numpy()[gene_tf_bool].tolist()
+
+        regulon_dict[gene] = dummy
+
+    return regulon_dict
 
 
 def get_tf_target_pdseries(

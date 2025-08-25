@@ -1,3 +1,6 @@
+
+# After installation: pip install --no-deps git+https://github.com/lkmklsmn/DrivAER.git
+
 name: drivaer
 channels:
   - conda-forge
@@ -128,7 +131,6 @@ dependencies:
       - dataclasses==0.8
       - dca==0.2.3
       - decorator==4.4.2
-      - drivaer==0.0.2  # pip install git+https://github.com/lkmklsmn/DrivAER.git
       - flatbuffers==1.12
       - future==1.0.0
       - gast==0.2.2
