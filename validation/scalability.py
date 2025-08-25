@@ -10,6 +10,11 @@
 #    - Additional study: SwitchTFI, DrivAER scales in n-edges (GRN-size), pick fixed number of cells (e.g. 10000) and remove random edges
 #  - Run everything on HPC
 
+# Todo: three comparisons
+#  (1) Vary number of cells, fix number of genes (except for spliceJAC), use output GRNs
+#  (2) Vary number of cells and number of genes (for comparison to spliceJAC)
+#  (3) Compare SwitchTFI and DrivAER on GRNs of different size for fixed n cells and n genes
+
 
 import os
 import argparse
@@ -87,7 +92,7 @@ def load_data(n_obs: int) -> sc.AnnData:
 
     if not (save_path / f'simdata_{n_obs}.h5ad').exists():
         raise RuntimeError(
-            f"Missing expected file 'simdata.h5ad'. Make sure generate_data() has been run first."
+            f"Missing expected file 'simdata_{n_obs}.h5ad'. Make sure generate_data() has been run first."
         )
 
     # Load npy files to avoid errors caused by incompatible Scanpy versions
@@ -216,19 +221,34 @@ def track_memory_gpu(interval=0.1):
     interval_ms = max(1, int(interval * 1000))
 
     # Start a persistent nvidia-smi process
-    proc = subprocess.Popen(
-        [
-            "nvidia-smi",
-            "-i", "0",  # Pin 1st GPU
-            f"-lms", str(interval_ms),  # Sampling interval in ms
-            "--query-gpu=memory.used",
-            "--format=csv,nounits,noheader"
-        ],
-        stdout=subprocess.PIPE,
-        stderr=subprocess.DEVNULL,
-        text=True,
-        bufsize=1
-    )
+    try:
+        proc = subprocess.Popen(
+            [
+                "nvidia-smi",
+                "-i", "0",  # Pin 1st GPU
+                f"-lms", str(interval_ms),  # Sampling interval in ms
+                "--query-gpu=memory.used",
+                "--format=csv,nounits,noheader"
+            ],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            text=True,
+            bufsize=1
+        )
+    except TypeError:
+        proc = subprocess.Popen(
+            [
+                "nvidia-smi",
+                "-i", "0",
+                f"-lms", str(interval_ms),
+                "--query-gpu=memory.used",
+                "--format=csv,nounits,noheader"
+            ],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            universal_newlines=True,  # instead of text=True
+            bufsize=1
+        )
 
     # Get first sample
     first = 0
@@ -390,9 +410,104 @@ def scalability_grn_inf():
 
 def scalability_switchtfi():
 
-    # Todo
+    import scvelo as scv
 
-    pass
+    import sys
+    sys.path.append(os.path.abspath('..'))
+    from switchtfi.fit import align_anndata_grn
+    from switchtfi.weight_fitting import calculate_weights
+    from switchtfi.pvalue_calculation import compute_corrected_pvalues, remove_insignificant_edges
+    from switchtfi.tf_ranking import rank_tfs
+
+    # Run cellrank inference on varying numbers of cells
+    res_dfs = []
+    for i, n in enumerate(NUM_CELLS):
+
+        # Load the simulated data
+        if not TEST:
+            simdata = load_data(n_obs=n)
+        else:
+            simdata = scv.datasets.simulation(n_obs=n, n_vars=NUM_GENES, random_seed=42)
+
+        # Annotate the data
+        simdata_annotated = add_prog_off_annotations(simdata=simdata)
+
+        # Load the corresponding GRN
+        grn_path = os.path.join(SAVE_PATH, 'grn_inf', f'grn_num_cells_{n}.csv')
+        grn_num_cells = pd.read_csv(grn_path, index_col=0)
+        grn_num_cells[['TF', 'target']] = grn_num_cells[['TF', 'target']].astype(str)
+
+        # Runs step-wise analysis
+        res_df_align, (simdata_aligned, grn_aligned) = scalability_wrapper(
+            function=align_anndata_grn,
+            function_params={'adata': simdata_annotated, 'grn': grn_num_cells},
+        )
+
+        res_df_weights, grn_weighted = scalability_wrapper(
+            function=calculate_weights,
+            function_params={
+                'adata': simdata_aligned,
+                'grn': grn_aligned,
+                'layer_key': None,
+                'n_cell_pruning_params': None,
+                'clustering_obs_key': 'prog_off'
+            },
+        )
+
+        res_df_pvalues, grn_pval = scalability_wrapper(
+            function=compute_corrected_pvalues,
+            function_params={
+                'adata': simdata_aligned,
+                'grn': grn_weighted,
+                'method': 'wy',
+                'clustering_obs_key': 'prog_off',
+            },
+        )
+
+        res_df_pruning, transition_grn = scalability_wrapper(
+            function=remove_insignificant_edges,
+            function_params={
+                'grn': grn_pval,
+                'alpha': 0.05,
+                'p_value_key': 'pvals_wy',
+            },
+        )
+
+        res_df_tf_ranking, ranked_tfs = scalability_wrapper(
+            function=rank_tfs,
+            function_params={
+                'grn': transition_grn,
+                'centrality_measure': 'pagerank',
+            },
+        )
+
+        res_df_subs = [
+            res_df_align, res_df_weights, res_df_pvalues, res_df_pruning, res_df_tf_ranking
+        ]
+        res_df_sub = pd.concat(res_df_subs, axis=0, ignore_index=True)
+
+        res_df_sub['n_cells'] = [n] * 5
+
+        res_df_sub['alg_step'] = ['align', 'weight', 'pvalue', 'pruning', 'tf_ranking']
+
+        res_dfs.append(res_df_sub)
+
+        res_df = pd.concat(res_dfs, axis=0, ignore_index=True)
+
+        res_df.to_csv(os.path.join(SAVE_PATH, 'switchtfi_fine_grained.csv'))
+
+        summary_df = (
+            res_df
+            .drop(columns=['alg_step'])
+            .groupby('n_cells', as_index=False)
+            .sum(min_count=1)
+        )
+
+        summary_df.to_csv(os.path.join(SAVE_PATH, 'switchtfi.csv'))
+
+        print(res_df)
+
+        print(summary_df)
 
 
 def scalability_cellrank():
@@ -455,7 +570,10 @@ def scalability_cellrank():
 
 
     # Warmup run to compile functions before the initial run
-    simdata_warmup = load_data(n_obs=200)
+    if not TEST:
+        simdata_warmup = load_data(n_obs=200)
+    else:
+        simdata_warmup = scv.datasets.simulation(n_obs=200, n_vars=NUM_GENES, random_seed=42)
     simdata_warmup = simdata_warmup[:, 0:400].copy()
     simdata_warmup_annotated = add_prog_off_annotations(simdata=simdata_warmup)
 
@@ -479,6 +597,7 @@ def scalability_cellrank():
         # Annotate the data
         simdata_annotated = add_prog_off_annotations(simdata=simdata)
 
+        # Runs step-wise analysis
         res_df_rna_velo, simdata_df_rna_velo = scalability_wrapper(
             function=compute_rna_velocity,
             function_params={'data': simdata_annotated},
@@ -549,7 +668,8 @@ def scalability_splicejac():
         # Compute highly variable genes
         scv.pp.filter_genes_dispersion(data, n_top_genes=num_genes, subset=True)
 
-        return
+        return data
+
 
     def compute_rna_velocity(data: sc.AnnData) -> sc.AnnData:
 
@@ -563,14 +683,165 @@ def scalability_splicejac():
         return data
 
 
-    # Todo
+    def infer_splicejac_grn(data: sc.AnnData) -> sc.AnnData:
+
+        # Genes were subset beforehand, use all genes - 1
+        num_genes = data.shape[1] - 1
+
+        bootstrapping_fraction = 0.999999  # 1.0 raises AssertionError
+
+        sj.tl.estimate_jacobian(data, frac=bootstrapping_fraction, n_top_genes=num_genes)
+
+        return data
+
+
+    def get_splicejac_transition_genes(data: sc.AnnData) -> Tuple[sc.AnnData, pd.DataFrame]:
+
+        sc.tl.rank_genes_groups(data, 'clusters', method='t-test')
+        sj.tl.transition_genes(data, 'prog', 'off')
+
+        # Extract ranked list of genes, see splicejac git - plot_trans_genes()
+        # Get splicejac transition weights
+        splicejac_weights = data.uns['transitions']['prog' + '-' + 'off']['weights']
+        genes = list(data.var_names)
+
+        driver_genes = pd.DataFrame({'gene': genes, 'splicejac_weight': splicejac_weights})
+        driver_genes.sort_values(by='splicejac_weight', ascending=False, inplace=True, ignore_index=True)
+
+        return data, driver_genes
+
+
+    # Run SpliceJAC inference on varying numbers of cells
+    res_dfs = []
+    for i, n in enumerate(NUM_CELLS):
+
+        # Load the simulated data
+        if not TEST:
+            simdata = load_data(n_obs=n)
+        else:
+            simdata = scv.datasets.simulation(n_obs=n, n_vars=NUM_GENES, random_seed=42)
+
+        # Annotate the data
+        simdata_annotated = add_prog_off_annotations(simdata=simdata)
+        simdata_annotated.obs['clusters'] = simdata_annotated.obs['prog_off'].copy()
+
+        # Runs step-wise analysis
+        res_df_hvg, simdata_hvg_subset = scalability_wrapper(
+            function=compute_hvgs_and_subset,
+            function_params={'data': simdata_annotated},
+        )
+
+        res_df_rna_velo, simdata_rna_velo = scalability_wrapper(
+            function=compute_rna_velocity,
+            function_params={'data': simdata_hvg_subset},
+        )
+
+        res_df_grn_inf, simdata_grn = scalability_wrapper(
+            function=infer_splicejac_grn,
+            function_params={'data': simdata_rna_velo},
+        )
+
+        res_df_transition, _ = scalability_wrapper(
+            function=get_splicejac_transition_genes,
+            function_params={'data': simdata_grn},
+        )
+
+        res_df_subs = [
+            res_df_hvg, res_df_rna_velo, res_df_grn_inf, res_df_transition
+        ]
+        res_df_sub = pd.concat(res_df_subs, axis=0, ignore_index=True)
+
+        res_df_sub['n_cells'] = [n] * 4
+
+        res_df_sub['alg_step'] = ['hvg_subset', 'rna_velo', 'grn_inf', 'transition']
+
+        res_dfs.append(res_df_sub)
+
+        res_df = pd.concat(res_dfs, axis=0, ignore_index=True)
+
+        gpu_cols = ['mem_peak_gpu', 'mem_avg_gpu', 'samples_gpu']
+        res_df[gpu_cols] = res_df[gpu_cols].astype('float64')
+
+        res_df.to_csv(os.path.join(SAVE_PATH, 'splicejac_fine_grained.csv'))
+
+        summary_df = (
+            res_df
+            .drop(columns=['alg_step'])
+            .groupby('n_cells', as_index=False)
+            .sum(min_count=1)
+        )
+
+        summary_df.to_csv(os.path.join(SAVE_PATH, 'splicejac.csv'))
+
+        print(res_df)
+
+        print(summary_df)
 
 
 def scalability_drivaer():
 
-    # Todo
+    import DrivAER as dv
 
-    pass
+    from drivaer_workflow import get_tf_target_pdseries
+
+    def drivaer_inference(data: sc.AnnData, grn: pd.DataFrame) -> pd.DataFrame:
+
+        tf_to_target_list = get_tf_target_pdseries(grn=grn, tf_target_keys=('TF', 'target'))
+
+        low_dim_rep, relevance, genes = dv.calc_relevance(
+            count=data,
+            pheno=data.obs['prog_off'],
+            tf_targets=tf_to_target_list,
+            min_targets=10,
+            ae_type='nb-conddisp',
+            epochs=50,
+            early_stop=3,
+            hidden_size=(8, 2, 8),
+            verbose=True
+        )
+
+
+        driver_genes = pd.DataFrame({'gene': genes, 'relevance': relevance})
+        driver_genes.sort_values(by='relevance', ascending=False, inplace=True, ignore_index=True)
+
+        return driver_genes
+
+
+    # Run DrivAER inference on varying numbers of cells
+    res_dfs = []
+    for i, n in enumerate(NUM_CELLS):
+
+        # Load the simulated data
+        if not TEST:
+            simdata = load_data(n_obs=n)
+        else:
+            data_matrix = np.random.randint(0, 100, size=(n, NUM_GENES))
+            simdata = sc.AnnData(data_matrix, obs=[str(j) for j in range(n)], var=[str(j) for j in range(NUM_GENES)])
+
+        # Annotate the data
+        simdata_annotated = add_prog_off_annotations(simdata=simdata)
+        simdata_annotated.obs['clusters'] = simdata_annotated.obs['prog_off'].copy()
+
+        # Load the corresponding GRN
+        grn_path = os.path.join(SAVE_PATH, 'grn_inf', f'grn_num_cells_{n}.csv')
+        grn_num_cells = pd.read_csv(grn_path, index_col=0)
+        grn_num_cells[['TF', 'target']] = grn_num_cells[['TF', 'target']].astype(str)
+
+        # Runs DrivAER analysis
+        current_res_df, _ = scalability_wrapper(
+            function=drivaer_inference,
+            function_params={'data': simdata_annotated, 'grn': grn_num_cells},
+            track_gpu=True,
+        )
+
+        current_res_df['n_cells'] = [n]
+
+        res_dfs.append(current_res_df)
+
+        res_df = pd.concat(res_dfs, axis=0, ignore_index=True)
+
+        res_df.to_csv(os.path.join(SAVE_PATH, 'drivaer.csv'))
+
 
 
 if __name__ == '__main__':
