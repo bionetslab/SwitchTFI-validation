@@ -1015,7 +1015,7 @@ def main_revised_regulon_plot():
     import matplotlib.transforms as mtransforms
     import scanpy as sc
 
-    from validation.plotting import plot_enrichr_results, plot_gam_gene_trend_heatmap
+    from validation.plotting import plot_enrichr_results
 
     from switchtfi.plotting import plot_regulon
 
@@ -1459,6 +1459,13 @@ def main_tcell_grn_inference():
         for cluster_keys in clusters:
             for infection in infections:
 
+                t = (tissue, infection, cluster_keys)
+
+                skip = {('spleen', 'acute', '345'), ('spleen', 'acute', '35'), ('spleen', 'chronic', '345')}
+
+                if t in skip:
+                    continue
+
                 # Load data
                 id_str = f'{tissue}_{time}_{infection}_{cluster_keys}'
                 filepath = os.path.join(data_p, f'tdata_{id_str}.h5ad')
@@ -1631,7 +1638,7 @@ def main_tcell_grn_exploration():
                 print(f'# num targets: {len(targets)}')
                 print(f'# intersection size: {len(tf_target_intersection)}')
 
-                print(f'# GRN:\n{grn}')
+                # print(f'# GRN:\n{grn}')
 
 
 def main_tcell_switchtfi():
@@ -1648,8 +1655,6 @@ def main_tcell_switchtfi():
     infection = 'acute'
     clusters = ['345', '35']
 
-    infection_to_label = {'chronic': 0, 'acute': 1}
-
     data_p = './data/anndata/tcell'
     grn_p = './results/01_grn_inf/tcell'
     base_res_p = './results/02_switchtfi/tcell'
@@ -1657,16 +1662,13 @@ def main_tcell_switchtfi():
     for tissue in tissues:
         for cluster_keys in clusters:
 
+            id_str = f'{tissue}_{time}_{infection}_{cluster_keys}'
+
             # Load data
-            id_str_data = f'{tissue}_{time}_{cluster_keys}'
-            filepath = os.path.join(data_p, f'tdata_{id_str_data}.h5ad')
+            filepath = os.path.join(data_p, f'tdata_{id_str}.h5ad')
             tdata = sc.read_h5ad(filepath)
 
-            # Subset data to acute infection
-            tdata_acute = tdata[tdata.obs['infection'] == infection_to_label[infection], :].copy()
-
             # Load the precomputed GRN
-            id_str = f'{tissue}_{time}_{infection}_{cluster_keys}'
             grn_path = os.path.join(grn_p, id_str, 'edge_count_threshold_9_scenic_aggregated_grn.csv')
             grn = pd.read_csv(grn_path, index_col=0).reset_index()
 
@@ -1675,7 +1677,7 @@ def main_tcell_switchtfi():
             os.makedirs(res_p, exist_ok=True)
 
             transition_grn, ranked_tfs_pagerank = fit_model(
-                adata=tdata_acute,
+                adata=tdata,
                 grn=grn,
                 layer_key='magic_imputed',
                 clustering_obs_key='prog_off',
@@ -1698,16 +1700,19 @@ def main_tcell_explore_results():
 
     import os
 
+    import numpy as np
     import pandas as pd
+    import matplotlib.pyplot as plt
     import scanpy as sc
 
+    from switchtfi.utils import load_grn_json, csr_to_numpy
+    from validation.plotting import plot_step_function
 
-    tissues = ['spleen', 'liver']
+
+    tissues = ['spleen', ]  # 'liver']
     time = 'd10'
     infection = 'acute'
     clusters = ['345', '35']
-
-    infection_to_label = {'chronic': 0, 'acute': 1}
 
     data_p = './data/anndata/tcell'
     base_res_p = './results/02_switchtfi/tcell'
@@ -1715,20 +1720,103 @@ def main_tcell_explore_results():
     for tissue in tissues:
         for cluster_keys in clusters:
 
+            id_str = f'{tissue}_{time}_{infection}_{cluster_keys}'
+
             # Load the data
-            id_str_data = f'{tissue}_{time}_{cluster_keys}'
-            filepath = os.path.join(data_p, f'tdata_{id_str_data}.h5ad')
+            filepath = os.path.join(data_p, f'tdata_{id_str}.h5ad')
             tdata = sc.read_h5ad(filepath)
 
-            # Subset data to acute infection
-            tdata_acute = tdata[tdata.obs['infection'] == infection_to_label[infection], :].copy()
-
             # Load the results
-            id_str = f'{tissue}_{time}_{infection}_{cluster_keys}'
             transition_grn = pd.read_csv(os.path.join(base_res_p, id_str, 'grn.csv'), index_col=0)
             ranked_tfs_pr = pd.read_csv(os.path.join(base_res_p, id_str, 'ranked_tfs.csv'), index_col=0)
-            ranked_tfs_od = pd.read_csv(os.path.join(base_res_p, id_str, 'outdeg_ranked_tfs.csv'), index_col=0)
+            ranked_tfs_od = pd.read_csv(os.path.join(base_res_p, id_str, 'outdegree_ranked_tfs.csv'), index_col=0)
 
+            print(f'# ### {id_str} ### #')
+            print(f'# ### Transition GRN:\n{transition_grn}')
+            print(f'# ### TFs PageRank:\n{ranked_tfs_pr}')
+            print(f'# ### TFs outdegree:\n{ranked_tfs_od}')
+
+            full_grn = load_grn_json(os.path.join(base_res_p, id_str, 'grn.json')).drop(columns=['index'])
+            full_grn = full_grn.sort_values(by='weight', ascending=False, ignore_index=True)  # .reset_index(drop=True)
+
+            print(full_grn)
+
+            fig = plt.figure(figsize=(8, 5), constrained_layout=True, dpi=300)
+            axd = fig.subplot_mosaic(
+                """
+                ABC
+                DEF
+                """
+            )
+
+            num_plots_per_row = 3
+            n_edges = full_grn.shape[0]
+            plot_indices = (
+                    list(range(0, num_plots_per_row))
+                    + list(range(n_edges - 1, n_edges - 1 - num_plots_per_row, -1))
+            )
+            subplot_keys = list('ABCDEF')
+
+            layer_key = 'magic_imputed'
+
+            label_to_color = {
+                'prog': '#fdae6b',  # warmer orange-peach
+                'off': '#a1d99b'  # fresher light green
+            }
+
+            legend_handles = [
+                plt.Line2D([], [], marker='o', color='w', label=label.capitalize(), markerfacecolor=color, markersize=6)
+                for label, color in label_to_color.items()
+            ]
+
+            for j, plot_idx in enumerate(plot_indices):
+
+                tf = full_grn.loc[plot_idx, 'TF']
+                target = full_grn.loc[plot_idx, 'target']
+                weight = full_grn.loc[plot_idx, 'weight']
+                threshold = full_grn.loc[plot_idx, 'threshold']
+                pred_l = full_grn.loc[plot_idx, 'pred_l']
+                pred_r = full_grn.loc[plot_idx, 'pred_r']
+
+                labels = tdata.obs['prog_off'].to_numpy()
+                x = csr_to_numpy(tdata[:, tf].layers[layer_key]).flatten()
+                y = csr_to_numpy(tdata[:, target].layers[layer_key]).flatten()
+
+                x_bool = (x != 0)
+                y_bool = (y != 0)
+                keep_bool = np.logical_and(x_bool, y_bool)
+
+                x = x[keep_bool]
+                y = y[keep_bool]
+                labels_plot = labels[keep_bool]
+
+                colors = [label_to_color[label] for label in labels_plot]
+
+                ax = axd[subplot_keys[j]]
+
+                ax.scatter(
+                    x,
+                    y,
+                    c=colors,
+                    alpha=0.9,
+                    edgecolors='none',
+                    s=10,
+                )
+
+                min_x, max_x = x.min(), x.max()
+
+                ax.plot([min_x, threshold], [pred_l, pred_l], color='red', zorder=2)
+                ax.scatter([threshold], [pred_l], color='red', marker='o', zorder=3)
+                ax.plot([threshold, max_x], [pred_r, pred_r], color='red', zorder=2)
+                ax.scatter([threshold], [pred_r], color='red', marker='o', facecolor='white', zorder=3)
+                ax.axvline(x=threshold, color='red', linestyle='--', zorder=1)
+                ax.set_title(fr'$w = {round(weight, 3)}$')
+                ax.set_xlabel(tf)
+                ax.set_ylabel(target)
+
+                ax.legend(handles=legend_handles)
+
+            fig.savefig(os.path.join(base_res_p, id_str, 'scatter_plots.png'), dpi=fig.dpi)
 
 
 if __name__ == '__main__':
@@ -1737,7 +1825,7 @@ if __name__ == '__main__':
 
     # main_additional_tf_target_scatter_plots()
 
-    main_revised_regulon_plot()
+    # main_revised_regulon_plot()
 
     # main_tcell_data_exploration()
 
@@ -1752,7 +1840,11 @@ if __name__ == '__main__':
     # main_tcell_explore_results()
 
 
-    '''
+
+    import os
+    import scvelo as scv
+    import scanpy as sc
+
     data_dir = './data_dummy'
     os.makedirs(data_dir, exist_ok=True)
 
@@ -1785,20 +1877,13 @@ if __name__ == '__main__':
     adata = scv.datasets.pbmc68k(os.path.join(data_dir, 'pbmc68k.h5ad'))
     print(f'# ### pbmc68k: {adata.n_obs} cells, {adata.n_vars} genes')
 
-    simdata = scv.datasets.simulation(n_obs=1000, n_vars=10000, switches=3, random_seed=42)
-
-    print(simdata)
-
+    # simdata = scv.datasets.simulation(n_obs=1000, n_vars=10000, switches=3, random_seed=42)
+    # print(simdata)
     # print(simdata.X)
+    # sc.pp.pca(simdata)
+    # sc.pp.neighbors(simdata)
+    #sc.tl.umap(simdata)
+    #sc.pl.umap(simdata, color='true_t')
 
-    sc.pp.pca(simdata)
-    sc.pp.neighbors(simdata)
-
-    # Step 3: Compute UMAP
-    sc.tl.umap(simdata)
-
-    # Step 4: Plot UMAP
-    sc.pl.umap(simdata, color='true_t')
-    '''
 
     print('done')
