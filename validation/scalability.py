@@ -41,8 +41,9 @@ os.makedirs(SAVE_PATH, exist_ok=True)
 
 TEST = True
 
-NUM_GENES = 10000 if not TEST else 200
-NUM_CELLS = [100, 500, 1000, 5000, 10000, 50000, 100000] if not TEST else [60, 70, 100]
+NUM_GENES = 10000 if not TEST else 1000
+NUM_CELLS = [100, 500, 1000, 5000, 10000, 50000, 100000] if not TEST else [100, 200, 300]
+
 
 def process_data():
 
@@ -54,9 +55,13 @@ def process_data():
     print(save_path)
 
     # Check whether data generation was run beforehand
-    if any(f.name[0] != '.' for f in save_path.iterdir()):
+    existing_files = [
+        f.name for f in save_path.iterdir() if not (f.name.startswith('.') or f.name == 'reprogramming_morris.h5ad')
+    ]
+    if existing_files:
         raise RuntimeError(
-            f'Data processing was already run. Remove existing files in "{save_path}" before running again.'
+            f'Data processing was already run. '
+            f'Remove existing files {existing_files} in "{save_path}" before running again.'
         )
 
     # Download data
@@ -578,8 +583,6 @@ def scalability_cellrank():
 
         # Load the data and do basic processing
         adata = load_data(n_obs=n)
-        # prog_off_anno = adata.obs['prog_off'].to_numpy()
-        # adata.obs['prog_off'] = pd.Categorical(prog_off_anno, categories=['prog', 'off'])
         sc.pp.normalize_per_cell(adata)
         sc.pp.log1p(adata)
 
@@ -644,15 +647,18 @@ def scalability_splicejac():
     import splicejac as sj
 
 
-    def compute_hvgs_and_subset(data: sc.AnnData) -> sc.AnnData:
+    def compute_hvgs_subset(data: sc.AnnData) -> sc.AnnData:
 
-        # Set number of genes to retain (min(# cells in custer) = 0.5 * # cells)
-        num_genes = int(data.shape[0] / 2)
+        # Set number of genes based on smallest cluster size
+        min_cluster_size = data.obs['clusters'].value_counts().min()
+        num_genes = min(data.shape[1], int(min_cluster_size * 0.9))
 
         # Compute highly variable genes
-        scv.pp.filter_genes_dispersion(data, n_top_genes=num_genes, subset=True)
+        sc.pp.highly_variable_genes(data, n_top_genes=num_genes)
 
-        return data
+        data_hvg = adata[:, data.var['highly_variable']].copy()
+
+        return data_hvg
 
 
     def compute_rna_velocity(data: sc.AnnData) -> sc.AnnData:
@@ -669,12 +675,7 @@ def scalability_splicejac():
 
     def infer_splicejac_grn(data: sc.AnnData) -> sc.AnnData:
 
-        # Genes were subset beforehand, use all genes - 1
-        num_genes = data.shape[1] - 1
-
-        bootstrapping_fraction = 0.999999  # 1.0 raises AssertionError
-
-        sj.tl.estimate_jacobian(data, frac=bootstrapping_fraction, n_top_genes=num_genes)
+        sj.tl.estimate_jacobian(data, filter_and_norm=False)  # No further gene filtering here
 
         return data
 
@@ -682,7 +683,8 @@ def scalability_splicejac():
     def get_splicejac_transition_genes(data: sc.AnnData) -> Tuple[sc.AnnData, pd.DataFrame]:
 
         sc.tl.rank_genes_groups(data, 'clusters', method='t-test')
-        sj.tl.transition_genes(data, 'prog', 'off')
+
+        sj.tl.transition_genes(data, 'prog', 'off')  # , top_DEG=num_genes, top_TG=num_genes)
 
         # Extract ranked list of genes, see splicejac git - plot_trans_genes()
         # Get splicejac transition weights
@@ -699,13 +701,15 @@ def scalability_splicejac():
     res_dfs = []
     for i, n in enumerate(NUM_CELLS):
 
-        # Load the data
+        # Load the data and do basic processing
         adata = load_data(n_obs=n)
+        sc.pp.normalize_total(adata)
+        sc.pp.log1p(adata)
         adata.obs['clusters'] = adata.obs['prog_off'].copy()
 
         # Runs step-wise analysis
         res_df_hvg, adata_hvg_subset = scalability_wrapper(
-            function=compute_hvgs_and_subset,
+            function=compute_hvgs_subset,
             function_params={'data': adata},
         )
 
