@@ -44,6 +44,8 @@ TEST = True
 NUM_GENES = 10000 if not TEST else 1000
 NUM_CELLS = [100, 500, 1000, 5000, 10000, 50000, 100000] if not TEST else [100, 200, 300]
 
+NUM_CELLS_GRN = 5000 if not TEST else 100
+
 
 def process_data():
 
@@ -357,7 +359,7 @@ def scalability_wrapper(
     return res_df, function_output
 
 
-def scalability_grn_inf():
+def scalability_grn_inf(subset_genes: bool = False):
 
     from arboreto.algo import grnboost2
 
@@ -369,8 +371,18 @@ def scalability_grn_inf():
     res_dfs = []
     for i, n in enumerate(NUM_CELLS):
 
-        # Load the data
+        # Load the data and do basic processing
         adata = load_data(n_obs=n)
+        sc.pp.normalize_per_cell(adata)
+        sc.pp.log1p(adata)
+        sc.pp.scale(adata)
+
+        if subset_genes:
+            # Set number of genes based on smallest cluster size
+            min_cluster_size = adata.obs['prog_off'].value_counts().min()
+            num_genes = min(adata.shape[1], int(min_cluster_size * 0.9))
+            adata = adata[:, :num_genes].copy()
+
         adata_df = adata.to_df(layer=None)
 
         # Define the 1500 first gene names as TFs
@@ -397,19 +409,21 @@ def scalability_grn_inf():
 
         res_dfs.append(res_df)
 
-        grn.to_csv(os.path.join(save_path, f'grn_num_cells_{n}.csv'))
+        fn_grn = f'grn_num_cells_{n}{"_subset_genes" if subset_genes else ""}.csv'
+        grn.to_csv(os.path.join(save_path, fn_grn))
 
         res_df_joint = pd.concat(res_dfs, axis=0, ignore_index=True)
 
-        res_df_joint.to_csv(os.path.join(SAVE_PATH, f'grn_inf.csv'))
+        res_df_joint.to_csv(os.path.join(SAVE_PATH, f'grn_inf_{n}{"_subset_genes" if subset_genes else ""}.csv'))
 
         print(res_df_joint)
 
 
-def scalability_switchtfi():
+def scalability_switchtfi(subset_genes: bool = False):
 
     import sys
     sys.path.append(os.path.abspath('..'))
+    import scanpy.external as sce
     from switchtfi.fit import align_anndata_grn
     from switchtfi.weight_fitting import calculate_weights
     from switchtfi.pvalue_calculation import compute_corrected_pvalues, remove_insignificant_edges
@@ -419,8 +433,16 @@ def scalability_switchtfi():
     res_dfs = []
     for i, n in enumerate(NUM_CELLS):
 
-        # Load the data
+        # Load the data and do basic processing
         adata = load_data(n_obs=n)
+        sc.pp.normalize_per_cell(adata)
+        sc.pp.log1p(adata)
+
+        if subset_genes:
+            # Set number of genes based on smallest cluster size
+            min_cluster_size = adata.obs['prog_off'].value_counts().min()
+            num_genes = min(adata.shape[1], int(min_cluster_size * 0.9))
+            adata = adata[:, :num_genes].copy()
 
         # Load the corresponding GRN
         grn_path = os.path.join(SAVE_PATH, 'grn_inf', f'grn_num_cells_{n}.csv')
@@ -433,12 +455,29 @@ def scalability_switchtfi():
             function_params={'adata': adata, 'grn': grn_num_cells},
         )
 
-        # Todo: imputation
+        res_df_imputation, adata_imputed = scalability_wrapper(
+            function=sce.pp.magic,
+            function_params={
+                'adata': adata_aligned,
+                'name_list': 'all_genes',
+                'knn': 5,
+                'decay': 1,
+                'knn_max': None,
+                't': 1,
+                'n_pca': 100,
+                'solver': 'exact',
+                'knn_dist': 'euclidean',
+                'random_state': 42,
+                'n_jobs': 1,
+                'verbose': True,
+                'copy': True,
+            },
+        )
 
         res_df_weights, grn_weighted = scalability_wrapper(
             function=calculate_weights,
             function_params={
-                'adata': adata_aligned,
+                'adata': adata_imputed,
                 'grn': grn_aligned,
                 'layer_key': None,
                 'n_cell_pruning_params': None,
@@ -474,19 +513,20 @@ def scalability_switchtfi():
         )
 
         res_df_subs = [
-            res_df_align, res_df_weights, res_df_pvalues, res_df_pruning, res_df_tf_ranking
+            res_df_align, res_df_imputation, res_df_weights, res_df_pvalues, res_df_pruning, res_df_tf_ranking
         ]
         res_df_sub = pd.concat(res_df_subs, axis=0, ignore_index=True)
 
-        res_df_sub['n_cells'] = [n] * 5
+        res_df_sub['n_cells'] = [n] * 6
 
-        res_df_sub['alg_step'] = ['align', 'weight', 'pvalue', 'pruning', 'tf_ranking']
+        res_df_sub['alg_step'] = ['align', 'impute', 'weight', 'pvalue', 'prune', 'rank_tfs']
 
         res_dfs.append(res_df_sub)
 
         res_df = pd.concat(res_dfs, axis=0, ignore_index=True)
 
-        res_df.to_csv(os.path.join(SAVE_PATH, 'switchtfi_fine_grained.csv'))
+        fn_fg = f'switchtfi_fine_grained_{n}{"_subset_genes" if subset_genes else ""}.csv'
+        res_df.to_csv(os.path.join(SAVE_PATH, fn_fg))
 
         summary_df = (
             res_df
@@ -495,14 +535,15 @@ def scalability_switchtfi():
             .sum(min_count=1)
         )
 
-        summary_df.to_csv(os.path.join(SAVE_PATH, 'switchtfi.csv'))
+        fn = f'switchtfi_{n}{"_subset_genes" if subset_genes else ""}.csv'
+        summary_df.to_csv(os.path.join(SAVE_PATH, fn))
 
         print(res_df)
 
         print(summary_df)
 
 
-def scalability_cellrank():
+def scalability_cellrank(subset_genes: bool = False):
 
     import scvelo as scv
     import cellrank as cr
@@ -569,6 +610,8 @@ def scalability_cellrank():
 
     # Warmup run to compile functions before the initial run
     adata_warmup = load_data(n_obs=200)
+    sc.pp.normalize_per_cell(adata_warmup)
+    sc.pp.log1p(adata_warmup)
 
     adata_warmup_velo = compute_rna_velocity(data=adata_warmup)
     velo_kernel = compute_rna_velo_transition_matrix(data=adata_warmup_velo)
@@ -585,6 +628,12 @@ def scalability_cellrank():
         adata = load_data(n_obs=n)
         sc.pp.normalize_per_cell(adata)
         sc.pp.log1p(adata)
+
+        if subset_genes:
+            # Set number of genes based on smallest cluster size
+            min_cluster_size = adata.obs['prog_off'].value_counts().min()
+            num_genes = min(adata.shape[1], int(min_cluster_size * 0.9))
+            adata = adata[:, :num_genes].copy()
 
         # Runs step-wise analysis
         res_df_rna_velo, adata_rna_velo = scalability_wrapper(
@@ -625,7 +674,8 @@ def scalability_cellrank():
 
         res_df = pd.concat(res_dfs, axis=0, ignore_index=True)
 
-        res_df.to_csv(os.path.join(SAVE_PATH, 'cellrank_fine_grained.csv'))
+        fn_fg = f'cellrank_fine_grained_{n}{"_subset_genes" if subset_genes else ""}.csv'
+        res_df.to_csv(os.path.join(SAVE_PATH, fn_fg))
 
         summary_df = (
             res_df
@@ -634,7 +684,8 @@ def scalability_cellrank():
             .sum(min_count=1)
         )
 
-        summary_df.to_csv(os.path.join(SAVE_PATH, 'cellrank.csv'))
+        fn = f'cellrank_{n}{"_subset_genes" if subset_genes else ""}.csv'
+        summary_df.to_csv(os.path.join(SAVE_PATH, fn))
 
         print(res_df)
 
@@ -744,7 +795,7 @@ def scalability_splicejac():
         gpu_cols = ['mem_peak_gpu', 'mem_avg_gpu', 'samples_gpu']
         res_df[gpu_cols] = res_df[gpu_cols].astype('float64')
 
-        res_df.to_csv(os.path.join(SAVE_PATH, 'splicejac_fine_grained.csv'))
+        res_df.to_csv(os.path.join(SAVE_PATH, f'splicejac_fine_grained_{n}.csv'))
 
         summary_df = (
             res_df
@@ -753,14 +804,14 @@ def scalability_splicejac():
             .sum(min_count=1)
         )
 
-        summary_df.to_csv(os.path.join(SAVE_PATH, 'splicejac.csv'))
+        summary_df.to_csv(os.path.join(SAVE_PATH, f'splicejac_{n}.csv'))
 
         print(res_df)
 
         print(summary_df)
 
 
-def scalability_drivaer():
+def scalability_drivaer(subset_genes: bool = False):
 
     import DrivAER as dv
 
@@ -782,7 +833,6 @@ def scalability_drivaer():
             verbose=True
         )
 
-
         driver_genes = pd.DataFrame({'gene': genes, 'relevance': relevance})
         driver_genes.sort_values(by='relevance', ascending=False, inplace=True, ignore_index=True)
 
@@ -795,6 +845,12 @@ def scalability_drivaer():
 
         # Load the data
         adata = load_data(n_obs=n)
+
+        if subset_genes:
+            # Set number of genes based on smallest cluster size
+            min_cluster_size = adata.obs['prog_off'].value_counts().min()
+            num_genes = min(adata.shape[1], int(min_cluster_size * 0.9))
+            adata = adata[:, :num_genes].copy()
 
         # Load the corresponding GRN
         grn_path = os.path.join(SAVE_PATH, 'grn_inf', f'grn_num_cells_{n}.csv')
@@ -814,10 +870,28 @@ def scalability_drivaer():
 
         res_df = pd.concat(res_dfs, axis=0, ignore_index=True)
 
-        res_df.to_csv(os.path.join(SAVE_PATH, 'drivaer.csv'))
+        fn = f'drivaer_{n}{"_subset_genes" if subset_genes else ""}.csv'
+        res_df.to_csv(os.path.join(SAVE_PATH, fn))
 
 
 def scalability_switchtfi_grn():
+
+
+    # Load the data and do basic processing
+    adata = load_data(n_obs=NUM_CELLS_GRN)
+    sc.pp.normalize_per_cell(adata)
+    sc.pp.log1p(adata)
+
+    if subset_genes:
+        # Set number of genes based on smallest cluster size
+        min_cluster_size = adata.obs['prog_off'].value_counts().min()
+        num_genes = min(adata.shape[1], int(min_cluster_size * 0.9))
+        adata = adata[:, :num_genes].copy()
+
+    # Load the corresponding GRN
+    grn_path = os.path.join(SAVE_PATH, 'grn_inf', f'grn_num_cells_{n}.csv')
+    grn_num_cells = pd.read_csv(grn_path, index_col=0)
+    grn_num_cells[['TF', 'target']] = grn_num_cells[['TF', 'target']].astype(str)
     # Todo
     pass
 
@@ -825,6 +899,7 @@ def scalability_switchtfi_grn():
 def scalability_drivaer_grn():
     # Todo
     pass
+
 
 if __name__ == '__main__':
 
@@ -843,39 +918,48 @@ if __name__ == '__main__':
         ),
     )
 
+    parser.add_argument(
+        '-sg', '--subset-genes',
+        action='store_true',
+        help="If set, subset the number of genes according to spliceJAC's specifications. Defaults to False."
+    )
+
     args = parser.parse_args()
 
-    if args.method in {'grn_inf', 'switchtfi', 'cellrank', 'splicejac', 'drivaer', 'switchtfi_grn', 'drivaer_grn'}:
+    m = args.method
+    sg = args.subset_genes
+
+    if m in {'grn_inf', 'switchtfi', 'cellrank', 'splicejac', 'drivaer', 'switchtfi_grn', 'drivaer_grn'}:
         p = SAVE_PATH / 'data'
         if (
                 not p.exists()
                 or not p.is_dir()
                 or not (any(f.name[0] != '.' for f in p.iterdir()))
         ):
-            raise RuntimeError(f'Run data generation before running "{args.method}"')
+            raise RuntimeError(f'Run data generation before running "{m}"')
 
-    if args.method in {'switchtfi', 'drivaer', 'switchtfi_grn', 'drivaer_grn'}:
+    if m in {'switchtfi', 'drivaer', 'switchtfi_grn', 'drivaer_grn'}:
         p = SAVE_PATH / 'grn_inf'
         if (
                 not p.exists()
                 or not p.is_dir()
                 or not (any(f.name[0] != '.' for f in p.iterdir()))
         ):
-            raise RuntimeError(f'Run GRN inference before running "{args.method}"')
+            raise RuntimeError(f'Run GRN inference before running "{m}"')
 
-    if args.method == 'data':
+    if m == 'data':
         process_data()
-    elif args.method == 'grn_inf':
-        scalability_grn_inf()
-    elif args.method == 'switchtfi':
-        scalability_switchtfi()
-    elif args.method == 'cellrank':
-        scalability_cellrank()
-    elif args.method == 'splicejac':
-        scalability_splicejac()
-    elif args.method == 'drivaer':
-        scalability_drivaer()
-    elif args.method == 'switchtfi_grn':
+    elif m == 'grn_inf':
+        scalability_grn_inf(subset_genes=sg)
+    elif m == 'switchtfi':
+        scalability_switchtfi(subset_genes=sg)
+    elif m == 'cellrank':
+        scalability_cellrank(subset_genes=sg)
+    elif m == 'splicejac':
+        scalability_splicejac(subset_genes=sg)
+    elif m == 'drivaer':
+        scalability_drivaer(subset_genes=sg)
+    elif m == 'switchtfi_grn':
         scalability_switchtfi_grn()
     else:  # 'drivaer_grn'
         scalability_drivaer_grn()
