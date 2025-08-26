@@ -817,6 +817,14 @@ def scalability_drivaer():
         res_df.to_csv(os.path.join(SAVE_PATH, 'drivaer.csv'))
 
 
+def scalability_switchtfi_grn():
+    # Todo
+    pass
+
+
+def scalability_drivaer_grn():
+    # Todo
+    pass
 
 if __name__ == '__main__':
 
@@ -827,14 +835,17 @@ if __name__ == '__main__':
     parser.add_argument(
         '-m', '--method',
         type=str,
-        choices=['data', 'grn_inf', 'switchtfi', 'cellrank', 'splicejac', 'drivaer'],
+        choices=['data', 'grn_inf', 'switchtfi', 'cellrank', 'splicejac', 'drivaer', 'switchtfi_grn', 'drivaer_grn'],
         default='switchtfi',
-        help='Method for which to run the analysis for: "grn_inf", "switchtfi", "splicejac", or "drivaer"'
+        help=(
+            'Method for which to run the analysis for: '
+            '"grn_inf", "switchtfi", "splicejac", "drivaer", "switchtfi_grn", or "drivaer_grn"'
+        ),
     )
 
     args = parser.parse_args()
 
-    if args.method in {'grn_inf', 'switchtfi', 'cellrank', 'splicejac', 'drivaer'}:
+    if args.method in {'grn_inf', 'switchtfi', 'cellrank', 'splicejac', 'drivaer', 'switchtfi_grn', 'drivaer_grn'}:
         p = SAVE_PATH / 'data'
         if (
                 not p.exists()
@@ -843,7 +854,7 @@ if __name__ == '__main__':
         ):
             raise RuntimeError(f'Run data generation before running "{args.method}"')
 
-    if args.method in {'switchtfi', 'drivaer'}:
+    if args.method in {'switchtfi', 'drivaer', 'switchtfi_grn', 'drivaer_grn'}:
         p = SAVE_PATH / 'grn_inf'
         if (
                 not p.exists()
@@ -862,8 +873,12 @@ if __name__ == '__main__':
         scalability_cellrank()
     elif args.method == 'splicejac':
         scalability_splicejac()
-    else:
+    elif args.method == 'drivaer':
         scalability_drivaer()
+    elif args.method == 'switchtfi_grn':
+        scalability_switchtfi_grn()
+    else:  # 'drivaer_grn'
+        scalability_drivaer_grn()
 
 
     print('done')
