@@ -42,79 +42,72 @@ os.makedirs(SAVE_PATH, exist_ok=True)
 TEST = True
 
 NUM_GENES = 10000 if not TEST else 200
-NUM_CELLS_DATA_GEN = list(range(100, 1000, 100)) + list(range(1000, 10000, 1000)) + list(range(10000, 100001, 10000))
 NUM_CELLS = [100, 500, 1000, 5000, 10000, 50000, 100000] if not TEST else [60, 70, 100]
 
-def generate_data():
+def process_data():
 
-    import scvelo as scv
+    import cellrank as cr
 
     save_path = SAVE_PATH / 'data'
-
-    # Check whether data generation was run beforehand
-    if save_path.is_dir() and any(f.name[0] != '.' for f in save_path.iterdir()):
-        raise RuntimeError(
-            f'Data generation was already run. Remove existing files in "{save_path}" before running again.'
-        )
-
     os.makedirs(save_path, exist_ok=True)
 
-    # Generate data
-    for n_obs in NUM_CELLS_DATA_GEN:
+    print(save_path)
 
-        n_vars = NUM_GENES
+    # Check whether data generation was run beforehand
+    if any(f.name[0] != '.' for f in save_path.iterdir()):
+        raise RuntimeError(
+            f'Data processing was already run. Remove existing files in "{save_path}" before running again.'
+        )
 
-        simdata = scv.datasets.simulation(n_obs=n_obs, n_vars=n_vars, random_seed=42)
+    # Download data
+    adata = cr.datasets.reprogramming_morris(os.path.join(save_path, 'reprogramming_morris.h5ad'), subset='full')
 
-        # Convert to float32 and sparse
-        x_unspliced = sp.csr_matrix(simdata.layers['unspliced'].astype(np.float32))
-        x_spliced = sp.csr_matrix(simdata.layers['spliced'].astype(np.float32))
+    # Subset to the top 10,000 hvg genes
+    adata_proc = adata.copy()
+    sc.pp.normalize_total(adata)
+    sc.pp.log1p(adata_proc)
+    sc.pp.highly_variable_genes(adata_proc, n_top_genes=NUM_GENES)
 
-        # Replace dense matrices in AnnData object
-        simdata.X = x_spliced
-        simdata.layers['unspliced'] = x_unspliced
-        simdata.layers['spliced'] = x_spliced
+    adata_hvg = adata[:, adata_proc.var['highly_variable']].copy()
 
-        # Save AnnData object
-        simdata.write_h5ad(os.path.join(save_path, f'simdata_{n_obs}.h5ad'), compression='gzip')
+    # Save AnnData, individual data matrices and relevant annotations
+    adata_hvg.write_h5ad(os.path.join(save_path, 'reprogramming_morris_hvg.h5ad'))
+    x_unspliced = adata_hvg.layers['unspliced']
+    x_spliced = adata_hvg.layers['spliced']
+    sp.save_npz(os.path.join(save_path, f'x_unspliced.npz'), x_unspliced)
+    sp.save_npz(os.path.join(save_path, f'x_spliced.npz'), x_spliced)
 
-        # Save individual data matrices and relevant annotations
-        sp.save_npz(os.path.join(save_path, f'unspliced_{n_obs}.npz'), x_unspliced)
-        sp.save_npz(os.path.join(save_path, f'spliced_{n_obs}.npz'), x_spliced)
-
-        np.save(os.path.join(save_path, f'cell_names_{n_obs}.npy'), simdata.obs_names.to_numpy())
-        np.save(os.path.join(save_path, f'gene_names_{n_obs}.npy'), simdata.var_names.to_numpy())
+    np.save(os.path.join(save_path, f'cell_names.npy'), adata_hvg.obs_names.to_numpy())
+    np.save(os.path.join(save_path, f'gene_names.npy'), adata_hvg.var_names.to_numpy())
 
 
-def load_data(n_obs: int) -> sc.AnnData:
+def load_data(n_obs: int, seed: int = 42) -> sc.AnnData:
 
     save_path = SAVE_PATH / 'data'
 
-    if not (save_path / f'simdata_{n_obs}.h5ad').exists():
+    if not (save_path / 'reprogramming_morris_hvg.h5ad').exists():
         raise RuntimeError(
-            f"Missing expected file 'simdata_{n_obs}.h5ad'. Make sure generate_data() has been run first."
+            f"Missing expected file 'reprogramming_morris_hvg.h5ad'. Make sure process_data() has been run first."
         )
 
     # Load npy files to avoid errors caused by incompatible Scanpy versions
-    x_unspliced = sp.load_npz(os.path.join(save_path, f'unspliced_{n_obs}.npz')).toarray().astype(np.float32)
-    x_spliced = sp.load_npz(os.path.join(save_path, f'spliced_{n_obs}.npz')).toarray().astype(np.float32)
-    cell_names = np.load(os.path.join(save_path, f'cell_names_{n_obs}.npy'), allow_pickle=True)
-    gene_names = np.load(os.path.join(save_path, f'gene_names_{n_obs}.npy'), allow_pickle=True)
+    x_unspliced = sp.load_npz(os.path.join(save_path, f'x_unspliced.npz')).toarray().astype(np.float32)
+    x_spliced = sp.load_npz(os.path.join(save_path, f'x_spliced.npz')).toarray().astype(np.float32)
+    cell_names = np.load(os.path.join(save_path, f'cell_names.npy'), allow_pickle=True)
+    gene_names = np.load(os.path.join(save_path, f'gene_names.npy'), allow_pickle=True)
 
-    simdata = sc.AnnData(X=x_spliced)
+    # Create anndata
+    adata = sc.AnnData(X=x_spliced)
+    adata.obs_names = cell_names
+    adata.var_names = gene_names
+    adata.layers['unspliced'] = x_unspliced
+    adata.layers['spliced'] = x_spliced
 
-    simdata.obs_names = cell_names
-    simdata.var_names = gene_names
-
-    simdata.layers['unspliced'] = x_unspliced
-    simdata.layers['spliced'] = x_spliced
-
-    return simdata
-
-
-def add_prog_off_annotations(simdata: sc.AnnData) -> sc.AnnData:
-
-    n_obs = simdata.n_obs
+    # Subsample to the desired number of cells
+    np.random.seed(seed)
+    n_total = adata.n_obs
+    idx = np.random.choice(n_total, size=n_obs, replace=False)
+    adata_sub = adata[idx, :].copy()
 
     # Add progenitor offspring annotations
     if n_obs % 2 != 0:
@@ -125,9 +118,9 @@ def add_prog_off_annotations(simdata: sc.AnnData) -> sc.AnnData:
         n_off = int(n_obs / 2)
 
     prog_off_anno = ['prog'] * n_prog + ['off'] * n_off
-    simdata.obs['prog_off'] = prog_off_anno
+    adata_sub.obs['prog_off'] = prog_off_anno
 
-    return  simdata
+    return adata_sub
 
 
 def get_cpu_memory_mb(process: psutil.Process) -> float:
@@ -371,16 +364,16 @@ def scalability_grn_inf():
     res_dfs = []
     for i, n in enumerate(NUM_CELLS):
 
-        # Load the simulated data
-        simdata = load_data(n_obs=n)
-        simdata_df = simdata.to_df(layer=None)
+        # Load the data
+        adata = load_data(n_obs=n)
+        adata_df = adata.to_df(layer=None)
 
         # Define the 1500 first gene names as TFs
-        n_tfs = min(1500, simdata_df.shape[0])
-        tf_names = simdata.var_names.tolist()[0:n_tfs]
+        n_tfs = min(1500, adata_df.shape[0])
+        tf_names = adata.var_names.tolist()[0:n_tfs]
 
         fn_kwargs = {
-            'expression_data': simdata_df,
+            'expression_data': adata_df,
             'gene_names': None,
             'tf_names': tf_names,
             'seed': 42,
@@ -410,8 +403,6 @@ def scalability_grn_inf():
 
 def scalability_switchtfi():
 
-    import scvelo as scv
-
     import sys
     sys.path.append(os.path.abspath('..'))
     from switchtfi.fit import align_anndata_grn
@@ -423,14 +414,8 @@ def scalability_switchtfi():
     res_dfs = []
     for i, n in enumerate(NUM_CELLS):
 
-        # Load the simulated data
-        if not TEST:
-            simdata = load_data(n_obs=n)
-        else:
-            simdata = scv.datasets.simulation(n_obs=n, n_vars=NUM_GENES, random_seed=42)
-
-        # Annotate the data
-        simdata_annotated = add_prog_off_annotations(simdata=simdata)
+        # Load the data
+        adata = load_data(n_obs=n)
 
         # Load the corresponding GRN
         grn_path = os.path.join(SAVE_PATH, 'grn_inf', f'grn_num_cells_{n}.csv')
@@ -438,15 +423,17 @@ def scalability_switchtfi():
         grn_num_cells[['TF', 'target']] = grn_num_cells[['TF', 'target']].astype(str)
 
         # Runs step-wise analysis
-        res_df_align, (simdata_aligned, grn_aligned) = scalability_wrapper(
+        res_df_align, (adata_aligned, grn_aligned) = scalability_wrapper(
             function=align_anndata_grn,
-            function_params={'adata': simdata_annotated, 'grn': grn_num_cells},
+            function_params={'adata': adata, 'grn': grn_num_cells},
         )
+
+        # Todo: imputation
 
         res_df_weights, grn_weighted = scalability_wrapper(
             function=calculate_weights,
             function_params={
-                'adata': simdata_aligned,
+                'adata': adata_aligned,
                 'grn': grn_aligned,
                 'layer_key': None,
                 'n_cell_pruning_params': None,
@@ -457,7 +444,7 @@ def scalability_switchtfi():
         res_df_pvalues, grn_pval = scalability_wrapper(
             function=compute_corrected_pvalues,
             function_params={
-                'adata': simdata_aligned,
+                'adata': adata_aligned,
                 'grn': grn_weighted,
                 'method': 'wy',
                 'clustering_obs_key': 'prog_off',
@@ -547,9 +534,15 @@ def scalability_cellrank():
         gpcca = cr.estimators.GPCCA(cr_kernel)
 
         gpcca.compute_schur()
-        gpcca.compute_macrostates(cluster_key='prog_off', n_states=2)
-        gpcca.set_initial_states(states='prog')
-        gpcca.set_terminal_states(states='off')
+
+        # Cannot use arbitrary annotations since CellRank will crash
+        # gpcca.compute_macrostates(cluster_key='prog_off', n_states=2)
+        # gpcca.set_initial_states(states='prog')
+        # gpcca.set_terminal_states(states='off')
+
+        gpcca.compute_macrostates()
+        gpcca.predict_initial_states(allow_overlap=True)
+        gpcca.predict_terminal_states(allow_overlap=True)
 
         return gpcca
 
@@ -564,21 +557,16 @@ def scalability_cellrank():
 
     def uncover_driver_genes(cr_estimator: cr.estimators.GPCCA) -> Tuple[pd.DataFrame, cr.estimators.GPCCA]:
         cr_estimator.compute_eigendecomposition()
-        res_df = cr_estimator.compute_lineage_drivers(cluster_key='clusters')
+        driver_genes = cr_estimator.compute_lineage_drivers(cluster_key='clusters')
 
-        return res_df, cr_estimator
+        return driver_genes, cr_estimator
 
 
     # Warmup run to compile functions before the initial run
-    if not TEST:
-        simdata_warmup = load_data(n_obs=200)
-    else:
-        simdata_warmup = scv.datasets.simulation(n_obs=200, n_vars=NUM_GENES, random_seed=42)
-    simdata_warmup = simdata_warmup[:, 0:400].copy()
-    simdata_warmup_annotated = add_prog_off_annotations(simdata=simdata_warmup)
+    adata_warmup = load_data(n_obs=200)
 
-    simdata_warmup_velo = compute_rna_velocity(data=simdata_warmup_annotated)
-    velo_kernel = compute_rna_velo_transition_matrix(data=simdata_warmup_velo)
+    adata_warmup_velo = compute_rna_velocity(data=adata_warmup)
+    velo_kernel = compute_rna_velo_transition_matrix(data=adata_warmup_velo)
     estimator = identify_initial_terminal_states(cr_kernel=velo_kernel)
     estimator_prob = estimate_fate_probabilities(cr_estimator=estimator)
     uncover_driver_genes(cr_estimator=estimator_prob)
@@ -588,24 +576,22 @@ def scalability_cellrank():
 
     for i, n in enumerate(NUM_CELLS):
 
-        # Load the simulated data
-        if not TEST:
-            simdata = load_data(n_obs=n)
-        else:
-            simdata = scv.datasets.simulation(n_obs=n, n_vars=NUM_GENES, random_seed=42)
-
-        # Annotate the data
-        simdata_annotated = add_prog_off_annotations(simdata=simdata)
+        # Load the data and do basic processing
+        adata = load_data(n_obs=n)
+        # prog_off_anno = adata.obs['prog_off'].to_numpy()
+        # adata.obs['prog_off'] = pd.Categorical(prog_off_anno, categories=['prog', 'off'])
+        sc.pp.normalize_per_cell(adata)
+        sc.pp.log1p(adata)
 
         # Runs step-wise analysis
-        res_df_rna_velo, simdata_df_rna_velo = scalability_wrapper(
+        res_df_rna_velo, adata_rna_velo = scalability_wrapper(
             function=compute_rna_velocity,
-            function_params={'data': simdata_annotated},
+            function_params={'data': adata},
         )
 
         res_df_trans_matrix, velocity_kernel = scalability_wrapper(
             function=compute_rna_velo_transition_matrix,
-            function_params={'data': simdata_df_rna_velo},
+            function_params={'data': adata_rna_velo},
         )
 
         res_df_terminal_states, cr_estim = scalability_wrapper(
@@ -637,8 +623,6 @@ def scalability_cellrank():
         res_df = pd.concat(res_dfs, axis=0, ignore_index=True)
 
         res_df.to_csv(os.path.join(SAVE_PATH, 'cellrank_fine_grained.csv'))
-
-        # summary_df = res_df.groupby(['n_cells'], as_index=False).sum(numeric_only=True)
 
         summary_df = (
             res_df
@@ -715,35 +699,29 @@ def scalability_splicejac():
     res_dfs = []
     for i, n in enumerate(NUM_CELLS):
 
-        # Load the simulated data
-        if not TEST:
-            simdata = load_data(n_obs=n)
-        else:
-            simdata = scv.datasets.simulation(n_obs=n, n_vars=NUM_GENES, random_seed=42)
-
-        # Annotate the data
-        simdata_annotated = add_prog_off_annotations(simdata=simdata)
-        simdata_annotated.obs['clusters'] = simdata_annotated.obs['prog_off'].copy()
+        # Load the data
+        adata = load_data(n_obs=n)
+        adata.obs['clusters'] = adata.obs['prog_off'].copy()
 
         # Runs step-wise analysis
-        res_df_hvg, simdata_hvg_subset = scalability_wrapper(
+        res_df_hvg, adata_hvg_subset = scalability_wrapper(
             function=compute_hvgs_and_subset,
-            function_params={'data': simdata_annotated},
+            function_params={'data': adata},
         )
 
-        res_df_rna_velo, simdata_rna_velo = scalability_wrapper(
+        res_df_rna_velo, adata_rna_velo = scalability_wrapper(
             function=compute_rna_velocity,
-            function_params={'data': simdata_hvg_subset},
+            function_params={'data': adata_hvg_subset},
         )
 
-        res_df_grn_inf, simdata_grn = scalability_wrapper(
+        res_df_grn_inf, adata_grn = scalability_wrapper(
             function=infer_splicejac_grn,
-            function_params={'data': simdata_rna_velo},
+            function_params={'data': adata_rna_velo},
         )
 
         res_df_transition, _ = scalability_wrapper(
             function=get_splicejac_transition_genes,
-            function_params={'data': simdata_grn},
+            function_params={'data': adata_grn},
         )
 
         res_df_subs = [
@@ -811,16 +789,8 @@ def scalability_drivaer():
     res_dfs = []
     for i, n in enumerate(NUM_CELLS):
 
-        # Load the simulated data
-        if not TEST:
-            simdata = load_data(n_obs=n)
-        else:
-            data_matrix = np.random.randint(0, 100, size=(n, NUM_GENES))
-            simdata = sc.AnnData(data_matrix, obs=[str(j) for j in range(n)], var=[str(j) for j in range(NUM_GENES)])
-
-        # Annotate the data
-        simdata_annotated = add_prog_off_annotations(simdata=simdata)
-        simdata_annotated.obs['clusters'] = simdata_annotated.obs['prog_off'].copy()
+        # Load the data
+        adata = load_data(n_obs=n)
 
         # Load the corresponding GRN
         grn_path = os.path.join(SAVE_PATH, 'grn_inf', f'grn_num_cells_{n}.csv')
@@ -830,7 +800,7 @@ def scalability_drivaer():
         # Runs DrivAER analysis
         current_res_df, _ = scalability_wrapper(
             function=drivaer_inference,
-            function_params={'data': simdata_annotated, 'grn': grn_num_cells},
+            function_params={'data': adata, 'grn': grn_num_cells},
             track_gpu=True,
         )
 
@@ -853,7 +823,7 @@ if __name__ == '__main__':
     parser.add_argument(
         '-m', '--method',
         type=str,
-        choices=['pre', 'grn_inf', 'switchtfi', 'cellrank', 'splicejac', 'drivaer'],
+        choices=['data', 'grn_inf', 'switchtfi', 'cellrank', 'splicejac', 'drivaer'],
         default='switchtfi',
         help='Method for which to run the analysis for: "grn_inf", "switchtfi", "splicejac", or "drivaer"'
     )
@@ -878,8 +848,8 @@ if __name__ == '__main__':
         ):
             raise RuntimeError(f'Run GRN inference before running "{args.method}"')
 
-    if args.method == 'pre':
-        generate_data()
+    if args.method == 'data':
+        process_data()
     elif args.method == 'grn_inf':
         scalability_grn_inf()
     elif args.method == 'switchtfi':
