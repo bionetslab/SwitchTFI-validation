@@ -44,7 +44,7 @@ TEST = True
 NUM_GENES = 10000 if not TEST else 1000
 NUM_CELLS = [100, 500, 1000, 5000, 10000, 50000, 100000] if not TEST else [100, 200, 300]
 
-NUM_CELLS_GRN = 5000 if not TEST else 100
+NUM_CELLS_GRN = 1000 if not TEST else 100
 
 
 def process_data():
@@ -368,7 +368,6 @@ def scalability_grn_inf(subset_genes: bool = False):
     os.makedirs(save_path, exist_ok=True)
 
     # Run GRN inference varying numbers of cells
-    res_dfs = []
     for i, n in enumerate(NUM_CELLS):
 
         # Load the data and do basic processing
@@ -407,16 +406,10 @@ def scalability_grn_inf(subset_genes: bool = False):
 
         res_df['n_cells'] = [n] * res_df.shape[0]
 
-        res_dfs.append(res_df)
+        res_df.to_csv(os.path.join(SAVE_PATH, f'grn_inf{"_subset_genes" if subset_genes else ""}_{n}.csv'))
 
-        fn_grn = f'grn_num_cells_{n}{"_subset_genes" if subset_genes else ""}.csv'
+        fn_grn = f'grn{"_subset_genes" if subset_genes else ""}_{n}.csv'
         grn.to_csv(os.path.join(save_path, fn_grn))
-
-        res_df_joint = pd.concat(res_dfs, axis=0, ignore_index=True)
-
-        res_df_joint.to_csv(os.path.join(SAVE_PATH, f'grn_inf_{n}{"_subset_genes" if subset_genes else ""}.csv'))
-
-        print(res_df_joint)
 
 
 def scalability_switchtfi(subset_genes: bool = False):
@@ -430,7 +423,6 @@ def scalability_switchtfi(subset_genes: bool = False):
     from switchtfi.tf_ranking import rank_tfs
 
     # Run cellrank inference on varying numbers of cells
-    res_dfs = []
     for i, n in enumerate(NUM_CELLS):
 
         # Load the data and do basic processing
@@ -445,9 +437,9 @@ def scalability_switchtfi(subset_genes: bool = False):
             adata = adata[:, :num_genes].copy()
 
         # Load the corresponding GRN
-        grn_path = os.path.join(SAVE_PATH, 'grn_inf', f'grn_num_cells_{n}.csv')
+        fn_grn = f'grn{"_subset_genes" if subset_genes else ""}_{n}.csv'
+        grn_path = os.path.join(SAVE_PATH, 'grn_inf', fn_grn)
         grn_num_cells = pd.read_csv(grn_path, index_col=0)
-        grn_num_cells[['TF', 'target']] = grn_num_cells[['TF', 'target']].astype(str)
 
         # Runs step-wise analysis
         res_df_align, (adata_aligned, grn_aligned) = scalability_wrapper(
@@ -512,20 +504,16 @@ def scalability_switchtfi(subset_genes: bool = False):
             },
         )
 
-        res_df_subs = [
+        res_dfs_sub = [
             res_df_align, res_df_imputation, res_df_weights, res_df_pvalues, res_df_pruning, res_df_tf_ranking
         ]
-        res_df_sub = pd.concat(res_df_subs, axis=0, ignore_index=True)
+        res_df = pd.concat(res_dfs_sub, axis=0, ignore_index=True)
 
-        res_df_sub['n_cells'] = [n] * 6
+        res_df['n_cells'] = [n] * 6
 
-        res_df_sub['alg_step'] = ['align', 'impute', 'weight', 'pvalue', 'prune', 'rank_tfs']
+        res_df['alg_step'] = ['align', 'impute', 'weight', 'pvalue', 'prune', 'rank_tfs']
 
-        res_dfs.append(res_df_sub)
-
-        res_df = pd.concat(res_dfs, axis=0, ignore_index=True)
-
-        fn_fg = f'switchtfi_fine_grained_{n}{"_subset_genes" if subset_genes else ""}.csv'
+        fn_fg = f'switchtfi_fine_grained{"_subset_genes" if subset_genes else ""}_{n}.csv'
         res_df.to_csv(os.path.join(SAVE_PATH, fn_fg))
 
         summary_df = (
@@ -535,12 +523,8 @@ def scalability_switchtfi(subset_genes: bool = False):
             .sum(min_count=1)
         )
 
-        fn = f'switchtfi_{n}{"_subset_genes" if subset_genes else ""}.csv'
+        fn = f'switchtfi{"_subset_genes" if subset_genes else ""}_{n}.csv'
         summary_df.to_csv(os.path.join(SAVE_PATH, fn))
-
-        print(res_df)
-
-        print(summary_df)
 
 
 def scalability_cellrank(subset_genes: bool = False):
@@ -620,8 +604,6 @@ def scalability_cellrank(subset_genes: bool = False):
     uncover_driver_genes(cr_estimator=estimator_prob)
 
     # Run cellrank inference on varying numbers of cells
-    res_dfs = []
-
     for i, n in enumerate(NUM_CELLS):
 
         # Load the data and do basic processing
@@ -661,20 +643,16 @@ def scalability_cellrank(subset_genes: bool = False):
             function_params={'cr_estimator': cr_estimator_fate_probs},
         )
 
-        res_df_subs = [
+        res_dfs_sub = [
             res_df_rna_velo, res_df_trans_matrix, res_df_terminal_states, res_df_fate_probs, res_df_driver_genes
         ]
-        res_df_sub = pd.concat(res_df_subs, axis=0, ignore_index=True)
+        res_df = pd.concat(res_dfs_sub, axis=0, ignore_index=True)
 
-        res_df_sub['n_cells'] = [n] * 5
+        res_df['n_cells'] = [n] * 5
 
-        res_df_sub['alg_step'] = ['rna_velo', 'trans_matrix', 'terminal_states', 'fate_probs', 'driver_genes']
+        res_df['alg_step'] = ['rna_velo', 'trans_matrix', 'terminal_states', 'fate_probs', 'driver_genes']
 
-        res_dfs.append(res_df_sub)
-
-        res_df = pd.concat(res_dfs, axis=0, ignore_index=True)
-
-        fn_fg = f'cellrank_fine_grained_{n}{"_subset_genes" if subset_genes else ""}.csv'
+        fn_fg = f'cellrank_fine_grained{"_subset_genes" if subset_genes else ""}_{n}.csv'
         res_df.to_csv(os.path.join(SAVE_PATH, fn_fg))
 
         summary_df = (
@@ -684,12 +662,8 @@ def scalability_cellrank(subset_genes: bool = False):
             .sum(min_count=1)
         )
 
-        fn = f'cellrank_{n}{"_subset_genes" if subset_genes else ""}.csv'
+        fn = f'cellrank{"_subset_genes" if subset_genes else ""}_{n}.csv'
         summary_df.to_csv(os.path.join(SAVE_PATH, fn))
-
-        print(res_df)
-
-        print(summary_df)
 
 
 def scalability_splicejac():
@@ -749,7 +723,6 @@ def scalability_splicejac():
 
 
     # Run SpliceJAC inference on varying numbers of cells
-    res_dfs = []
     for i, n in enumerate(NUM_CELLS):
 
         # Load the data and do basic processing
@@ -779,21 +752,17 @@ def scalability_splicejac():
             function_params={'data': adata_grn},
         )
 
-        res_df_subs = [
+        res_dfs_sub = [
             res_df_hvg, res_df_rna_velo, res_df_grn_inf, res_df_transition
         ]
-        res_df_sub = pd.concat(res_df_subs, axis=0, ignore_index=True)
+        res_df = pd.concat(res_dfs_sub, axis=0, ignore_index=True)
 
-        res_df_sub['n_cells'] = [n] * 4
+        res_df['n_cells'] = [n] * 4
 
-        res_df_sub['alg_step'] = ['hvg_subset', 'rna_velo', 'grn_inf', 'transition']
+        res_df['alg_step'] = ['hvg_subset', 'rna_velo', 'grn_inf', 'transition']
 
-        res_dfs.append(res_df_sub)
-
-        res_df = pd.concat(res_dfs, axis=0, ignore_index=True)
-
-        gpu_cols = ['mem_peak_gpu', 'mem_avg_gpu', 'samples_gpu']
-        res_df[gpu_cols] = res_df[gpu_cols].astype('float64')
+        # gpu_cols = ['mem_peak_gpu', 'mem_avg_gpu', 'samples_gpu']
+        # res_df_sub[gpu_cols] = res_df_sub[gpu_cols].astype('float64')
 
         res_df.to_csv(os.path.join(SAVE_PATH, f'splicejac_fine_grained_{n}.csv'))
 
@@ -805,10 +774,6 @@ def scalability_splicejac():
         )
 
         summary_df.to_csv(os.path.join(SAVE_PATH, f'splicejac_{n}.csv'))
-
-        print(res_df)
-
-        print(summary_df)
 
 
 def scalability_drivaer(subset_genes: bool = False):
@@ -840,7 +805,6 @@ def scalability_drivaer(subset_genes: bool = False):
 
 
     # Run DrivAER inference on varying numbers of cells
-    res_dfs = []
     for i, n in enumerate(NUM_CELLS):
 
         # Load the data
@@ -853,24 +817,20 @@ def scalability_drivaer(subset_genes: bool = False):
             adata = adata[:, :num_genes].copy()
 
         # Load the corresponding GRN
-        grn_path = os.path.join(SAVE_PATH, 'grn_inf', f'grn_num_cells_{n}.csv')
+        grn_path = os.path.join(SAVE_PATH, 'grn_inf', f'grn{"_subset_genes" if subset_genes else ""}_{n}.csv')
         grn_num_cells = pd.read_csv(grn_path, index_col=0)
         grn_num_cells[['TF', 'target']] = grn_num_cells[['TF', 'target']].astype(str)
 
         # Runs DrivAER analysis
-        current_res_df, _ = scalability_wrapper(
+        res_df, _ = scalability_wrapper(
             function=drivaer_inference,
             function_params={'data': adata, 'grn': grn_num_cells},
             track_gpu=True,
         )
 
-        current_res_df['n_cells'] = [n]
+        res_df['n_cells'] = [n]
 
-        res_dfs.append(current_res_df)
-
-        res_df = pd.concat(res_dfs, axis=0, ignore_index=True)
-
-        fn = f'drivaer_{n}{"_subset_genes" if subset_genes else ""}.csv'
+        fn = f'drivaer{"_subset_genes" if subset_genes else ""}_{n}.csv'
         res_df.to_csv(os.path.join(SAVE_PATH, fn))
 
 
