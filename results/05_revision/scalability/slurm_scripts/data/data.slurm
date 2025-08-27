@@ -7,7 +7,7 @@
 #SBATCH --mem=128G
 #SBATCH --error=%x_%j.error
 #SBATCH --output=%x_%j.log
-#SBATCH --job-name=data_gen
+#SBATCH --job-name=data
 #SBATCH --export=NONE
 
 unset SLURM_EXPORT_ENV
