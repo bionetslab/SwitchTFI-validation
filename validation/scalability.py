@@ -45,6 +45,7 @@ NUM_GENES = 10000 if not TEST else 1000
 NUM_CELLS = [100, 500, 1000, 5000, 10000, 50000, 100000] if not TEST else [100, 200, 300]
 
 NUM_CELLS_GRN = 1000 if not TEST else 100
+NUM_EDGES_GRN = [100, 500, 1000, 5000, 10000, 50000] if not TEST else [100, 200, 300]
 
 
 def process_data():
@@ -760,9 +761,8 @@ def scalability_splicejac():
         res_df['n_cells'] = [n] * 4
 
         res_df['alg_step'] = ['hvg_subset', 'rna_velo', 'grn_inf', 'transition']
-
-        # gpu_cols = ['mem_peak_gpu', 'mem_avg_gpu', 'samples_gpu']
-        # res_df_sub[gpu_cols] = res_df_sub[gpu_cols].astype('float64')
+        gpu_cols = ['mem_peak_gpu', 'mem_avg_gpu', 'samples_gpu']
+        res_df[gpu_cols] = res_df[gpu_cols].astype('float64')
 
         res_df.to_csv(os.path.join(SAVE_PATH, f'splicejac_fine_grained_{n}.csv'))
 
@@ -821,7 +821,7 @@ def scalability_drivaer(subset_genes: bool = False):
         grn_num_cells = pd.read_csv(grn_path, index_col=0)
         grn_num_cells[['TF', 'target']] = grn_num_cells[['TF', 'target']].astype(str)
 
-        # Runs DrivAER analysis
+        # Run DrivAER analysis
         res_df, _ = scalability_wrapper(
             function=drivaer_inference,
             function_params={'data': adata, 'grn': grn_num_cells},
@@ -836,29 +836,275 @@ def scalability_drivaer(subset_genes: bool = False):
 
 def scalability_switchtfi_grn():
 
+    import sys
+    sys.path.append(os.path.abspath('..'))
+    import scanpy.external as sce
+    from switchtfi.fit import align_anndata_grn
+    from switchtfi.weight_fitting import calculate_weights
+    from switchtfi.pvalue_calculation import compute_corrected_pvalues, remove_insignificant_edges
+    from switchtfi.tf_ranking import rank_tfs
 
-    # Load the data and do basic processing
-    adata = load_data(n_obs=NUM_CELLS_GRN)
-    sc.pp.normalize_per_cell(adata)
-    sc.pp.log1p(adata)
+    for n in NUM_EDGES_GRN:
 
-    if subset_genes:
-        # Set number of genes based on smallest cluster size
-        min_cluster_size = adata.obs['prog_off'].value_counts().min()
-        num_genes = min(adata.shape[1], int(min_cluster_size * 0.9))
-        adata = adata[:, :num_genes].copy()
+        # Load the data and do basic processing
+        adata = load_data(n_obs=NUM_CELLS_GRN)
+        sc.pp.normalize_per_cell(adata)
+        sc.pp.log1p(adata)
 
-    # Load the corresponding GRN
-    grn_path = os.path.join(SAVE_PATH, 'grn_inf', f'grn_num_cells_{n}.csv')
-    grn_num_cells = pd.read_csv(grn_path, index_col=0)
-    grn_num_cells[['TF', 'target']] = grn_num_cells[['TF', 'target']].astype(str)
-    # Todo
-    pass
+        # Load the corresponding GRN
+        grn_path = os.path.join(SAVE_PATH, 'grn_inf', f'grn_{NUM_CELLS_GRN}.csv')
+        grn = pd.read_csv(grn_path, index_col=0)
+
+        num_edges = grn.shape[0]
+
+        n_target = min(n, num_edges)
+
+        grn_downsampled = grn.sample(n=n_target, axis=0, random_state=42).reset_index(drop=True)
+
+        # Runs step-wise analysis
+        res_df_align, (adata_aligned, grn_aligned) = scalability_wrapper(
+            function=align_anndata_grn,
+            function_params={'adata': adata, 'grn': grn_downsampled},
+        )
+
+        res_df_imputation, adata_imputed = scalability_wrapper(
+            function=sce.pp.magic,
+            function_params={
+                'adata': adata_aligned,
+                'name_list': 'all_genes',
+                'knn': 5,
+                'decay': 1,
+                'knn_max': None,
+                't': 1,
+                'n_pca': 100,
+                'solver': 'exact',
+                'knn_dist': 'euclidean',
+                'random_state': 42,
+                'n_jobs': 1,
+                'verbose': True,
+                'copy': True,
+            },
+        )
+
+        res_df_weights, grn_weighted = scalability_wrapper(
+            function=calculate_weights,
+            function_params={
+                'adata': adata_imputed,
+                'grn': grn_aligned,
+                'layer_key': None,
+                'n_cell_pruning_params': None,
+                'clustering_obs_key': 'prog_off'
+            },
+        )
+
+        res_df_pvalues, grn_pval = scalability_wrapper(
+            function=compute_corrected_pvalues,
+            function_params={
+                'adata': adata_aligned,
+                'grn': grn_weighted,
+                'method': 'wy',
+                'clustering_obs_key': 'prog_off',
+            },
+        )
+
+        res_df_pruning, transition_grn = scalability_wrapper(
+            function=remove_insignificant_edges,
+            function_params={
+                'grn': grn_pval,
+                'alpha': 0.05,
+                'p_value_key': 'pvals_wy',
+            },
+        )
+
+        res_df_tf_ranking, ranked_tfs = scalability_wrapper(
+            function=rank_tfs,
+            function_params={
+                'grn': transition_grn,
+                'centrality_measure': 'pagerank',
+            },
+        )
+
+        res_dfs_sub = [
+            res_df_align, res_df_imputation, res_df_weights, res_df_pvalues, res_df_pruning, res_df_tf_ranking
+        ]
+        res_df = pd.concat(res_dfs_sub, axis=0, ignore_index=True)
+
+        res_df['n_cells'] = [n] * 6
+
+        res_df['alg_step'] = ['align', 'impute', 'weight', 'pvalue', 'prune', 'rank_tfs']
+
+        fn_fg = f'switchtfi_fine_grained_grn_size_{n}.csv'
+        res_df.to_csv(os.path.join(SAVE_PATH, fn_fg))
+
+        summary_df = (
+            res_df
+            .drop(columns=['alg_step'])
+            .groupby('n_cells', as_index=False)
+            .sum(min_count=1)
+        )
+
+        fn = f'switchtfi_grn_size_{n}.csv'
+        summary_df.to_csv(os.path.join(SAVE_PATH, fn))
+
+        if n_target == num_edges:
+            break
 
 
 def scalability_drivaer_grn():
-    # Todo
-    pass
+
+    import DrivAER as dv
+    from drivaer_workflow import get_tf_target_pdseries
+
+    def drivaer_inference(data: sc.AnnData, grn: pd.DataFrame) -> pd.DataFrame:
+        tf_to_target_list = get_tf_target_pdseries(grn=grn, tf_target_keys=('TF', 'target'))
+
+        low_dim_rep, relevance, genes = dv.calc_relevance(
+            count=data,
+            pheno=data.obs['prog_off'],
+            tf_targets=tf_to_target_list,
+            min_targets=1,  # Set min targets to 1 here for fair comparison
+            ae_type='nb-conddisp',
+            epochs=50,
+            early_stop=3,
+            hidden_size=(8, 2, 8),
+            verbose=True
+        )
+
+        driver_genes = pd.DataFrame({'gene': genes, 'relevance': relevance})
+        driver_genes.sort_values(by='relevance', ascending=False, inplace=True, ignore_index=True)
+
+        return driver_genes
+
+    for n in NUM_EDGES_GRN:
+        # Load the data and do basic processing
+        adata = load_data(n_obs=NUM_CELLS_GRN)
+
+        # Load the corresponding GRN
+        grn_path = os.path.join(SAVE_PATH, 'grn_inf', f'grn_{NUM_CELLS_GRN}.csv')
+        grn = pd.read_csv(grn_path, index_col=0)
+
+        num_edges = grn.shape[0]
+
+        n_target = min(n, num_edges)
+
+        grn_downsampled = grn.sample(n=n_target, axis=0, random_state=42).reset_index(drop=True)
+
+        # Run DrivAER analysis
+        res_df, _ = scalability_wrapper(
+            function=drivaer_inference,
+            function_params={'data': adata, 'grn': grn_downsampled},
+            track_gpu=True,
+        )
+
+        res_df['n_cells'] = [n]
+
+        fn = f'drivaer_grn_size_{n}.csv'
+        res_df.to_csv(os.path.join(SAVE_PATH, fn))
+
+
+def aggregate_results():
+
+    save_path = os.path.join(SAVE_PATH, 'aggregated_results')
+    os.makedirs(save_path, exist_ok=True)
+
+    modes = ['base', 'subset_genes']
+    methods = ['grn_inf', 'switchtfi', 'cellrank', 'splicejac', 'drivaer']
+
+    # Aggregate num_cell results
+    for mode in modes:
+
+        mode_str = ('_' + mode) if mode != 'base' else ''
+
+        res_dfs_method = []
+        for method in methods:
+
+            # Load the results for the respective method, aggregate and save
+            res_dfs_n = []
+            for n in NUM_CELLS:
+                fn = f'{method}{mode_str}_{n}.csv'
+                fp = os.path.join(SAVE_PATH, fn)
+                try:
+                    res_df_n = pd.read_csv(fp, index_col=0)
+                    res_dfs_n.append(res_df_n)
+                except FileNotFoundError:
+                    print(f'File {fn} not found')
+                    continue
+
+            if res_dfs_n:
+                res_df_n = pd.concat(res_dfs_n, axis=0, ignore_index=True).reset_index(drop=True)
+                res_df_n['method'] = method
+                res_dfs_method.append(res_df_n)
+
+                save_fn = f'{method}{mode_str}.csv'
+                res_df_n.to_csv(os.path.join(save_path, save_fn))
+            else:
+                print(f'No results found for method: {method}, mode: {mode_str}, skipping')
+
+            # Load the fine-grained results for the respective method, aggregate and save
+            if method not in {'grn_inf', 'drivaer'}:
+                res_dfs_fine_grained_n = []
+                for n in NUM_CELLS:
+                    fn = f'{method}_fine_grained{mode_str}_{n}.csv'
+                    fp = os.path.join(SAVE_PATH, fn)
+                    try:
+                        res_df_fine_grained_n = pd.read_csv(fp, index_col=0)
+                        res_dfs_fine_grained_n.append(res_df_fine_grained_n)
+                    except FileNotFoundError:
+                        print(f'File {fn} not found')
+                        continue
+
+                if res_dfs_fine_grained_n:
+                    res_df_fine_grained_method = (
+                        pd.concat(res_dfs_fine_grained_n, axis=0, ignore_index=True)
+                        .reset_index(drop=True)
+                    )
+
+                    mode_str = ('_' + mode) if mode != 'base' else ''
+                    save_fn = f'{method}_fine_grained{mode_str}.csv'
+                    res_df_fine_grained_method.to_csv(os.path.join(save_path, save_fn))
+                else:
+                    print(f'No results found for method: {method}, mode: {mode_str}, skipping')
+
+        res_df_method = pd.concat(res_dfs_method, axis=0, ignore_index=True).reset_index(drop=True)
+        save_fn = f'aggregated_results{mode_str}.csv'
+        res_df_method.to_csv(os.path.join(save_path, save_fn))
+
+    # ### Aggregate GRN size results
+    methods_grn = ['switchtfi', 'drivaer']
+
+    res_dfs_grn_size_method = []
+    for method in methods_grn:
+        res_dfs_n_edges = []
+        res_dfs_fine_grained_n_edges = []
+        for n in NUM_EDGES_GRN:
+            fn = f'{method}_grn_size_{n}.csv'
+            try:
+                res_df_n_edges_n = pd.read_csv(os.path.join(SAVE_PATH, fn), index_col=0)
+                res_dfs_n_edges.append(res_df_n_edges_n)
+            except FileNotFoundError:
+                print(f'File {fn} not found')
+                continue
+
+            if method != 'drivaer':
+                fn_fg = f'{method}_fine_grained_grn_size_{n}.csv'
+                res_df_fine_grained_n_edges_n = pd.read_csv(os.path.join(SAVE_PATH, fn_fg), index_col=0)
+                res_dfs_fine_grained_n_edges.append(res_df_fine_grained_n_edges_n)
+
+        if res_dfs_n_edges:
+            res_df_n_edges = pd.concat(res_dfs_n_edges, axis=0, ignore_index=True)
+            res_df_n_edges['method'] = method
+            res_dfs_grn_size_method.append(res_df_n_edges)
+            res_df_n_edges.to_csv(os.path.join(save_path, f'{method}_grn_size.csv'))
+
+            if res_dfs_fine_grained_n_edges:
+                res_df_fine_grained_n_edges = pd.concat(res_dfs_fine_grained_n_edges, axis=0, ignore_index=True)
+                res_df_fine_grained_n_edges.to_csv(os.path.join(save_path, f'{method}_fine_grained_grn_size.csv'))
+        else:
+            print(f'No results found for method: {method}, skipping')
+
+    res_df_grn_size_method = pd.concat(res_dfs_grn_size_method, axis=0, ignore_index=True)
+    res_df_grn_size_method.to_csv(os.path.join(save_path, 'aggregated_results_grn_size.csv'))
+
 
 
 if __name__ == '__main__':
@@ -870,11 +1116,16 @@ if __name__ == '__main__':
     parser.add_argument(
         '-m', '--method',
         type=str,
-        choices=['data', 'grn_inf', 'switchtfi', 'cellrank', 'splicejac', 'drivaer', 'switchtfi_grn', 'drivaer_grn'],
+        choices=[
+            'data',
+            'grn_inf', 'switchtfi', 'cellrank', 'splicejac', 'drivaer',
+            'switchtfi_grn', 'drivaer_grn',
+            'results'
+        ],
         default='switchtfi',
         help=(
             'Method for which to run the analysis for: '
-            '"grn_inf", "switchtfi", "splicejac", "drivaer", "switchtfi_grn", or "drivaer_grn"'
+            '"grn_inf", "switchtfi", "splicejac", "drivaer", "switchtfi_grn", "drivaer_grn", or "results"'
         ),
     )
 
@@ -884,10 +1135,26 @@ if __name__ == '__main__':
         help="If set, subset the number of genes according to spliceJAC's specifications. Defaults to False."
     )
 
+    parser.add_argument(
+        '-nc', '--num_cells',
+        type=int,
+        default=None,
+        help='Number of cells to include in the analysis. Optional, overwrites the global NUM_CELLS variable.'
+    )
+
+    parser.add_argument(
+        '-ne', '--num_edges',
+        type=int,
+        default=None,
+        help='Number of edges to include in the analysis. Optional, overwrites the global NUM_EDGES_GRN variable.'
+    )
+
     args = parser.parse_args()
 
     m = args.method
     sg = args.subset_genes
+    nc = args.num_cells
+    ne = args.num_edges
 
     if m in {'grn_inf', 'switchtfi', 'cellrank', 'splicejac', 'drivaer', 'switchtfi_grn', 'drivaer_grn'}:
         p = SAVE_PATH / 'data'
@@ -907,6 +1174,12 @@ if __name__ == '__main__':
         ):
             raise RuntimeError(f'Run GRN inference before running "{m}"')
 
+    if nc is not None:
+        NUM_CELLS = [nc, ]
+
+    if ne is not None:
+        NUM_EDGES_GRN = [ne, ]
+
     if m == 'data':
         process_data()
     elif m == 'grn_inf':
@@ -916,14 +1189,22 @@ if __name__ == '__main__':
     elif m == 'cellrank':
         scalability_cellrank(subset_genes=sg)
     elif m == 'splicejac':
-        scalability_splicejac(subset_genes=sg)
+        scalability_splicejac()
     elif m == 'drivaer':
         scalability_drivaer(subset_genes=sg)
     elif m == 'switchtfi_grn':
         scalability_switchtfi_grn()
-    else:  # 'drivaer_grn'
+    elif m == 'drivaer_grn':
         scalability_drivaer_grn()
-
+    else:  # 'results'
+        aggregate_results()
 
     print('done')
+
+# Todo:
+#  - data generation
+#  - ALL GENES: grn inf, cellrank, splicejac, drivaer, switchtfi
+#  - SUBSET GENES: grn inf, cellrank, [splicejac], drivaer, switchtfi
+#  - GRN SIZE: drivaer, switchtfi
+#  -
 
