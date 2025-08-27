@@ -1,0 +1,117 @@
+  0%|          | 0/200 [00:00<?, ?cell/s]100%|██████████| 200/200 [00:00<00:00, 2760.89cell/s]
+  0%|          | 0/200 [00:00<?, ?cell/s]100%|██████████| 200/200 [00:00<00:00, 5256.78cell/s]
+WARNING: There is only `1` terminal state, all cells will have probability `1` of going there
+  0%|          | 0/1 [00:00<?, ?/s]100%|██████████| 1/1 [00:00<00:00, 29.67/s]
+WARNING: There is only 1 lineage present. Using stationary distribution instead
+  0%|          | 0/100 [00:00<?, ?cell/s]100%|██████████| 100/100 [00:00<00:00, 1427.58cell/s]
+[0]PETSC ERROR: ------------------------------------------------------------------------
+[0]PETSC ERROR: Caught signal number 13 Broken Pipe: Likely while reading or writing to a socket
+[0]PETSC ERROR: Try option -start_in_debugger or -on_error_attach_debugger
+[0]PETSC ERROR: or see https://petsc.org/release/faq/#valgrind and https://petsc.org/release/faq/
+[0]PETSC ERROR: configure using --with-debugging=yes, recompile, link, and run 
+[0]PETSC ERROR: to get more information on the crash.
+  0%|          | 0/100 [00:00<?, ?cell/s]100%|██████████| 100/100 [00:00<00:00, 1279.80cell/s]
+[0]PETSC ERROR: ------------------------------------------------------------------------
+[0]PETSC ERROR: Caught signal number 13 Broken Pipe: Likely while reading or writing to a socket
+[0]PETSC ERROR: Try option -start_in_debugger or -on_error_attach_debugger
+[0]PETSC ERROR: or see https://petsc.org/release/faq/#valgrind and https://petsc.org/release/faq/
+[0]PETSC ERROR: configure using --with-debugging=yes, recompile, link, and run 
+[0]PETSC ERROR: to get more information on the crash.
+Abort(59) on node 0 (rank 0 in comm 0): application called MPI_Abort(MPI_COMM_WORLD, 59) - process 0
+/home/woody/iwbn/iwbn107h/software/private/conda/envs/switchtfi_val/lib/python3.10/site-packages/pygpcca/_sorted_schur.py:279: UserWarning: The number of converged eigenpairs is `11`, but `20` were requested.
+  warnings.warn(f"The number of converged eigenpairs is `{nconv}`, but `{k}` were requested.")
+/home/woody/iwbn/iwbn107h/software/private/conda/envs/switchtfi_val/lib/python3.10/site-packages/pygpcca/_sorted_schur.py:179: UserWarning: According to `scipy.linalg.subspace_angles()`, the dimension of the column space of P*Q and/or Q*L is not equal to m (L is a diagonal matrix with the sorted top eigenvalues on the diagonal), method=`krylov`.
+  warnings.warn(
+/home/woody/iwbn/iwbn107h/software/private/conda/envs/switchtfi_val/lib/python3.10/site-packages/pygpcca/_gpcca.py:317: UserWarning: According to `scipy.linalg.subspace_angles()` the dimension of the column spaces of P*X and/or X*R is not equal to 20.
+  warnings.warn(
+WARNING: There is only `1` terminal state, all cells will have probability `1` of going there
+  0%|          | 0/1 [00:00<?, ?/s]100%|██████████| 1/1 [00:00<00:00, 33.23/s]
+[0]PETSC ERROR: ------------------------------------------------------------------------
+[0]PETSC ERROR: Caught signal number 13 Broken Pipe: Likely while reading or writing to a socket
+[0]PETSC ERROR: Try option -start_in_debugger or -on_error_attach_debugger
+[0]PETSC ERROR: or see https://petsc.org/release/faq/#valgrind and https://petsc.org/release/faq/
+[0]PETSC ERROR: configure using --with-debugging=yes, recompile, link, and run 
+[0]PETSC ERROR: to get more information on the crash.
+Abort(59) on node 0 (rank 0 in comm 0): application called MPI_Abort(MPI_COMM_WORLD, 59) - process 0
+WARNING: There is only 1 lineage present. Using stationary distribution instead
+[0]PETSC ERROR: ------------------------------------------------------------------------
+[0]PETSC ERROR: Caught signal number 13 Broken Pipe: Likely while reading or writing to a socket
+[0]PETSC ERROR: Try option -start_in_debugger or -on_error_attach_debugger
+[0]PETSC ERROR: or see https://petsc.org/release/faq/#valgrind and https://petsc.org/release/faq/
+[0]PETSC ERROR: configure using --with-debugging=yes, recompile, link, and run 
+[0]PETSC ERROR: to get more information on the crash.
+Abort(59) on node 0 (rank 0 in comm 0): application called MPI_Abort(MPI_COMM_WORLD, 59) - process 0
+  0%|          | 0/500 [00:00<?, ?cell/s] 12%|█▏        | 58/500 [00:00<00:00, 461.25cell/s] 27%|██▋       | 137/500 [00:00<00:00, 559.80cell/s] 44%|████▎     | 218/500 [00:00<00:00, 599.53cell/s] 59%|█████▊    | 293/500 [00:00<00:00, 400.90cell/s] 70%|███████   | 352/500 [00:00<00:00, 304.06cell/s] 80%|███████▉  | 399/500 [00:01<00:00, 268.65cell/s] 88%|████████▊ | 439/500 [00:01<00:00, 261.38cell/s] 95%|█████████▌| 476/500 [00:01<00:00, 246.26cell/s]100%|██████████| 500/500 [00:01<00:00, 300.19cell/s]
+[0]PETSC ERROR: ------------------------------------------------------------------------
+[0]PETSC ERROR: Caught signal number 13 Broken Pipe: Likely while reading or writing to a socket
+[0]PETSC ERROR: Try option -start_in_debugger or -on_error_attach_debugger
+[0]PETSC ERROR: or see https://petsc.org/release/faq/#valgrind and https://petsc.org/release/faq/
+[0]PETSC ERROR: configure using --with-debugging=yes, recompile, link, and run 
+[0]PETSC ERROR: to get more information on the crash.
+Abort(59) on node 0 (rank 0 in comm 0): application called MPI_Abort(MPI_COMM_WORLD, 59) - process 0
+  0%|          | 0/500 [00:00<?, ?cell/s]  3%|▎         | 13/500 [00:00<00:04, 102.96cell/s]  6%|▋         | 32/500 [00:00<00:03, 130.18cell/s] 11%|█         | 54/500 [00:00<00:02, 150.73cell/s] 16%|█▌        | 81/500 [00:00<00:02, 175.84cell/s] 22%|██▏       | 108/500 [00:00<00:02, 189.69cell/s] 27%|██▋       | 135/500 [00:00<00:01, 196.76cell/s] 33%|███▎      | 164/500 [00:00<00:01, 206.95cell/s] 39%|███▊      | 193/500 [00:01<00:01, 214.83cell/s] 44%|████▍     | 220/500 [00:01<00:01, 211.63cell/s] 50%|████▉     | 249/500 [00:01<00:01, 213.17cell/s] 56%|█████▌    | 278/500 [00:01<00:01, 217.76cell/s] 61%|██████▏   | 307/500 [00:01<00:00, 221.23cell/s] 67%|██████▋   | 337/500 [00:01<00:00, 225.45cell/s] 73%|███████▎  | 366/500 [00:01<00:00, 225.80cell/s] 79%|███████▉  | 395/500 [00:01<00:00, 221.57cell/s] 85%|████████▌ | 425/500 [00:02<00:00, 226.04cell/s] 91%|█████████ | 455/500 [00:02<00:00, 229.75cell/s] 97%|█████████▋| 485/500 [00:02<00:00, 231.71cell/s]100%|██████████| 500/500 [00:02<00:00, 211.06cell/s]
+[0]PETSC ERROR: ------------------------------------------------------------------------
+[0]PETSC ERROR: Caught signal number 13 Broken Pipe: Likely while reading or writing to a socket
+[0]PETSC ERROR: Try option -start_in_debugger or -on_error_attach_debugger
+[0]PETSC ERROR: or see https://petsc.org/release/faq/#valgrind and https://petsc.org/release/faq/
+[0]PETSC ERROR: configure using --with-debugging=yes, recompile, link, and run 
+[0]PETSC ERROR: to get more information on the crash.
+Abort(59) on node 0 (rank 0 in comm 0): application called MPI_Abort(MPI_COMM_WORLD, 59) - process 0
+WARNING: There is only `1` terminal state, all cells will have probability `1` of going there
+  0%|          | 0/1 [00:00<?, ?/s]100%|██████████| 1/1 [00:00<00:00, 16.05/s]
+[0]PETSC ERROR: ------------------------------------------------------------------------
+[0]PETSC ERROR: Caught signal number 13 Broken Pipe: Likely while reading or writing to a socket
+[0]PETSC ERROR: Try option -start_in_debugger or -on_error_attach_debugger
+[0]PETSC ERROR: or see https://petsc.org/release/faq/#valgrind and https://petsc.org/release/faq/
+[0]PETSC ERROR: configure using --with-debugging=yes, recompile, link, and run 
+[0]PETSC ERROR: to get more information on the crash.
+Abort(59) on node 0 (rank 0 in comm 0): application called MPI_Abort(MPI_COMM_WORLD, 59) - process 0
+WARNING: There is only 1 lineage present. Using stationary distribution instead
+[0]PETSC ERROR: ------------------------------------------------------------------------
+[0]PETSC ERROR: Caught signal number 13 Broken Pipe: Likely while reading or writing to a socket
+[0]PETSC ERROR: Try option -start_in_debugger or -on_error_attach_debugger
+[0]PETSC ERROR: or see https://petsc.org/release/faq/#valgrind and https://petsc.org/release/faq/
+[0]PETSC ERROR: configure using --with-debugging=yes, recompile, link, and run 
+[0]PETSC ERROR: to get more information on the crash.
+Abort(59) on node 0 (rank 0 in comm 0): application called MPI_Abort(MPI_COMM_WORLD, 59) - process 0
+  0%|          | 0/1000 [00:00<?, ?cell/s]  3%|▎         | 28/1000 [00:00<00:04, 222.64cell/s]  6%|▌         | 56/1000 [00:00<00:06, 152.36cell/s]  8%|▊         | 77/1000 [00:00<00:06, 145.39cell/s] 10%|▉         | 99/1000 [00:00<00:05, 153.85cell/s] 12%|█▏        | 122/1000 [00:00<00:05, 162.07cell/s] 14%|█▍        | 145/1000 [00:00<00:05, 168.25cell/s] 17%|█▋        | 170/1000 [00:01<00:04, 177.17cell/s] 20%|█▉        | 196/1000 [00:01<00:04, 181.95cell/s] 22%|██▏       | 223/1000 [00:01<00:04, 191.15cell/s] 25%|██▌       | 251/1000 [00:01<00:03, 200.17cell/s] 28%|██▊       | 279/1000 [00:01<00:03, 206.27cell/s] 31%|███       | 309/1000 [00:01<00:03, 215.78cell/s] 34%|███▍      | 338/1000 [00:01<00:03, 218.60cell/s] 37%|███▋      | 370/1000 [00:01<00:02, 229.54cell/s] 40%|███▉      | 399/1000 [00:02<00:02, 226.86cell/s] 43%|████▎     | 428/1000 [00:02<00:02, 200.73cell/s] 45%|████▌     | 454/1000 [00:02<00:02, 188.39cell/s] 48%|████▊     | 479/1000 [00:02<00:02, 184.74cell/s] 50%|█████     | 503/1000 [00:02<00:02, 177.52cell/s] 53%|█████▎    | 529/1000 [00:02<00:02, 183.83cell/s] 56%|█████▌    | 555/1000 [00:02<00:02, 189.46cell/s] 58%|█████▊    | 583/1000 [00:03<00:02, 198.37cell/s] 61%|██████    | 609/1000 [00:03<00:01, 199.69cell/s] 64%|██████▍   | 638/1000 [00:03<00:01, 207.57cell/s] 67%|██████▋   | 669/1000 [00:03<00:01, 217.53cell/s] 70%|██████▉   | 699/1000 [00:03<00:01, 222.93cell/s] 73%|███████▎  | 727/1000 [00:03<00:01, 209.94cell/s] 75%|███████▌  | 754/1000 [00:03<00:01, 195.32cell/s] 78%|███████▊  | 779/1000 [00:04<00:01, 192.41cell/s] 80%|████████  | 805/1000 [00:04<00:00, 195.47cell/s] 83%|████████▎ | 830/1000 [00:04<00:00, 196.61cell/s] 86%|████████▌ | 855/1000 [00:04<00:00, 195.64cell/s] 88%|████████▊ | 881/1000 [00:04<00:00, 193.42cell/s] 91%|█████████ | 910/1000 [00:04<00:00, 204.01cell/s] 94%|█████████▎| 937/1000 [00:04<00:00, 207.30cell/s] 96%|█████████▋| 964/1000 [00:04<00:00, 205.72cell/s] 99%|█████████▉| 990/1000 [00:05<00:00, 206.36cell/s]100%|██████████| 1000/1000 [00:05<00:00, 196.41cell/s]
+[0]PETSC ERROR: ------------------------------------------------------------------------
+[0]PETSC ERROR: Caught signal number 13 Broken Pipe: Likely while reading or writing to a socket
+[0]PETSC ERROR: Try option -start_in_debugger or -on_error_attach_debugger
+[0]PETSC ERROR: or see https://petsc.org/release/faq/#valgrind and https://petsc.org/release/faq/
+[0]PETSC ERROR: configure using --with-debugging=yes, recompile, link, and run 
+[0]PETSC ERROR: to get more information on the crash.
+Abort(59) on node 0 (rank 0 in comm 0): application called MPI_Abort(MPI_COMM_WORLD, 59) - process 0
+  0%|          | 0/1000 [00:00<?, ?cell/s]  0%|          | 4/1000 [00:00<00:31, 31.88cell/s]  2%|▏         | 17/1000 [00:00<00:13, 73.82cell/s]  4%|▎         | 36/1000 [00:00<00:08, 109.07cell/s]  6%|▌         | 58/1000 [00:00<00:07, 134.46cell/s]  8%|▊         | 83/1000 [00:00<00:05, 156.70cell/s] 11%|█         | 107/1000 [00:00<00:05, 168.02cell/s] 13%|█▎        | 133/1000 [00:00<00:04, 180.78cell/s] 16%|█▌        | 158/1000 [00:01<00:04, 185.34cell/s] 19%|█▊        | 187/1000 [00:01<00:04, 199.45cell/s] 22%|██▏       | 216/1000 [00:01<00:03, 202.48cell/s] 25%|██▍       | 246/1000 [00:01<00:03, 213.40cell/s] 28%|██▊       | 279/1000 [00:01<00:03, 227.74cell/s] 32%|███▏      | 316/1000 [00:01<00:02, 247.83cell/s] 35%|███▍      | 348/1000 [00:01<00:02, 240.80cell/s] 38%|███▊      | 379/1000 [00:01<00:02, 219.24cell/s] 41%|████      | 407/1000 [00:02<00:02, 201.07cell/s] 43%|████▎     | 433/1000 [00:02<00:02, 194.14cell/s] 46%|████▌     | 458/1000 [00:02<00:02, 187.25cell/s] 48%|████▊     | 482/1000 [00:02<00:02, 188.36cell/s] 51%|█████     | 506/1000 [00:02<00:02, 186.25cell/s] 53%|█████▎    | 533/1000 [00:02<00:02, 193.41cell/s] 56%|█████▌    | 561/1000 [00:02<00:02, 200.79cell/s] 59%|█████▉    | 590/1000 [00:03<00:01, 208.68cell/s] 62%|██████▏   | 622/1000 [00:03<00:01, 221.50cell/s] 65%|██████▌   | 653/1000 [00:03<00:01, 229.08cell/s] 69%|██████▉   | 688/1000 [00:03<00:01, 242.65cell/s] 72%|███████▏  | 720/1000 [00:03<00:01, 246.47cell/s] 76%|███████▌  | 756/1000 [00:03<00:00, 257.78cell/s] 80%|███████▉  | 798/1000 [00:03<00:00, 279.10cell/s] 83%|████████▎ | 833/1000 [00:04<00:00, 247.94cell/s] 86%|████████▋ | 865/1000 [00:04<00:00, 211.27cell/s] 89%|████████▉ | 893/1000 [00:04<00:00, 179.13cell/s] 92%|█████████▏| 918/1000 [00:04<00:00, 167.88cell/s] 94%|█████████▍| 941/1000 [00:04<00:00, 162.70cell/s] 96%|█████████▋| 963/1000 [00:04<00:00, 163.03cell/s] 98%|█████████▊| 984/1000 [00:05<00:00, 160.77cell/s]100%|██████████| 1000/1000 [00:05<00:00, 194.27cell/s]
+[0]PETSC ERROR: ------------------------------------------------------------------------
+[0]PETSC ERROR: Caught signal number 13 Broken Pipe: Likely while reading or writing to a socket
+[0]PETSC ERROR: Try option -start_in_debugger or -on_error_attach_debugger
+[0]PETSC ERROR: or see https://petsc.org/release/faq/#valgrind and https://petsc.org/release/faq/
+[0]PETSC ERROR: configure using --with-debugging=yes, recompile, link, and run 
+[0]PETSC ERROR: to get more information on the crash.
+Abort(59) on node 0 (rank 0 in comm 0): application called MPI_Abort(MPI_COMM_WORLD, 59) - process 0
+WARNING: There is only `1` terminal state, all cells will have probability `1` of going there
+  0%|          | 0/1 [00:00<?, ?/s]100%|██████████| 1/1 [00:00<00:00, 13.88/s]
+[0]PETSC ERROR: ------------------------------------------------------------------------
+[0]PETSC ERROR: Caught signal number 13 Broken Pipe: Likely while reading or writing to a socket
+[0]PETSC ERROR: Try option -start_in_debugger or -on_error_attach_debugger
+[0]PETSC ERROR: or see https://petsc.org/release/faq/#valgrind and https://petsc.org/release/faq/
+[0]PETSC ERROR: configure using --with-debugging=yes, recompile, link, and run 
+[0]PETSC ERROR: to get more information on the crash.
+Abort(59) on node 0 (rank 0 in comm 0): application called MPI_Abort(MPI_COMM_WORLD, 59) - process 0
+Traceback (most recent call last):
+  File "/home/hpc/iwbn/iwbn107h/SwitchTFI-validation/validation/scalability.py", line 618, in <module>
+    scalability_cellrank()
+  File "/home/hpc/iwbn/iwbn107h/SwitchTFI-validation/validation/scalability.py", line 498, in scalability_cellrank
+    res_df_fate_probs, cr_estimator_fate_probs = scalability_wrapper(
+  File "/home/hpc/iwbn/iwbn107h/SwitchTFI-validation/validation/scalability.py", line 294, in scalability_wrapper
+    function_output = function(**function_params)
+  File "/home/hpc/iwbn/iwbn107h/SwitchTFI-validation/validation/scalability.py", line 445, in estimate_fate_probabilities
+    cr_estimator.compute_fate_probabilities()
+  File "/home/woody/iwbn/iwbn107h/software/private/conda/envs/switchtfi_val/lib/python3.10/site-packages/cellrank/estimators/mixins/_fate_probabilities.py", line 220, in compute_fate_probabilities
+    fate_probs = self._compute_fate_probabilities(
+  File "/home/woody/iwbn/iwbn107h/software/private/conda/envs/switchtfi_val/lib/python3.10/site-packages/cellrank/estimators/mixins/_fate_probabilities.py", line 494, in _compute_fate_probabilities
+    raise ValueError(
+ValueError: `283` value(s) do not sum to 1 (rtol=1e-3). Try decreasing the tolerance as `tol=...`, specifying a preconditioner as `preconditioner=...` or use a direct solver as `solver='direct'` if the matrix is small.
+srun: error: w2504: task 0: Exited with exit code 1
+srun: Terminating StepId=8899564.0

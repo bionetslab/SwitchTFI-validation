@@ -2,8 +2,9 @@
 
 #SBATCH --nodes=1
 #SBATCH --ntasks-per-node=1
-#SBATCH --cpus-per-task=30
+#SBATCH --cpus-per-task=32
 #SBATCH --time=24:00:00
+#SBATCH --mem=128G
 #SBATCH --error=%x_%j.error
 #SBATCH --output=%x_%j.log
 #SBATCH --job-name=grn_inference
