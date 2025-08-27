@@ -19,8 +19,8 @@ conda activate switchtfi_drivaer
 
 cd $HOME/SwitchTFI-validation/validation
 
-# Define NUM_EDGES options
-NUM_EDGES=(100 500 1000 5000 10000 50000)
+# Source common parameters file (NUM_EDGES defined here)
+source $HOME/SwitchTFI-validation/results/05_revision/scalability/slurm_scripts/params.sh
 
 # Pick entry for this task
 NE=${NUM_EDGES[$SLURM_ARRAY_TASK_ID]}

@@ -19,8 +19,8 @@ conda activate switchtfi_drivaer
 
 cd $HOME/SwitchTFI-validation/validation
 
-# Define NUM_CELLS options
-NUM_CELLS=(100 500 1000 5000 10000 50000 100000)
+# Source common parameters file (NUM_CELLS defined here)
+source $HOME/SwitchTFI-validation/results/05_revision/scalability/slurm_scripts/params.sh
 
 # Pick entry for this task
 NC=${NUM_CELLS[$SLURM_ARRAY_TASK_ID]}
