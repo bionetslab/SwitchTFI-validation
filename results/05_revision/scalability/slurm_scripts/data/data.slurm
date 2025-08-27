@@ -18,4 +18,4 @@ conda activate switchtfi_val
 
 cd $HOME/SwitchTFI-validation/validation
 
-srun python scalability.py -m pre
+srun python scalability.py -m data
