@@ -1,49 +1,0 @@
-  0%|          | 0/200 [00:00<?, ?cell/s]100%|██████████| 200/200 [00:00<00:00, 2544.49cell/s]
-  0%|          | 0/200 [00:00<?, ?cell/s]100%|██████████| 200/200 [00:00<00:00, 4135.31cell/s]
-WARNING: There is only `1` terminal state, all cells will have probability `1` of going there
-  0%|          | 0/1 [00:00<?, ?/s]100%|██████████| 1/1 [00:00<00:00, 32.41/s]
-WARNING: There is only 1 lineage present. Using stationary distribution instead
-[0]PETSC ERROR: ------------------------------------------------------------------------
-  0%|          | 0/60 [00:00<?, ?cell/s]100%|██████████| 60/60 [00:00<00:00, 1178.19cell/s]
-[0]PETSC ERROR: ------------------------------------------------------------------------
-[0]PETSC ERROR: Caught signal number 13 Broken Pipe: Likely while reading or writing to a socket
-[0]PETSC ERROR: Try option -start_in_debugger or -on_error_attach_debugger
-[0]PETSC ERROR: or see https://petsc.org/release/faq/#valgrind and https://petsc.org/release/faq/
-[0]PETSC ERROR: configure using --with-debugging=yes, recompile, link, and run 
-[0]PETSC ERROR: to get more information on the crash.
-  0%|          | 0/60 [00:00<?, ?cell/s]100%|██████████| 60/60 [00:00<00:00, 813.50cell/s]
-[0]PETSC ERROR: ------------------------------------------------------------------------
-[0]PETSC ERROR: Caught signal number 13 Broken Pipe: Likely while reading or writing to a socket
-[0]PETSC ERROR: /home/woody/iwbn/iwbn107h/software/private/conda/envs/switchtfi_val/lib/python3.10/site-packages/pygpcca/_sorted_schur.py:279: UserWarning: The number of converged eigenpairs is `18`, but `20` were requested.
-  warnings.warn(f"The number of converged eigenpairs is `{nconv}`, but `{k}` were requested.")
-/home/woody/iwbn/iwbn107h/software/private/conda/envs/switchtfi_val/lib/python3.10/site-packages/pygpcca/_sorted_schur.py:179: UserWarning: According to `scipy.linalg.subspace_angles()`, the dimension of the column space of P*Q and/or Q*L is not equal to m (L is a diagonal matrix with the sorted top eigenvalues on the diagonal), method=`krylov`.
-  warnings.warn(
-/home/woody/iwbn/iwbn107h/software/private/conda/envs/switchtfi_val/lib/python3.10/site-packages/pygpcca/_gpcca.py:317: UserWarning: According to `scipy.linalg.subspace_angles()` the dimension of the column spaces of P*X and/or X*R is not equal to 20.
-  warnings.warn(
-WARNING: The following terminal states have different number of cells than requested (30): {'prog': 29}
-Traceback (most recent call last):
-  File "/home/hpc/iwbn/iwbn107h/SwitchTFI-validation/validation/scalability.py", line 617, in <module>
-    scalability_cellrank()
-  File "/home/hpc/iwbn/iwbn107h/SwitchTFI-validation/validation/scalability.py", line 492, in scalability_cellrank
-    res_df_terminal_states, cr_estim = scalability_wrapper(
-  File "/home/hpc/iwbn/iwbn107h/SwitchTFI-validation/validation/scalability.py", line 294, in scalability_wrapper
-    function_output = function(**function_params)
-  File "/home/hpc/iwbn/iwbn107h/SwitchTFI-validation/validation/scalability.py", line 437, in identify_initial_terminal_states
-    gpcca.set_terminal_states(states='off')
-  File "/home/woody/iwbn/iwbn107h/software/private/conda/envs/switchtfi_val/lib/python3.10/site-packages/cellrank/estimators/terminal_states/_gpcca.py", line 446, in set_terminal_states
-    self._write_states(
-  File "/home/woody/iwbn/iwbn107h/software/private/conda/envs/switchtfi_val/lib/python3.10/site-packages/cellrank/estimators/mixins/_utils.py", line 106, in logger
-    msg = wrapped(*args, **kwargs)
-  File "/home/woody/iwbn/iwbn107h/software/private/conda/envs/switchtfi_val/lib/python3.10/site-packages/cellrank/estimators/mixins/_utils.py", line 120, in shadow
-    res = wrapped(*args, **kwargs)
-  File "/home/woody/iwbn/iwbn107h/software/private/conda/envs/switchtfi_val/lib/python3.10/site-packages/cellrank/estimators/terminal_states/_gpcca.py", line 1356, in _write_states
-    msg = super()._write_states(
-  File "/home/woody/iwbn/iwbn107h/software/private/conda/envs/switchtfi_val/lib/python3.10/site-packages/cellrank/estimators/mixins/_utils.py", line 106, in logger
-    msg = wrapped(*args, **kwargs)
-  File "/home/woody/iwbn/iwbn107h/software/private/conda/envs/switchtfi_val/lib/python3.10/site-packages/cellrank/estimators/mixins/_utils.py", line 120, in shadow
-    res = wrapped(*args, **kwargs)
-  File "/home/woody/iwbn/iwbn107h/software/private/conda/envs/switchtfi_val/lib/python3.10/site-packages/cellrank/estimators/terminal_states/_term_states_estimator.py", line 638, in _write_states
-    raise ValueError(
-ValueError: Found `1` overlapping cells between initial and terminal states. If this is intended, please use `allow_overlap=True`.
-srun: error: w2404: task 0: Exited with exit code 1
-srun: Terminating StepId=8899779.0
