@@ -793,6 +793,468 @@ def main_no_imputation_results():
         plt.savefig(os.path.join(res_path, f'{trafo}_weights_vs_num_cells.png'), dpi=300)
 
 
+def main_tf_ranking_similarity_old():
+
+    import os
+    import random
+    import numpy as np
+    import pandas as pd
+    import matplotlib.pyplot as plt
+    import seaborn as sns
+
+    from itertools import combinations
+    from tqdm import tqdm
+    from scipy.stats import kendalltau, spearmanr
+    from sklearn.metrics import ndcg_score
+    from switchtfi.tf_ranking import rank_tfs
+
+
+    # ### Note:
+    # - Kendall's Tau: Count dis-/concordant pairs (with -1, +1 => ranges in [-1, 1])
+    # - Spearman's Rank Correlation: Pearson correlation between the rank rvs (ranges in [-1, 1])
+    # - Normalized Discounted Cumulative Gain: Focuses more at top end agreement (ranges in [0, 1])
+
+    random.seed(42)
+
+    save_p = './results/05_revision/tf_ranking_similarity'
+    os.makedirs(save_p, exist_ok=True)
+
+    datasets = ['Beta', 'Alpha', 'Erythrocytes']
+    centrality_measures = ['pagerank', 'out_degree', 'closeness', 'betweenness']
+    cm1_cm2_combinations = list(combinations(centrality_measures, 2))
+    ranking_scores = ['tau', 'rho', 'ndcg']
+
+    cm_to_cm_name = {
+        'pagerank': 'PageRank', 'out_degree': 'Out-degree', 'closeness': 'Closeness', 'betweenness': 'Betweenness'
+    }
+
+    ranking_score_to_symbol = {'tau': r'$\tau$', 'rho': r'$\rho$', 'ndcg': 'nDCG'}
+
+    base_res_dir = './results/02_switchtfi'
+    dataset_to_res_dir = {'Beta': 'endocrine/beta', 'Alpha': 'endocrine/alpha', 'Erythrocytes': 'hematopoiesis'}
+
+    num_permutations = 10000
+
+    def compute_tau_corr_ndcg(
+            ranking_1: list[str], ranking_2: list[str], verbosity: int = 0
+    ) -> tuple[tuple[float, float], tuple[float, float], tuple[float, float]]:
+
+        # Map genes to ranks
+        gene_to_rank_r1 = {gene: i for i, gene in enumerate(ranking_1)}
+        gene_to_rank_r2 = {gene: i for i, gene in enumerate(ranking_2)}
+
+        # Align items -> same order in array (pr as reference), rank with pr/od as entry
+        all_tfs = list(sorted(ranking_1))
+        rank_list_r1 = [gene_to_rank_r1[tf] for tf in all_tfs]
+        rank_list_r2 = [gene_to_rank_r2[tf] for tf in all_tfs]
+
+        tau, pval_tau = kendalltau(rank_list_r1, rank_list_r2)
+        rho, pval_rho = spearmanr(rank_list_r1, rank_list_r2)
+
+        # Treat inverse rank as relevance
+        relevance_r1 = np.array([1.0 / (1 + gene_to_rank_r1[g]) for g in all_tfs])
+        relevance_r2 = np.array([1.0 / (1 + gene_to_rank_r2[g]) for g in all_tfs])
+
+        ndcg_r1_vs_r2_local = ndcg_score([relevance_r1], [relevance_r2])
+        ndcg_r2_vs_r1_local = ndcg_score([relevance_r2], [relevance_r1])
+
+        if verbosity > 0:
+            print(f"'# ### Kendall's Tau: {tau}, p-value: {pval_tau}")
+            print(f"'# ### Spearman's Rank Correlation: {rho}, p-value: {pval_rho}")
+            print(f"'# ### Normalized Discounted Cumulative Gain: r1 vs r2: {ndcg_r1_vs_r2_local}, r2 vs r1: {ndcg_r2_vs_r1_local}")
+
+        return (tau, pval_tau), (rho, pval_rho), (ndcg_r1_vs_r2_local, ndcg_r2_vs_r1_local)
+
+
+    res_dict_dataset = dict()
+    for dataset in datasets:
+
+        print(f'# ### {dataset} ### #')
+
+        res_dir = os.path.join(base_res_dir, dataset_to_res_dir[dataset])
+
+        # Load the GRN
+        grn = pd.read_csv(os.path.join(res_dir, 'grn.csv'), index_col=0)
+
+        centrality_measure_to_ranking = dict()
+        for cm in centrality_measures:
+            if cm == 'pagerank':
+                ranked_tfs = pd.read_csv(os.path.join(res_dir, 'ranked_tfs.csv'), index_col=0)
+            elif cm == 'out_degree':
+                ranked_tfs = pd.read_csv(os.path.join(res_dir, 'outdeg_ranked_tfs.csv'), index_col=0)
+            else:  # 'betweenness', 'closeness':
+                ranked_tfs = rank_tfs(
+                    grn=grn,
+                    centrality_measure=cm,
+                    undirected=True,
+                    weight_key='score',
+                )
+
+            ranked_tfs = ranked_tfs['gene'].tolist()
+
+            centrality_measure_to_ranking[cm] = ranked_tfs
+
+        res_dfs_r1_vs_r2 = []
+        for cm1, cm2 in cm1_cm2_combinations:
+            print(f'# ###### {cm1} vs {cm2} ###### #')
+            r1 = centrality_measure_to_ranking[cm1]
+            r2 = centrality_measure_to_ranking[cm2]
+            (t, pvalt), (r, pvalr), (ndcg_r1_vs_r2, ndcg_r2_vs_r1) = compute_tau_corr_ndcg(
+                ranking_1=r1,
+                ranking_2=r2,
+                verbosity=1
+            )
+
+            res_df_r1_vs_r1_current = pd.DataFrame({
+                'cm1': cm1, 'cm2': cm2,
+                'tau': [t], 'pval_tau': [pvalt],
+                'rho': [r], 'pval_rho': [pvalr],
+                'ndcg_r1_vs_r2': [ndcg_r1_vs_r2], 'ndcg_r2_vs_r1': [ndcg_r2_vs_r1]
+            })
+
+            res_dfs_r1_vs_r2.append(res_df_r1_vs_r1_current)
+
+        res_df_r1_vs_r2 = pd.concat(res_dfs_r1_vs_r2).reset_index(drop=True)
+
+        res_dict_dataset[dataset] = {'cm1_vs_cm2': res_df_r1_vs_r2}
+
+        # Compute random rankings
+        tfs = list(set(grn['TF'].tolist()))
+        res_dict_score = {'tau': [], 'rho': [], 'ndcg_r1_vs_r2': [], 'ndcg_r2_vs_r1': []}
+        for _ in tqdm(range(num_permutations), total=num_permutations):
+
+            tf_ranking_rand0 = random.sample(tfs, k=len(tfs))
+            tf_ranking_rand1 = random.sample(tfs, k=len(tfs))
+
+            (t_rand, _), (r_rand, _), (ndcg_r1_vs_r2_rand, ndcg_r2_vs_r1_rand) = compute_tau_corr_ndcg(
+                ranking_1=tf_ranking_rand0, ranking_2=tf_ranking_rand1, verbosity=0
+            )
+
+            res_dict_score['tau'].append(t_rand)
+            res_dict_score['rho'].append(r_rand)
+            res_dict_score['ndcg_r1_vs_r2'].append(ndcg_r1_vs_r2_rand)
+            res_dict_score['ndcg_r2_vs_r1'].append(ndcg_r2_vs_r1_rand)
+
+        res_dict_dataset[dataset]['random'] = pd.DataFrame(res_dict_score)
+
+    for score in ranking_scores:
+
+        fig = plt.figure(figsize=(4, 4), constrained_layout=True, dpi=300)
+        axd = fig.subplot_mosaic(
+            '''
+            AB
+            CD
+            '''
+        )
+
+        colors = sns.color_palette('deep', 3)
+        for dataset, subplot_key, color in zip(datasets, list('ABC'), colors):
+
+            # Get the plot data for the histogram
+            if score != 'ndcg':
+                rand_scores = res_dict_dataset[dataset]['random'][score].to_numpy()
+
+            else:
+                rand_scores_r1_vs_r2 = res_dict_dataset[dataset]['random']['ndcg_r1_vs_r2'].to_numpy()
+                rand_scores_r2_vs_r1 = res_dict_dataset[dataset]['random']['ndcg_r2_vs_r1'].to_numpy()
+                rand_scores = (rand_scores_r1_vs_r2 + rand_scores_r2_vs_r1) / 2
+
+            # Plot
+            ax = axd[subplot_key]
+            ax.hist(
+                rand_scores,
+                bins=100,
+                color=color,
+                edgecolor='grey',
+                linewidth=0.2,
+            )
+
+            # Plot vertical lines
+            palette = sns.color_palette('Set1', len(cm1_cm2_combinations))
+            df = res_dict_dataset[dataset]['cm1_vs_cm2']
+            for i, (cm1, cm2) in enumerate(cm1_cm2_combinations):
+
+                if score != 'ndcg':
+                    cm1_vs_cm2_score = (
+                        df
+                        .loc[(df['cm1'] == cm1) & (df['cm2'] == cm2), score]
+                        .iloc[0]
+                    )
+                else:
+                    cm1_vs_cm2_score = (
+                        df.loc[(df['cm1'] == cm1) & (df['cm2'] == cm2), 'ndcg_r1_vs_r2']
+                        .iloc[0]
+                    )
+                    cm2_vs_cm1_score = (
+                        df
+                        .loc[(df['cm1'] == cm1) & (df['cm2'] == cm2), 'ndcg_r2_vs_r1']
+                        .iloc[0]
+                    )
+                    cm1_vs_cm2_score = (cm1_vs_cm2_score + cm2_vs_cm1_score) / 2
+
+
+                empirical_p_value = (((cm1_vs_cm2_score <= rand_scores).sum() + 1) / (num_permutations + 1))
+
+                # legend_label = (
+                #     f'{cm1} vs {cm2}'
+                #     f'{score}: {np.round(cm1_vs_cm2_score.item(), 3)}'
+                #     f'\nEmp. P-value: {np.round(empirical_p_value, 4)}'
+                # )
+
+                legend_label = (
+                    f'{cm_to_cm_name[cm1]} vs {cm_to_cm_name[cm2]},'
+                    f'\n{ranking_score_to_symbol[score]}: {np.round(cm1_vs_cm2_score, 2)}, '
+                    f'P-value:{np.round(empirical_p_value, 4)}'
+                )
+                ax.axvline(cm1_vs_cm2_score, color=palette[i], linestyle='-', linewidth=0.75, label=legend_label)
+
+            ax.set_xlabel(ranking_score_to_symbol[score])
+            ax.set_ylabel(f'Count (total: n = {num_permutations})')
+            ax.set_title(dataset)
+
+        handles, labels = axd['A'].get_legend_handles_labels()
+        axd['D'].legend(handles, labels, loc='center', fontsize=6)
+        axd['D'].axis('off')
+
+        fig.savefig(os.path.join(save_p, f'ranking_similarities_all_cms_{score}.png'), dpi=fig.dpi)
+
+
+    for score in ranking_scores:
+
+        fig = plt.figure(figsize=(4, 4), constrained_layout=True, dpi=300)
+        axd = fig.subplot_mosaic(
+            '''
+            AB
+            CD
+            '''
+        )
+
+        colors = sns.color_palette('deep', 3)
+        for dataset, subplot_key, color in zip(datasets, list('ABC'), colors):
+
+            # Get the plot data for the histogram
+            if score != 'ndcg':
+                rand_scores = res_dict_dataset[dataset]['random'][score].to_numpy()
+
+            else:
+                rand_scores_r1_vs_r2 = res_dict_dataset[dataset]['random']['ndcg_r1_vs_r2'].to_numpy()
+                rand_scores_r2_vs_r1 = res_dict_dataset[dataset]['random']['ndcg_r2_vs_r1'].to_numpy()
+                rand_scores = (rand_scores_r1_vs_r2 + rand_scores_r2_vs_r1) / 2
+
+            # Plot
+            ax = axd[subplot_key]
+            ax.hist(
+                rand_scores,
+                bins=100,
+                color=color,
+                edgecolor='grey',
+                linewidth=0.2,
+            )
+
+            # Plot vertical lines
+            df = res_dict_dataset[dataset]['cm1_vs_cm2']
+            for i, (cm1, cm2) in enumerate(cm1_cm2_combinations):
+
+                cm_bool = (df['cm1'] == 'pagerank') & (df['cm2'] == 'out_degree')
+                if score != 'ndcg':
+                    pr_vs_od_score = df.loc[cm_bool, score].iloc[0]
+
+                else:
+                    pr_vs_od_score = df.loc[cm_bool, 'ndcg_r1_vs_r2'].iloc[0]
+                    od_vs_pr_score = df.loc[cm_bool, 'ndcg_r2_vs_r1'].iloc[0]
+                    pr_vs_od_score = (pr_vs_od_score + od_vs_pr_score) / 2
+
+                empirical_p_value = (((pr_vs_od_score <= rand_scores).sum() + 1) / (num_permutations + 1))
+
+                legend_label = (
+                    f'Pagerank vs Outdegree'
+                    f'{ranking_score_to_symbol[score]}: {np.round(pr_vs_od_score, 3)}'
+                    f'\nEmp. P-value: {np.round(empirical_p_value, 4)}'
+                    f'Emp. P-value:{np.round(empirical_p_value, 4)}'
+                )
+
+                ax.axvline(pr_vs_od_score, color='red', linestyle='-', linewidth=0.75, label=legend_label)
+
+            ax.set_xlabel(ranking_score_to_symbol[score])
+            ax.set_ylabel('Count')
+            ax.set_title(dataset)
+
+        handles, labels = axd['A'].get_legend_handles_labels()
+        axd['D'].legend(handles, labels, loc='center', fontsize=6)
+        axd['D'].axis('off')
+
+        fig.savefig(os.path.join(save_p, f'ranking_similarities_{score}.png'), dpi=fig.dpi)
+
+
+def main_tf_ranking_similarity():
+    import os
+    import random
+    import numpy as np
+    import pandas as pd
+    import matplotlib.pyplot as plt
+    import matplotlib.transforms as mtransforms
+    import seaborn as sns
+
+    from tqdm import tqdm
+    from scipy.stats import kendalltau, spearmanr
+
+    # ### Note:
+    # - Kendall's Tau: Count dis-/concordant pairs (with -1, +1 => ranges in [-1, 1])
+    # - Spearman's Rank Correlation: Pearson correlation between the rank rvs (ranges in [-1, 1])
+
+    random.seed(42)
+
+    save_p = './results/05_revision/tf_ranking_similarity'
+    os.makedirs(save_p, exist_ok=True)
+
+    datasets = ['Beta', 'Alpha', 'Erythrocytes']
+    centrality_measures = ['pagerank', 'out_degree']
+    ranking_scores = ['tau', 'rho']
+
+    cm_to_cm_name = {'pagerank': 'PR', 'out_degree': 'OD'}
+
+    ranking_score_to_symbol = {'tau': r'$\tau$', 'rho': r'$\rho$', 'ndcg': 'nDCG'}
+
+    base_res_dir = './results/02_switchtfi'
+    dataset_to_res_dir = {'Beta': 'endocrine/beta', 'Alpha': 'endocrine/alpha', 'Erythrocytes': 'hematopoiesis'}
+
+    num_permutations = 10000
+
+    def compute_tau_rho(
+            ranking_1: list[str], ranking_2: list[str], verbosity: int = 0
+    ) -> dict[str, tuple[float, float]]:
+
+        # Map genes to ranks
+        gene_to_rank_r1 = {gene: i for i, gene in enumerate(ranking_1)}
+        gene_to_rank_r2 = {gene: i for i, gene in enumerate(ranking_2)}
+
+        # Align items -> same order in array (pr as reference), rank with pr/od as entry
+        all_tfs = list(sorted(ranking_1))
+        rank_list_r1 = [gene_to_rank_r1[tf] for tf in all_tfs]
+        rank_list_r2 = [gene_to_rank_r2[tf] for tf in all_tfs]
+
+        tau, pval_tau = kendalltau(rank_list_r1, rank_list_r2)
+        rho, pval_rho = spearmanr(rank_list_r1, rank_list_r2)
+
+        if verbosity > 0:
+            print(f"'# ### Kendall's Tau: {tau}, p-value: {pval_tau}")
+            print(f"'# ### Spearman's Rank Correlation: {rho}, p-value: {pval_rho}")
+
+        return {'tau': (tau, pval_tau), 'rho': (rho, pval_rho)}
+
+
+    res_dfs_random = []
+    res_dfs_actual = []
+    for dataset in datasets:
+
+        print(f'# ### {dataset} ### #')
+
+        res_dir = os.path.join(base_res_dir, dataset_to_res_dir[dataset])
+        ranked_tfs_pr = pd.read_csv(os.path.join(res_dir, 'ranked_tfs.csv'), index_col=0)['gene'].tolist()
+        ranked_tfs_od = pd.read_csv(os.path.join(res_dir, 'outdeg_ranked_tfs.csv'), index_col=0)['gene'].tolist()
+        tfs = list(sorted(ranked_tfs_pr))
+
+        # Similarity between pr and od
+        corrs_actual = compute_tau_rho(ranked_tfs_pr, ranked_tfs_od, verbosity=1)
+        for metric, (val, pval) in corrs_actual.items():
+            res_dfs_actual.append({
+                "dataset": dataset,
+                "ranking_metric": metric,
+                "value": val,
+                "pval": pval,
+                "comparison": "PR_vs_OD"
+            })
+
+        # Similarity of pr and od to random
+        rows = []
+        for _ in tqdm(range(num_permutations), total=num_permutations):
+            ranked_tfs_random = random.sample(tfs, k=len(tfs))
+
+            for ranking, centrality_measure in [(ranked_tfs_pr, "pagerank"), (ranked_tfs_od, 'out_degree')]:
+                ranking_similarities = compute_tau_rho(ranking, ranked_tfs_random)
+
+                for metric, (val, pval) in ranking_similarities.items():
+
+                    rows.append({
+                        "dataset": dataset,
+                        "centrality_measure": centrality_measure,
+                        "ranking_metric": metric,
+                        "value": val,
+                        "pval": pval
+                    })
+        res_dfs_random.append(pd.DataFrame(rows))
+
+    res_df_actual = pd.DataFrame(res_dfs_actual)
+    res_df_random = pd.concat(res_dfs_random, ignore_index=True)
+
+    for score in ranking_scores:
+
+        fig = plt.figure(figsize=(8, 6), constrained_layout=True, dpi=300)
+        axd = fig.subplot_mosaic(
+            '''
+            ABC
+            DEF
+            '''
+        )
+
+        for cm, subplot_keys in zip(centrality_measures, [list('ABC'), list('DEF')]):
+
+            colors = sns.color_palette('deep', 3)
+
+            for dataset, subplot_key, color in zip(datasets, subplot_keys, colors):
+
+                # Get the plot data for the histogram
+                data_bool = (
+                        (res_df_random['ranking_metric'] == score)
+                        & (res_df_random['dataset'] == dataset)
+                        & (res_df_random['centrality_measure'] == cm)
+                )
+
+                plot_df = res_df_random[data_bool].copy()
+
+                rand_scores = plot_df['value'].to_numpy()
+
+                pr_vs_od_score = (
+                    res_df_actual
+                    .query("dataset == @dataset and ranking_metric == @score")
+                    ["value"].iloc[0]
+                )
+
+                empirical_p_value = ((pr_vs_od_score <= rand_scores).sum() + 1) / (rand_scores.shape[0] + 1)
+
+                legend_label = (
+                    f"PR–OD Similarity:"
+                    f"\n{ranking_score_to_symbol[score]}: {np.round(pr_vs_od_score, 3)},"
+                    f"\nEmp. P-value: {np.round(empirical_p_value, 4)}"
+                )
+
+                # Plot
+                ax = axd[subplot_key]
+                ax.hist(
+                    rand_scores,
+                    bins=50,
+                    color=color,
+                    edgecolor='grey',
+                    linewidth=0.2,
+                )
+
+                ax.axvline(pr_vs_od_score, color='red', linestyle='-', linewidth=1.0, label=legend_label)
+
+                ax.set_xlabel(ranking_score_to_symbol[score])
+                ax.set_ylabel(fr'Count (total: $n$ = {num_permutations})')
+                ax.set_title(f'{dataset} | {cm_to_cm_name[cm]}')
+
+                ax.legend()
+
+        # Annotate subplot mosaic tiles with labels
+        for label, ax in axd.items():
+            trans = mtransforms.ScaledTranslation(-20 / 72, 7 / 72, fig.dpi_scale_trans)
+            ax.text(0.0, 1.0, label, transform=ax.transAxes + trans,
+                    fontsize=14, va='bottom', fontfamily='sans-serif', fontweight='bold')
+
+        fig.savefig(os.path.join(save_p, f'ranking_similarities_{score}.png'), dpi=fig.dpi)
+
+
 def main_additional_tf_target_scatter_plots():
 
     import os
@@ -1019,6 +1481,9 @@ def main_revised_regulon_plot():
 
     from switchtfi.plotting import plot_regulon
 
+    save_p = './results/05_revision/revised_regulon_plot'
+    os.makedirs(save_p, exist_ok=True)
+
     # Load transition GRN of beta-cell transition
     bgrn = pd.read_csv('./results/02_switchtfi/endocrine/beta/grn.csv', index_col=0)
 
@@ -1158,8 +1623,7 @@ def main_revised_regulon_plot():
         ax.text(0.0, 1.0, label, transform=ax.transAxes + trans,
                 fontsize=letter_fs, va='bottom', fontfamily='sans-serif', fontweight='bold')
 
-    # plt.show()
-    plt.savefig('./results/04_plots/hypothesis_gen_ybx1_revised.png', dpi=fig.dpi)
+    plt.savefig(os.path.join(save_p, 'hypothesis_gen_ybx1_revised.png'), dpi=fig.dpi)
 
 
 def main_tcell_data_exploration():
@@ -1169,17 +1633,17 @@ def main_tcell_data_exploration():
     import matplotlib.pyplot as plt
     import scanpy as sc
 
-    data_dir = './data/anndata/tcell'
-
-    plot_dir = './data/anndata/tcell/plots'
+    data_dir = './results/05_revision/tcell/data'
+    plot_dir = './results/05_revision/tcell/plots/data_exploration'
     os.makedirs(plot_dir, exist_ok=True)
+
+    full_dataset_filename = 'ga_an0602_10x_smarta_doc_arm_liver_spleen_d10_d28_mgd_ts_filtered_int_inf_tp_rp_convert.h5ad'
 
     load_full_dataset = True
 
     # ### Load full dataset and subset (tissue spleen, day 10)
     if load_full_dataset:
 
-        full_dataset_filename = 'ga_an0602_10x_smarta_doc_arm_liver_spleen_d10_d28_mgd_ts_filtered_int_inf_tp_rp_convert.h5ad'
         tdata = sc.read_h5ad(os.path.join(data_dir, full_dataset_filename))
 
         tdata.raw = None  # Delete the raw to avoid error when saving
@@ -1343,7 +1807,7 @@ def main_tcell_data_processing():
     import scanpy as sc
     import scanpy.external as scex
 
-    data_dir = './data/anndata/tcell'
+    data_dir = './results/05_revision/tcell/data'
 
     tissues = ['spleen', 'liver']
     time = 'd10'
@@ -1452,19 +1916,19 @@ def main_tcell_grn_inference():
 
     inference = True
 
-    data_p = './data/anndata/tcell'
-    base_res_p = './results/01_grn_inf/tcell'
+    data_p = './results/05_revision/tcell/data'
+    base_res_p = './results/05_revision/tcell/grn'
+    os.makedirs(base_res_p, exist_ok=True)
 
-    for tissue in tissues:
-        for cluster_keys in clusters:
-            for infection in infections:
+    for infection in infections:
+        for tissue in tissues:
+            for cluster_keys in clusters:
 
-                t = (tissue, infection, cluster_keys)
-
-                skip = {('spleen', 'acute', '345'), ('spleen', 'acute', '35'), ('spleen', 'chronic', '345')}
-
-                if t in skip:
-                    continue
+                # Todo
+                # t = (tissue, infection, cluster_keys)
+                # skip = {('spleen', 'acute', '345'), ('spleen', 'acute', '35'), ('spleen', 'chronic', '345')}
+                # if t in skip:
+                #     continue
 
                 # Load data
                 id_str = f'{tissue}_{time}_{infection}_{cluster_keys}'
@@ -1604,7 +2068,7 @@ def main_tcell_grn_exploration():
     infection = 'acute'
     clusters = ['345', '35']
 
-    grn_p = './results/01_grn_inf/tcell'
+    grn_p = './results/05_revision/tcell/grn'
 
     method_to_weight_key = {'grnboost2': 'importance', 'scenic': 'scenic_weight'}
 
@@ -1673,7 +2137,7 @@ def main_tcell_switchtfi():
             grn = pd.read_csv(grn_path, index_col=0).reset_index()
 
             # Create results directory
-            res_p = os.path.join(base_res_p, id_str)
+            res_p = os.path.join(base_res_p, 'grnboost2', id_str)  # Todo
             os.makedirs(res_p, exist_ok=True)
 
             transition_grn, ranked_tfs_pagerank = fit_model(
@@ -1706,7 +2170,6 @@ def main_tcell_explore_results():
     import scanpy as sc
 
     from switchtfi.utils import load_grn_json, csr_to_numpy
-    from validation.plotting import plot_step_function
 
 
     tissues = ['spleen', ]  # 'liver']
@@ -1823,6 +2286,12 @@ if __name__ == '__main__':
 
     # main_no_imputation_results()
 
+    # main_tf_ranking_similarity_old()
+
+
+
+    # main_tf_ranking_similarity()
+
     # main_additional_tf_target_scatter_plots()
 
     # main_revised_regulon_plot()
@@ -1837,53 +2306,27 @@ if __name__ == '__main__':
 
     # main_tcell_switchtfi()
 
-    # main_tcell_explore_results()
+    # main_tcell_explore_results()  # todo: de testing, check if edges present in chronic grn
 
 
+    load = False
+    if load:
+        import os
+        import scanpy as sc
+        import cellrank as cr
 
-    import os
-    import scvelo as scv
-    import scanpy as sc
+        data_dir = './data_dummy'
+        os.makedirs(data_dir, exist_ok=True)
 
-    data_dir = './data_dummy'
-    os.makedirs(data_dir, exist_ok=True)
-
-    scv.settings.data_path = data_dir
-
-    adata = scv.datasets.pancreas(os.path.join(data_dir, 'endocrinogenesis_day15.h5ad'))
-    print(f'# ### Pancreas: {adata.n_obs} cells, {adata.n_vars} genes')
-
-    adata = scv.datasets.dentategyrus(os.path.join(data_dir, 'dentategyrus.h5ad'))
-    print(f'# ### Dentategyrus: {adata.n_obs} cells, {adata.n_vars} genes')
-
-    # adata = scv.datasets.forebrain()  # os.path.join(data_dir, 'forebrain.loom'))
-    # print(f'# ### Forebrain: {adata.n_obs} cells, {adata.n_vars} genes')
-
-    # adata = scv.datasets.dentategyrus_lamanno()  # os.path.join(data_dir, 'dentategyrus_lamanno.h5ad'))
-    # print(f'# ### Dentategyrus_lamanno: {adata.n_obs} cells, {adata.n_vars} genes')
-
-    adata = scv.datasets.gastrulation(os.path.join(data_dir, 'gastrulation.h5ad'))
-    print(f'# ### Gastrulation: {adata.n_obs} cells, {adata.n_vars} genes')
-
-    adata = scv.datasets.gastrulation_e75(os.path.join(data_dir, 'gastrulation_e75.h5ad'))
-    print(f'# ### Gastrulation_e75: {adata.n_obs} cells, {adata.n_vars} genes')
-
-    adata = scv.datasets.gastrulation_erythroid(os.path.join(data_dir, 'gastrulation_erythroid.h5ad'))
-    print(f'# ### Gastrulation_erythroid: {adata.n_obs} cells, {adata.n_vars} genes')
-
-    adata = scv.datasets.bonemarrow(os.path.join(data_dir, 'bonemarrow.h5ad'))
-    print(f'# ### Bonemarrow: {adata.n_obs} cells, {adata.n_vars} genes')
-
-    adata = scv.datasets.pbmc68k(os.path.join(data_dir, 'pbmc68k.h5ad'))
-    print(f'# ### pbmc68k: {adata.n_obs} cells, {adata.n_vars} genes')
-
-    # simdata = scv.datasets.simulation(n_obs=1000, n_vars=10000, switches=3, random_seed=42)
-    # print(simdata)
-    # print(simdata.X)
-    # sc.pp.pca(simdata)
-    # sc.pp.neighbors(simdata)
-    #sc.tl.umap(simdata)
-    #sc.pl.umap(simdata, color='true_t')
+        adata = cr.datasets.reprogramming_morris(os.path.join(data_dir, 'reprogramming_morris.h5ad'), subset='full')
+        print(f'# ### Reprogramming Morris: {adata.n_obs} cells, {adata.n_vars} genes')
+        print(adata)
+        # print(adata.X)
+        print(type(adata.X))
+        print(type(adata.X[0, 0]))
+        print(adata.obs['pseudotime'])
+        print(adata.obs['timecourse'])
+        print(adata.obs['cell_type'])
 
 
     print('done')
