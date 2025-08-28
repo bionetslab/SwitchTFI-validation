@@ -8,7 +8,7 @@
 #SBATCH --array=0-6
 #SBATCH --error=%x_%A_%a.error
 #SBATCH --output=%x_%A_%a.log
-#SBATCH --job-name=cellrank
+#SBATCH --job-name=cellrank_sg
 #SBATCH --export=NONE
 
 unset SLURM_EXPORT_ENV
