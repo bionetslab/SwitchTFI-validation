@@ -793,6 +793,107 @@ def main_no_imputation_results():
         plt.savefig(os.path.join(res_path, f'{trafo}_weights_vs_num_cells.png'), dpi=300)
 
 
+def main_targets_enrichment_analysis():
+
+    import os
+
+    import numpy as np
+    import pandas as pd
+
+    save_path = './results/05_revision/enrichment_analysis_targets'
+    os.makedirs(save_path, exist_ok=True)
+
+    res_path_base = './results/02_switchtfi'
+    dataset_to_res_dir = {'Beta': 'endocrine/beta', 'Alpha': 'endocrine/alpha', 'Erythrocytes': 'hematopoiesis'}
+
+    datasets = ['Beta', 'Alpha', 'Erythrocytes']
+    centrality_measures = ['pagerank', 'outdeg']
+
+    cm_to_cm_name = {'pagerank': 'PR', 'outdeg': 'OD'}
+
+    num_top_tfs_list = [10]
+    num_top_targets_list = [1, 2, 5, 10]
+
+    sort_by = 'weight'  # 'weight', 'score'
+
+    get_targets = True
+    if get_targets:
+        def get_top_targets(
+                g: pd.DataFrame,
+                tfs: list[str],
+                num_top_targets: int = 3,
+                weight_key: str = 'weight'
+        ) -> list[str]:
+
+            targets = []
+            for tf in tfs:
+                g_sub = g[g['TF'] == tf].copy()
+                g_sub_sorted = g_sub.sort_values(by=weight_key, ascending=False)
+                top_targets = g_sub_sorted['target'].tolist()[:num_top_targets]
+                targets.extend(top_targets)
+
+            return targets
+
+        save_path_targets_naive = os.path.join(save_path, 'top_targets_naive')
+        os.makedirs(save_path_targets_naive, exist_ok=True)
+
+        save_path_targets = os.path.join(save_path, 'top_targets')
+        os.makedirs(save_path_targets, exist_ok=True)
+
+        for dataset in datasets:
+
+            results_path = os.path.join(res_path_base, dataset_to_res_dir[dataset])
+
+            # Load the transition GRN
+            grn = pd.read_csv(os.path.join(results_path, 'grn.csv'), index_col=0)
+
+            # Compute the score
+            weights = grn['weight'].to_numpy()
+            pvals = grn['pvals_wy'].to_numpy()
+            pvals += np.finfo(np.float64).eps
+            grn['score'] = -np.log10(pvals) * weights
+
+            grn = grn.sort_values(by=sort_by, ascending=False)
+
+            # Extract top targets naively
+            for top_k in [10, 20]:
+                top_targets = grn['target'].tolist()[:top_k]
+
+                fn = f'{dataset}_num_targets_{top_k}.txt'
+
+                with open(os.path.join(save_path_targets_naive, fn), 'w') as f:
+                    for t in top_targets:
+                        f.write(t + '\n')
+
+            # Extract top targets per TF
+            for cm in centrality_measures:
+
+                cm_str = (cm + '_') if cm == 'outdeg' else ''
+                ranked_tfs = pd.read_csv(os.path.join(results_path, f'{cm_str}ranked_tfs.csv'), index_col=0)
+
+                for n_tf in num_top_tfs_list:
+
+                    top_tfs = ranked_tfs['gene'].tolist()[:n_tf]
+
+                    for n_target in num_top_targets_list:
+
+                        if (n_tf == 5 and n_target == 1) or (n_tf == 10 and n_target == 10):
+                            continue
+
+                        top_targets = get_top_targets(
+                            g=grn,
+                            tfs=top_tfs,
+                            num_top_targets=n_target,
+                            weight_key=sort_by
+                        )
+
+                        fn = f'{dataset}_{cm}_num_tfs_{n_tf}_num_targets_{n_target}.txt'
+
+                        with open(os.path.join(save_path_targets, fn), 'w') as f:
+                            for t in top_targets:
+                                f.write(t + '\n')
+
+
 def main_tf_ranking_similarity():
     import os
     import random
@@ -1995,7 +2096,7 @@ if __name__ == '__main__':
 
     # main_tf_ranking_similarity_old()
 
-
+    # main_targets_enrichment_analysis()
 
     # main_tf_ranking_similarity()
 
