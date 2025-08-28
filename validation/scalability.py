@@ -834,7 +834,7 @@ def scalability_drivaer(subset_genes: bool = False):
         res_df, _ = scalability_wrapper(
             function=drivaer_inference,
             function_params={'data': adata, 'grn': grn_num_cells},
-            track_gpu=True,
+            track_gpu=False,
         )
 
         res_df['n_cells'] = [n]
@@ -1002,7 +1002,7 @@ def scalability_drivaer_grn():
         res_df, _ = scalability_wrapper(
             function=drivaer_inference,
             function_params={'data': adata, 'grn': grn_downsampled},
-            track_gpu=True,
+            track_gpu=False,
         )
 
         res_df['n_cells'] = [n]
