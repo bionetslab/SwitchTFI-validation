@@ -39,7 +39,7 @@ else:
     SAVE_PATH = Path.cwd().parent / 'results/05_revision/scalability'
 os.makedirs(SAVE_PATH, exist_ok=True)
 
-TEST = True
+TEST = False
 
 NUM_GENES = 10000 if not TEST else 1000
 NUM_CELLS = [100, 500, 1000, 5000, 10000, 50000, 100000] if not TEST else [100, 200, 300]
@@ -682,7 +682,7 @@ def scalability_splicejac():
         # Compute highly variable genes
         sc.pp.highly_variable_genes(data, n_top_genes=num_genes)
 
-        data_hvg = adata[:, data.var['highly_variable']].copy()
+        data_hvg = data[:, data.var['highly_variable']].copy()
 
         return data_hvg
 
@@ -1201,10 +1201,10 @@ if __name__ == '__main__':
 
     print('done')
 
-# Todo:
-#  - data generation
-#  - ALL GENES: grn inf, cellrank, splicejac, drivaer, switchtfi
-#  - SUBSET GENES: grn inf, cellrank, [splicejac], drivaer, switchtfi
-#  - GRN SIZE: drivaer, switchtfi
-#  -
+# Todo: no error # error
+#  - data generation (uploaded to HPC)
+#  - ALL GENES: cellrank, # grn inf (cpu usage is < 32), splicejac
+#  - SUBSET GENES: cellrank, # grn inf (cpu usage is < 32), splicejac
+#  - GRN SIZE:
+
 
