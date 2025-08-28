@@ -1,0 +1,16 @@
+Traceback (most recent call last):
+  File "/home/hpc/iwbn/iwbn107h/SwitchTFI-validation/validation/scalability.py", line 1192, in <module>
+    scalability_splicejac()
+  File "/home/hpc/iwbn/iwbn107h/SwitchTFI-validation/validation/scalability.py", line 736, in scalability_splicejac
+    res_df_hvg, adata_hvg_subset = scalability_wrapper(
+  File "/home/hpc/iwbn/iwbn107h/SwitchTFI-validation/validation/scalability.py", line 315, in scalability_wrapper
+    function_output = function(**function_params)
+  File "/home/hpc/iwbn/iwbn107h/SwitchTFI-validation/validation/scalability.py", line 683, in compute_hvgs_subset
+    sc.pp.highly_variable_genes(data, n_top_genes=num_genes)
+  File "/home/woody/iwbn/iwbn107h/software/private/conda/envs/switchtfi_splicejac/lib/python3.10/site-packages/scanpy/preprocessing/_highly_variable_genes.py", line 434, in highly_variable_genes
+    df = _highly_variable_genes_single_batch(
+  File "/home/woody/iwbn/iwbn107h/software/private/conda/envs/switchtfi_splicejac/lib/python3.10/site-packages/scanpy/preprocessing/_highly_variable_genes.py", line 268, in _highly_variable_genes_single_batch
+    disp_cut_off = dispersion_norm[n_top_genes - 1]
+IndexError: index 999 is out of bounds for axis 0 with size 904
+srun: error: w2219: task 0: Exited with exit code 1
+srun: Terminating StepId=8915665.0
