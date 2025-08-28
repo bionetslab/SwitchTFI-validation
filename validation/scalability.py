@@ -680,9 +680,18 @@ def scalability_splicejac():
         num_genes = min(data.shape[1], int(min_cluster_size * 0.9))
 
         # Compute highly variable genes
-        sc.pp.highly_variable_genes(data, n_top_genes=num_genes)
+        sc.pp.highly_variable_genes(
+            data,
+            # n_top_genes=num_genes,
+            # min_disp=0, max_disp=np.inf,
+            # min_mean=0, max_mean=np.inf,
+        )
 
-        data_hvg = data[:, data.var['highly_variable']].copy()
+        # Select exactly top num_genes by dispersion
+        ranked = data.var.sort_values('dispersions_norm', ascending=False)
+        top_genes = ranked.index[:num_genes]
+
+        data_hvg = data[:, top_genes].copy()
 
         return data_hvg
 
