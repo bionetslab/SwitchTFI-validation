@@ -971,7 +971,7 @@ def scalability_drivaer_grn():
             count=data,
             pheno=data.obs['prog_off'],
             tf_targets=tf_to_target_list,
-            min_targets=1,  # Set min targets to 1 here for fair comparison
+            min_targets=2,  # Set min targets to 2 here for fair comparison
             ae_type='nb-conddisp',
             epochs=50,
             early_stop=3,
@@ -1212,8 +1212,8 @@ if __name__ == '__main__':
 
 # Todo: no error # error
 #  - data generation (uploaded to HPC)
-#  - ALL GENES: cellrank, # grn inf (cpu usage is < 32), splicejac
-#  - SUBSET GENES: cellrank, # grn inf (cpu usage is < 32), splicejac
-#  - GRN SIZE:
+#  - ALL GENES: cellrank, drivaer, switchtfi, splicejac # grn inf (cpu usage is < 32)
+#  - SUBSET GENES: cellrank, drivaer, switchtfi # grn inf (cpu usage is < 32)
+#  - GRN SIZE: switchtfi # drivaer (failure at 100 500)
 
 
