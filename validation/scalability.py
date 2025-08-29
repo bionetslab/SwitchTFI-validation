@@ -971,7 +971,7 @@ def scalability_drivaer_grn():
             count=data,
             pheno=data.obs['prog_off'],
             tf_targets=tf_to_target_list,
-            min_targets=2,  # Set min targets to 2 here for fair comparison
+            min_targets=2,  # Set min targets to 2 here for fair comparison (cannot be 1)
             ae_type='nb-conddisp',
             epochs=50,
             early_stop=3,
