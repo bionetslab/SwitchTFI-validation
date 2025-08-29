@@ -1975,6 +1975,7 @@ def main_tcell_explore_results():
     import numpy as np
     import pandas as pd
     import matplotlib.pyplot as plt
+    import seaborn as sns
     import scanpy as sc
 
     from switchtfi.utils import load_grn_json, csr_to_numpy
@@ -1985,32 +1986,37 @@ def main_tcell_explore_results():
     infection = 'acute'
     clusters = ['345', '35']
 
-    data_p = './data/anndata/tcell'
-    base_res_p = './results/02_switchtfi/tcell'
+    data_p = './results/05_revision/tcell/data/'
+    switchtfi_res_p = './results/02_switchtfi/tcell/'
 
+    save_path = './results/05_revision/tcell/results_analysis'
+    os.makedirs(save_path, exist_ok=True)
+
+    fn_all_data = 'ga_an0602_10x_smarta_doc_arm_liver_spleen_d10_d28_mgd_ts_filtered_int_inf_tp_rp_convert.h5ad'
+
+    # ### --- First look at results (number of driver TFs, transition GRN size, scatter plots ...) --- ### #
     for tissue in tissues:
         for cluster_keys in clusters:
 
             id_str = f'{tissue}_{time}_{infection}_{cluster_keys}'
+            os.makedirs(os.path.join(save_path, id_str), exist_ok=True)
 
             # Load the data
             filepath = os.path.join(data_p, f'tdata_{id_str}.h5ad')
             tdata = sc.read_h5ad(filepath)
 
             # Load the results
-            transition_grn = pd.read_csv(os.path.join(base_res_p, id_str, 'grn.csv'), index_col=0)
-            ranked_tfs_pr = pd.read_csv(os.path.join(base_res_p, id_str, 'ranked_tfs.csv'), index_col=0)
-            ranked_tfs_od = pd.read_csv(os.path.join(base_res_p, id_str, 'outdegree_ranked_tfs.csv'), index_col=0)
+            transition_grn = pd.read_csv(os.path.join(switchtfi_res_p, id_str, 'grn.csv'), index_col=0)
+            ranked_tfs_pr = pd.read_csv(os.path.join(switchtfi_res_p, id_str, 'ranked_tfs.csv'), index_col=0)
+            ranked_tfs_od = pd.read_csv(os.path.join(switchtfi_res_p, id_str, 'outdegree_ranked_tfs.csv'), index_col=0)
 
             print(f'# ### {id_str} ### #')
             print(f'# ### Transition GRN:\n{transition_grn}')
             print(f'# ### TFs PageRank:\n{ranked_tfs_pr}')
             print(f'# ### TFs outdegree:\n{ranked_tfs_od}')
 
-            full_grn = load_grn_json(os.path.join(base_res_p, id_str, 'grn.json')).drop(columns=['index'])
+            full_grn = load_grn_json(os.path.join(switchtfi_res_p, id_str, 'grn.json')).drop(columns=['index'])
             full_grn = full_grn.sort_values(by='weight', ascending=False, ignore_index=True)  # .reset_index(drop=True)
-
-            print(full_grn)
 
             fig = plt.figure(figsize=(8, 5), constrained_layout=True, dpi=300)
             axd = fig.subplot_mosaic(
@@ -2087,7 +2093,207 @@ def main_tcell_explore_results():
 
                 ax.legend(handles=legend_handles)
 
-            fig.savefig(os.path.join(base_res_p, id_str, 'scatter_plots.png'), dpi=fig.dpi)
+            fig.savefig(os.path.join(save_path, id_str, 'scatter_plots.png'), dpi=fig.dpi)
+
+
+    # ### --- DE analysis for driver TFs --- ### #
+    tdata = sc.read_h5ad(os.path.join(data_p, fn_all_data))
+    tdata.raw = None
+
+    # Relabel cluster labels from 0-9 to 1-10
+    new_labels = [int(label + 1) for label in tdata.obs['cluster']]
+    tdata.obs['cluster'] = new_labels
+
+    time_name_to_label = {'d10': 0, 'd28': 1}
+    tissue_name_to_label = {'spleen': 0, 'liver': 1}
+    infection_name_to_label = {'chronic': 0, 'acute': 1}
+
+    clusters_data = ['35', '345']
+    clusters_de = [[3, 5], [3, 4, 5], [3, 4 ], [3, ], [4, ], [5, ]]
+
+    save_p_de = os.path.join(save_path, 'de')
+    os.makedirs(save_p_de, exist_ok=True)
+
+    for tissue in tissues:
+        for cluster_config_data in clusters_data:
+            for cluster_keys_de in clusters_de:
+
+                if (cluster_config_data == '35') and 4 in cluster_keys_de:
+                    continue
+
+                # Load the SwitchTFI result
+                id_str_switchtfi = f'{tissue}_{time}_{infection}_{cluster_config_data}'
+                ranked_tfs_pr = pd.read_csv(
+                    os.path.join(switchtfi_res_p, id_str_switchtfi, 'ranked_tfs.csv'), index_col=0
+                )
+                ranked_tfs_od = pd.read_csv(
+                    os.path.join(switchtfi_res_p, id_str_switchtfi, 'outdegree_ranked_tfs.csv'), index_col=0
+                )
+
+                ranked_tfs_pr = ranked_tfs_pr['gene'].tolist()
+                ranked_tfs_od = ranked_tfs_od['gene'].tolist()
+                candidate_tfs = list(set(ranked_tfs_pr + ranked_tfs_od))
+
+                # Subset data
+                keep_bool_time = tdata.obs['time'] == time_name_to_label[time]
+                keep_bool_tissue = tdata.obs['tissue'] == tissue_name_to_label[tissue]
+                keep_bool_cluster_de = tdata.obs['cluster'].isin(cluster_keys_de)
+
+                keep_bool = keep_bool_time & keep_bool_tissue & keep_bool_cluster_de
+
+                tdata_sub = tdata[keep_bool, :].copy()
+
+                # DE analysis
+                tdata_sub.obs['infection_name'] = tdata_sub.obs['infection'].map({0: 'chronic', 1: 'acute'})
+                sc.tl.rank_genes_groups(
+                    tdata_sub,
+                    groupby='infection_name',
+                    method='wilcoxon',
+                )
+
+                for group in ['chronic', 'acute']:
+
+                    group_str = 'cva' if group == 'chronic' else 'avc'
+
+                    cluster_str = ''.join(str(i) for i in cluster_keys_de)
+                    id_str = f'{tissue}_{time}_switchtficlust_{cluster_config_data}_declust_{cluster_str}'
+                    save_path_de_current = os.path.join(save_p_de, id_str)
+                    os.makedirs(save_path_de_current, exist_ok=True)
+
+                    de_results = sc.get.rank_genes_groups_df(tdata_sub, group=group)  # !!! chronic vs acute
+
+                    de_results_tfs = de_results[de_results['names'].isin(candidate_tfs)]
+
+                    de_results.to_csv(os.path.join(save_path_de_current, f'de_results_all_{group_str}.csv'))
+                    de_results_tfs.to_csv(os.path.join(save_path_de_current, f'de_results_tfs_{group_str}.csv'))
+
+                    print(de_results_tfs)
+
+                    # Plot results
+                    # Heatmap of top DE genes
+                    sc.pl.rank_genes_groups_heatmap(
+                        tdata_sub,
+                        groupby='infection_name',
+                        n_genes=20,
+                        standard_scale='var',
+                        show=False,
+                        save=False,
+                    )
+                    fig = plt.gcf()
+                    for ax in fig.axes:
+                        for label in ax.get_xticklabels():
+                            if label.get_text() in candidate_tfs:
+                                label.set_color('red')
+                    fig.savefig(os.path.join(save_path_de_current, f'heatmap_{group_str}.png'), dpi=fig.dpi, bbox_inches="tight", pad_inches=0.05)
+                    plt.close(fig)
+
+                    # Dotplot of top DE genes
+                    sc.pl.rank_genes_groups_dotplot(
+                        tdata_sub,
+                        groupby='infection_name',
+                        n_genes=20,
+                        standard_scale='var',
+                        show=False,
+                        save=False,
+                    )
+                    fig = plt.gcf()
+                    for ax in fig.axes:
+                        for label in ax.get_xticklabels():
+                            if label.get_text() in candidate_tfs:
+                                label.set_color('red')
+                    fig.savefig(os.path.join(save_path_de_current, f'dotplot_scaled_mean_expression_{group_str}.png'), dpi=fig.dpi, bbox_inches="tight", pad_inches=0.05)
+                    plt.close(fig)
+
+                    # Dotplot of top DE genes
+                    sc.pl.rank_genes_groups_dotplot(
+                        tdata_sub,
+                        groupby='infection_name',
+                        n_genes=20,
+                        values_to_plot='logfoldchanges', cmap='bwr',
+                        vmin=-4, vmax=4,
+                        colorbar_title='logfoldchange',
+                        show=False,
+                        save=False,
+                    )
+                    fig = plt.gcf()
+                    for ax in fig.axes:
+                        for label in ax.get_xticklabels():
+                            if label.get_text() in candidate_tfs:
+                                label.set_color('red')
+                    fig.savefig(os.path.join(save_path_de_current, f'dotplot_lfc_{group_str}.png'), dpi=fig.dpi, bbox_inches="tight", pad_inches=0.05)
+                    plt.close(fig)
+
+                    # Dotplot candidate driver TFs
+                    var_names = {'driver_tfs': candidate_tfs}
+                    sc.pl.rank_genes_groups_dotplot(
+                        tdata_sub,
+                        var_names=var_names,
+                        values_to_plot='logfoldchanges', cmap='bwr',
+                        vmin=-4, vmax=4,
+                        colorbar_title='logfoldchange',
+                        show=False,
+                        save=False,
+                    )
+                    fig = plt.gcf()
+                    for ax in fig.axes:
+                        for label in ax.get_xticklabels():
+                            if label.get_text() in candidate_tfs:
+                                label.set_color('red')
+                    fig.savefig(os.path.join(save_path_de_current, f'dotplot_tfs_lfc_{group_str}.png'), dpi=fig.dpi, bbox_inches="tight", pad_inches=0.05)
+                    plt.close(fig)
+
+                    # Ranked DE genes
+                    sc.pl.rank_genes_groups(
+                        tdata_sub,
+                        groups=None,
+                        n_genes=20,
+                        show=False,
+                        save=False,
+                    )
+                    fig = plt.gcf()
+                    for ax in fig.axes:
+                        for label in ax.get_xticklabels():
+                            if label.get_text() in candidate_tfs:
+                                label.set_color('red')
+                    fig.savefig(os.path.join(save_path_de_current, f'de_ranking_{group_str}.png'), dpi=fig.dpi, bbox_inches="tight", pad_inches=0.05)
+                    plt.close(fig)
+
+                    # Volcano plot
+                    de_results['-logQ'] = -np.log(de_results['pvals'].astype('float'))
+                    de_results = de_results[de_results['logfoldchanges'].abs() <= 10].copy()
+
+                    lowqval_de = de_results.loc[abs(de_results['logfoldchanges']) > 1.5]
+                    other_de = de_results.loc[abs(de_results['logfoldchanges']) <= 1.5]
+
+                    fig, ax = plt.subplots(dpi=300)
+                    sns.regplot(
+                        x=other_de['logfoldchanges'],
+                        y=other_de['-logQ'],
+                        fit_reg=False,
+                        scatter_kws={'s': 6},
+                    )
+                    sns.regplot(
+                        x=lowqval_de['logfoldchanges'],
+                        y=lowqval_de['-logQ'],
+                        fit_reg=False,
+                        scatter_kws={'s': 6},
+                    )
+
+                    for tf in candidate_tfs:
+                        sub = de_results.loc[de_results['names'] == tf]
+                        if not sub.empty:
+                            x = sub["logfoldchanges"].to_numpy()[0]
+                            y = sub["-logQ"].to_numpy()[0]
+
+                            ax.scatter(x, y, color='red', s=6, zorder=3)
+                            ax.text(x, y, tf, fontsize=6, ha='right', va='bottom')
+
+                    ax.set_xlabel('log2 FC')
+                    ax.set_ylabel('-log Q-value')
+
+                    ax.set_title(group_str)
+                    fig.savefig(os.path.join(save_path_de_current, f'volcanoe_{group_str}.png'), dpi=fig.dpi, bbox_inches="tight", pad_inches=0.05)
+
 
 
 if __name__ == '__main__':
@@ -2108,13 +2314,15 @@ if __name__ == '__main__':
 
     # main_tcell_data_processing()
 
-    # main_tcell_grn_inference()
+    main_tcell_grn_inference()
 
+    # Todo: change paths ...
     # main_tcell_grn_exploration()
 
     # main_tcell_switchtfi()
+    # Todo: end todo
 
-    # main_tcell_explore_results()  # todo: de testing, check if edges present in chronic grn
+    # main_tcell_explore_results()
 
 
     load = False
