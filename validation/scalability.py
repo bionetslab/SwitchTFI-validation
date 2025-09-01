@@ -39,10 +39,10 @@ else:
     SAVE_PATH = Path.cwd().parent / 'results/05_revision/scalability'
 os.makedirs(SAVE_PATH, exist_ok=True)
 
-TEST = False
+TEST = True
 
 NUM_GENES = 10000 if not TEST else 1000
-NUM_CELLS = [100, 500, 1000, 5000, 10000, 50000, 100000] if not TEST else [100, 200, 300]
+NUM_CELLS = [100, 500, 1000, 5000, 10000, 50000, 85010] if not TEST else [100, 200, 300]
 
 NUM_CELLS_GRN = 1000 if not TEST else 100
 NUM_EDGES_GRN = [100, 500, 1000, 5000, 10000, 50000] if not TEST else [100, 200, 300]
@@ -360,7 +360,7 @@ def scalability_wrapper(
     return res_df, function_output
 
 
-def scalability_grn_inf(subset_genes: bool = False):
+def scalability_grn_inf():
 
     from arboreto.algo import grnboost2
 
@@ -376,12 +376,6 @@ def scalability_grn_inf(subset_genes: bool = False):
         sc.pp.normalize_per_cell(adata)
         sc.pp.log1p(adata)
         sc.pp.scale(adata)
-
-        if subset_genes:
-            # Set number of genes based on smallest cluster size
-            min_cluster_size = adata.obs['prog_off'].value_counts().min()
-            num_genes = min(adata.shape[1], int(min_cluster_size * 0.9))
-            adata = adata[:, :num_genes].copy()
 
         adata_df = adata.to_df(layer=None)
 
@@ -407,13 +401,13 @@ def scalability_grn_inf(subset_genes: bool = False):
 
         res_df['n_cells'] = [n] * res_df.shape[0]
 
-        res_df.to_csv(os.path.join(SAVE_PATH, f'grn_inf{"_subset_genes" if subset_genes else ""}_{n}.csv'))
+        res_df.to_csv(os.path.join(SAVE_PATH, f'grn_inf_{n}.csv'))
 
-        fn_grn = f'grn{"_subset_genes" if subset_genes else ""}_{n}.csv'
+        fn_grn = f'grn_{n}.csv'
         grn.to_csv(os.path.join(save_path, fn_grn))
 
 
-def scalability_switchtfi(subset_genes: bool = False):
+def scalability_switchtfi():
 
     import sys
     sys.path.append(os.path.abspath('..'))
@@ -431,14 +425,8 @@ def scalability_switchtfi(subset_genes: bool = False):
         sc.pp.normalize_per_cell(adata)
         sc.pp.log1p(adata)
 
-        if subset_genes:
-            # Set number of genes based on smallest cluster size
-            min_cluster_size = adata.obs['prog_off'].value_counts().min()
-            num_genes = min(adata.shape[1], int(min_cluster_size * 0.9))
-            adata = adata[:, :num_genes].copy()
-
         # Load the corresponding GRN
-        fn_grn = f'grn{"_subset_genes" if subset_genes else ""}_{n}.csv'
+        fn_grn = f'grn_{n}.csv'
         grn_path = os.path.join(SAVE_PATH, 'grn_inf', fn_grn)
         grn_num_cells = pd.read_csv(grn_path, index_col=0)
 
@@ -514,7 +502,7 @@ def scalability_switchtfi(subset_genes: bool = False):
 
         res_df['alg_step'] = ['align', 'impute', 'weight', 'pvalue', 'prune', 'rank_tfs']
 
-        fn_fg = f'switchtfi_fine_grained{"_subset_genes" if subset_genes else ""}_{n}.csv'
+        fn_fg = f'switchtfi_fine_grained_{n}.csv'
         res_df.to_csv(os.path.join(SAVE_PATH, fn_fg))
 
         summary_df = (
@@ -524,11 +512,11 @@ def scalability_switchtfi(subset_genes: bool = False):
             .sum(min_count=1)
         )
 
-        fn = f'switchtfi{"_subset_genes" if subset_genes else ""}_{n}.csv'
+        fn = f'switchtfi_{n}.csv'
         summary_df.to_csv(os.path.join(SAVE_PATH, fn))
 
 
-def scalability_cellrank(subset_genes: bool = False):
+def scalability_cellrank():
 
     import scvelo as scv
     import cellrank as cr
@@ -612,12 +600,6 @@ def scalability_cellrank(subset_genes: bool = False):
         sc.pp.normalize_per_cell(adata)
         sc.pp.log1p(adata)
 
-        if subset_genes:
-            # Set number of genes based on smallest cluster size
-            min_cluster_size = adata.obs['prog_off'].value_counts().min()
-            num_genes = min(adata.shape[1], int(min_cluster_size * 0.9))
-            adata = adata[:, :num_genes].copy()
-
         # Runs step-wise analysis
         res_df_rna_velo, adata_rna_velo = scalability_wrapper(
             function=compute_rna_velocity,
@@ -653,7 +635,7 @@ def scalability_cellrank(subset_genes: bool = False):
 
         res_df['alg_step'] = ['rna_velo', 'trans_matrix', 'terminal_states', 'fate_probs', 'driver_genes']
 
-        fn_fg = f'cellrank_fine_grained{"_subset_genes" if subset_genes else ""}_{n}.csv'
+        fn_fg = f'cellrank_fine_grained_{n}.csv'
         res_df.to_csv(os.path.join(SAVE_PATH, fn_fg))
 
         summary_df = (
@@ -663,7 +645,7 @@ def scalability_cellrank(subset_genes: bool = False):
             .sum(min_count=1)
         )
 
-        fn = f'cellrank{"_subset_genes" if subset_genes else ""}_{n}.csv'
+        fn = f'cellrank_{n}.csv'
         summary_df.to_csv(os.path.join(SAVE_PATH, fn))
 
 
@@ -785,7 +767,7 @@ def scalability_splicejac():
         summary_df.to_csv(os.path.join(SAVE_PATH, f'splicejac_{n}.csv'))
 
 
-def scalability_drivaer(subset_genes: bool = False):
+def scalability_drivaer():
 
     import DrivAER as dv
 
@@ -819,14 +801,8 @@ def scalability_drivaer(subset_genes: bool = False):
         # Load the data
         adata = load_data(n_obs=n)
 
-        if subset_genes:
-            # Set number of genes based on smallest cluster size
-            min_cluster_size = adata.obs['prog_off'].value_counts().min()
-            num_genes = min(adata.shape[1], int(min_cluster_size * 0.9))
-            adata = adata[:, :num_genes].copy()
-
         # Load the corresponding GRN
-        grn_path = os.path.join(SAVE_PATH, 'grn_inf', f'grn{"_subset_genes" if subset_genes else ""}_{n}.csv')
+        grn_path = os.path.join(SAVE_PATH, 'grn_inf', f'grn_{n}.csv')
         grn_num_cells = pd.read_csv(grn_path, index_col=0)
         grn_num_cells[['TF', 'target']] = grn_num_cells[['TF', 'target']].astype(str)
 
@@ -839,7 +815,7 @@ def scalability_drivaer(subset_genes: bool = False):
 
         res_df['n_cells'] = [n]
 
-        fn = f'drivaer{"_subset_genes" if subset_genes else ""}_{n}.csv'
+        fn = f'drivaer_{n}.csv'
         res_df.to_csv(os.path.join(SAVE_PATH, fn))
 
 
@@ -1139,12 +1115,6 @@ if __name__ == '__main__':
     )
 
     parser.add_argument(
-        '-sg', '--subset-genes',
-        action='store_true',
-        help="If set, subset the number of genes according to spliceJAC's specifications. Defaults to False."
-    )
-
-    parser.add_argument(
         '-nc', '--num_cells',
         type=int,
         default=None,
@@ -1161,7 +1131,6 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     m = args.method
-    sg = args.subset_genes
     nc = args.num_cells
     ne = args.num_edges
 
@@ -1192,15 +1161,15 @@ if __name__ == '__main__':
     if m == 'data':
         process_data()
     elif m == 'grn_inf':
-        scalability_grn_inf(subset_genes=sg)
+        scalability_grn_inf()
     elif m == 'switchtfi':
-        scalability_switchtfi(subset_genes=sg)
+        scalability_switchtfi()
     elif m == 'cellrank':
-        scalability_cellrank(subset_genes=sg)
+        scalability_cellrank()
     elif m == 'splicejac':
         scalability_splicejac()
     elif m == 'drivaer':
-        scalability_drivaer(subset_genes=sg)
+        scalability_drivaer()
     elif m == 'switchtfi_grn':
         scalability_switchtfi_grn()
     elif m == 'drivaer_grn':
@@ -1213,7 +1182,6 @@ if __name__ == '__main__':
 # Todo: no error # error
 #  - data generation (uploaded to HPC)
 #  - ALL GENES: cellrank, drivaer, switchtfi, splicejac # grn inf (cpu usage is < 32)
-#  - SUBSET GENES: cellrank, drivaer, switchtfi # grn inf (cpu usage is < 32)
 #  - GRN SIZE: switchtfi, drivaer #
 
 
