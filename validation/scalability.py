@@ -363,7 +363,6 @@ def scalability_wrapper(
 def scalability_grn_inf(subset_genes: bool = False):
 
     from arboreto.algo import grnboost2
-    from dask.distributed import Client, LocalCluster
 
     # Define path where results are saved
     save_path = SAVE_PATH / 'grn_inf'
@@ -390,17 +389,12 @@ def scalability_grn_inf(subset_genes: bool = False):
         n_tfs = min(1500, adata_df.shape[0])
         tf_names = adata.var_names.tolist()[0:n_tfs]
 
-        # Create LocalCluster and Client instances
-        local_cluster = LocalCluster(n_workers=32, threads_per_worker=1)
-        custom_client = Client(cluster=local_cluster)
-
         fn_kwargs = {
             'expression_data': adata_df,
             'gene_names': None,
             'tf_names': tf_names,
             'seed': 42,
             'verbose': True,
-            'client_or_address': custom_client,
         }
 
         res_df, grn = scalability_wrapper(
