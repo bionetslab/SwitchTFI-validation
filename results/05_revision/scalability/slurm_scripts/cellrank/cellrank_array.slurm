@@ -4,7 +4,7 @@
 #SBATCH --ntasks-per-node=1
 #SBATCH --cpus-per-task=1
 #SBATCH --time=24:00:00
-#SBATCH --mem=128G
+#SBATCH --mem=240G
 #SBATCH --array=0-6
 #SBATCH --error=%x_%A_%a.error
 #SBATCH --output=%x_%A_%a.log
