@@ -53,111 +53,6 @@ VARY_NUM_EDGES_NUM_EDGES = [100, 500, 1000, 5000, 10000, 50000] if not TEST else
 VARY_NUM_EDGES_NUM_CELLS = [1000, 10000, 50000] if not TEST else [100, 200, 300]
 
 
-def process_data():
-
-    # Todo: add prog_off_annotations
-
-    import cellrank as cr
-
-    save_path = SAVE_PATH / 'data'
-    os.makedirs(save_path, exist_ok=True)
-
-    print(save_path)
-
-    # Check whether data generation was run beforehand
-    existing_files = [
-        f.name for f in save_path.iterdir() if not (f.name.startswith('.') or f.name == 'reprogramming_morris.h5ad')
-    ]
-    if existing_files:
-        raise RuntimeError(
-            f'Data processing was already run. '
-            f'Remove existing files {existing_files} in "{save_path}" before running again.'
-        )
-
-    # Download data
-    adata = cr.datasets.reprogramming_morris(os.path.join(save_path, 'reprogramming_morris.h5ad'), subset='full')
-
-    # Subset to the top 10,000 hvg genes
-    adata_proc = adata.copy()
-    sc.pp.normalize_total(adata)
-    sc.pp.log1p(adata_proc)
-    sc.pp.highly_variable_genes(adata_proc, n_top_genes=NUM_GENES)
-
-    adata_hvg = adata[:, adata_proc.var['highly_variable']].copy()
-
-    # Save AnnData, individual data matrices and relevant annotations
-    adata_hvg.write_h5ad(os.path.join(save_path, 'reprogramming_morris_hvg.h5ad'))
-    x_unspliced = adata_hvg.layers['unspliced']
-    x_spliced = adata_hvg.layers['spliced']
-    sp.save_npz(os.path.join(save_path, f'x_unspliced.npz'), x_unspliced)
-    sp.save_npz(os.path.join(save_path, f'x_spliced.npz'), x_spliced)
-
-    np.save(os.path.join(save_path, f'cell_names.npy'), adata_hvg.obs_names.to_numpy())
-    np.save(os.path.join(save_path, f'gene_names.npy'), adata_hvg.var_names.to_numpy())
-
-
-def load_data(n_obs: int, seed: int = 42) -> sc.AnnData:
-
-    # Todo: add prog_off anno loading
-
-    save_path = SAVE_PATH / 'data'
-
-    if not (save_path / 'reprogramming_morris_hvg.h5ad').exists():
-        raise RuntimeError(
-            f"Missing expected file 'reprogramming_morris_hvg.h5ad'. Make sure process_data() has been run first."
-        )
-
-    # Load npy files to avoid errors caused by incompatible Scanpy versions
-    x_unspliced = sp.load_npz(os.path.join(save_path, f'x_unspliced.npz')).toarray().astype(np.float32)
-    x_spliced = sp.load_npz(os.path.join(save_path, f'x_spliced.npz')).toarray().astype(np.float32)
-    cell_names = np.load(os.path.join(save_path, f'cell_names.npy'), allow_pickle=True)
-    gene_names = np.load(os.path.join(save_path, f'gene_names.npy'), allow_pickle=True)
-
-    # Create anndata
-    adata = sc.AnnData(X=x_spliced)
-    adata.obs_names = cell_names
-    adata.var_names = gene_names
-    adata.layers['unspliced'] = x_unspliced
-    adata.layers['spliced'] = x_spliced
-
-    # Subsample to the desired number of cells
-    np.random.seed(seed)
-    n_total = adata.n_obs
-    idx = np.random.choice(n_total, size=n_obs, replace=False)
-    adata_sub = adata[idx, :].copy()
-
-    # Add progenitor offspring annotations
-    if n_obs % 2 != 0:
-        n_prog = n_obs // 2
-        n_off = n_obs - n_prog
-    else:
-        n_prog = int(n_obs / 2)
-        n_off = int(n_obs / 2)
-
-    prog_off_anno = ['prog'] * n_prog + ['off'] * n_off
-    adata_sub.obs['prog_off'] = prog_off_anno
-
-    return adata_sub
-
-
-def load_grn(n_obs: int, n_edges: int | float | None) -> pd.DataFrame:
-
-    # Load full GRN
-    fn_grn = f'grn_scenic_num_cells_{n_obs}.csv'
-    grn_path = os.path.join(SAVE_PATH, 'grn_inf', fn_grn)
-    grn = pd.read_csv(grn_path, index_col=0)
-
-    # Subset GRN
-    if n_edges is not None:
-
-        if isinstance(n_edges, float):
-            n_edges = int(n_edges * grn.shape[0])
-
-        grn = grn.iloc[:n_edges].copy()
-
-    return grn
-
-
 def get_cpu_memory_mb(process: psutil.Process) -> float:
     total_mem = 0
     try:
@@ -351,6 +246,111 @@ def scalability_wrapper(
         res_df.to_csv(os.path.join(res_dir, res_filename))
 
     return res_df, function_output
+
+
+def process_data():
+
+    # Todo: add prog_off_annotations
+
+    import cellrank as cr
+
+    save_path = SAVE_PATH / 'data'
+    os.makedirs(save_path, exist_ok=True)
+
+    print(save_path)
+
+    # Check whether data generation was run beforehand
+    existing_files = [
+        f.name for f in save_path.iterdir() if not (f.name.startswith('.') or f.name == 'reprogramming_morris.h5ad')
+    ]
+    if existing_files:
+        raise RuntimeError(
+            f'Data processing was already run. '
+            f'Remove existing files {existing_files} in "{save_path}" before running again.'
+        )
+
+    # Download data
+    adata = cr.datasets.reprogramming_morris(os.path.join(save_path, 'reprogramming_morris.h5ad'), subset='full')
+
+    # Subset to the top 10,000 hvg genes
+    adata_proc = adata.copy()
+    sc.pp.normalize_total(adata)
+    sc.pp.log1p(adata_proc)
+    sc.pp.highly_variable_genes(adata_proc, n_top_genes=NUM_GENES)
+
+    adata_hvg = adata[:, adata_proc.var['highly_variable']].copy()
+
+    # Save AnnData, individual data matrices and relevant annotations
+    adata_hvg.write_h5ad(os.path.join(save_path, 'reprogramming_morris_hvg.h5ad'))
+    x_unspliced = adata_hvg.layers['unspliced']
+    x_spliced = adata_hvg.layers['spliced']
+    sp.save_npz(os.path.join(save_path, f'x_unspliced.npz'), x_unspliced)
+    sp.save_npz(os.path.join(save_path, f'x_spliced.npz'), x_spliced)
+
+    np.save(os.path.join(save_path, f'cell_names.npy'), adata_hvg.obs_names.to_numpy())
+    np.save(os.path.join(save_path, f'gene_names.npy'), adata_hvg.var_names.to_numpy())
+
+
+def load_data(n_obs: int, seed: int = 42) -> sc.AnnData:
+
+    # Todo: add prog_off anno loading
+
+    save_path = SAVE_PATH / 'data'
+
+    if not (save_path / 'reprogramming_morris_hvg.h5ad').exists():
+        raise RuntimeError(
+            f"Missing expected file 'reprogramming_morris_hvg.h5ad'. Make sure process_data() has been run first."
+        )
+
+    # Load npy files to avoid errors caused by incompatible Scanpy versions
+    x_unspliced = sp.load_npz(os.path.join(save_path, f'x_unspliced.npz')).toarray().astype(np.float32)
+    x_spliced = sp.load_npz(os.path.join(save_path, f'x_spliced.npz')).toarray().astype(np.float32)
+    cell_names = np.load(os.path.join(save_path, f'cell_names.npy'), allow_pickle=True)
+    gene_names = np.load(os.path.join(save_path, f'gene_names.npy'), allow_pickle=True)
+
+    # Create anndata
+    adata = sc.AnnData(X=x_spliced)
+    adata.obs_names = cell_names
+    adata.var_names = gene_names
+    adata.layers['unspliced'] = x_unspliced
+    adata.layers['spliced'] = x_spliced
+
+    # Subsample to the desired number of cells
+    np.random.seed(seed)
+    n_total = adata.n_obs
+    idx = np.random.choice(n_total, size=n_obs, replace=False)
+    adata_sub = adata[idx, :].copy()
+
+    # Add progenitor offspring annotations
+    if n_obs % 2 != 0:
+        n_prog = n_obs // 2
+        n_off = n_obs - n_prog
+    else:
+        n_prog = int(n_obs / 2)
+        n_off = int(n_obs / 2)
+
+    prog_off_anno = ['prog'] * n_prog + ['off'] * n_off
+    adata_sub.obs['prog_off'] = prog_off_anno
+
+    return adata_sub
+
+
+def load_grn(n_obs: int, n_edges: int | float | None) -> pd.DataFrame:
+
+    # Load full GRN
+    fn_grn = f'grn_scenic_num_cells_{n_obs}.csv'
+    grn_path = os.path.join(SAVE_PATH, 'grn_inf', fn_grn)
+    grn = pd.read_csv(grn_path, index_col=0)
+
+    # Subset GRN
+    if n_edges is not None:
+
+        if isinstance(n_edges, float):
+            n_edges = int(n_edges * grn.shape[0])
+
+        grn = grn.iloc[:n_edges].copy()
+
+    return grn
 
 
 def scalability_grn_inf():
