@@ -30,27 +30,29 @@ import scanpy as sc
 import scipy.sparse as sp
 
 from pathlib import Path
-from typing import Callable, Dict, Tuple, Union, Any
+from typing import Callable, Dict, Tuple, Union, Literal, Any
 
 
 if Path('/home/woody/iwbn/iwbn107h').is_dir():
     SAVE_PATH = Path('/home/woody/iwbn/iwbn107h/scalability')
 else:
-    SAVE_PATH = './results/05_revision/scalability'
-os.makedirs(SAVE_PATH, exist_ok=True)
+    SAVE_PATH = Path('./results/05_revision/scalability')
+
+INTERM_RES_SUBDIR = 'intermediate_results'
+os.makedirs(os.path.join(SAVE_PATH, INTERM_RES_SUBDIR), exist_ok=True)
 
 TEST = True
 
 # --- Number of genes always fix
-NUM_GENES = 10000 if not TEST else 1000
+NUM_GENES = 10000 if not TEST else 300
 
 # --- Vary number of cells, vary number of edges (GRN: small, medium, large)
-VARY_NUM_CELLS_NUM_CELLS = [100, 500, 1000, 5000, 10000, 50000, 85010] if not TEST else [100, 200, 300]
+VARY_NUM_CELLS_NUM_CELLS = [100, 500, 1000, 5000, 10000, 50000, 85010] if not TEST else [50, 100, 150]
 VARY_NUM_CELLS_NUM_EDGES = [0.05, 0.10, 0.5]
 
 # --- Vary number of edges, vary number of cells (low, medium, high)
 VARY_NUM_EDGES_NUM_EDGES = [100, 500, 1000, 5000, 10000, 50000] if not TEST else [100, 200, 300]
-VARY_NUM_EDGES_NUM_CELLS = [1000, 10000, 50000] if not TEST else [100, 200, 300]
+VARY_NUM_EDGES_NUM_CELLS = [1000, 10000, 50000] if not TEST else [50, 100, 150]
 
 
 def get_cpu_memory_mb(process: psutil.Process) -> float:
@@ -250,8 +252,6 @@ def scalability_wrapper(
 
 def process_data():
 
-    # Todo: add prog_off_annotations
-
     import cellrank as cr
 
     save_path = SAVE_PATH / 'data'
@@ -272,7 +272,7 @@ def process_data():
 
     # Subset to the top 10,000 hvg genes
     adata_proc = adata.copy()
-    sc.pp.normalize_total(adata)
+    sc.pp.normalize_total(adata_proc)
     sc.pp.log1p(adata_proc)
     sc.pp.highly_variable_genes(adata_proc, n_top_genes=NUM_GENES)
     adata_hvg = adata[:, adata_proc.var['highly_variable']].copy()
@@ -296,7 +296,7 @@ def process_data():
     np.save(os.path.join(save_path, f'prog_off_anno.npy'), adata_hvg.obs['prog_off'].to_numpy())
 
 
-def load_data(n_obs: int, seed: int = 42) -> sc.AnnData:
+def load_data(n_obs: Union[int, None] = None, seed: int = 42) -> sc.AnnData:
 
     save_path = SAVE_PATH / 'data'
 
@@ -321,6 +321,8 @@ def load_data(n_obs: int, seed: int = 42) -> sc.AnnData:
     adata.obs['prog_off'] = prog_off_anno
 
     # Subsample to the desired number of cells
+    if n_obs is None:
+        n_obs = adata.n_obs
     np.random.seed(seed)
     n_total = adata.n_obs
     idx = np.random.choice(n_total, size=n_obs, replace=False)
@@ -329,10 +331,14 @@ def load_data(n_obs: int, seed: int = 42) -> sc.AnnData:
     return adata_sub
 
 
-def load_grn(n_obs: int, n_edges: int | float | None) -> pd.DataFrame:
+def load_grn(
+        n_obs: int,
+        n_edges: Union[int, float, None] = None,
+        grn_inf_method: Literal['scenic', 'grnboost2'] = 'scenic'
+) -> pd.DataFrame:
 
     # Load full GRN
-    fn_grn = f'grn_scenic_num_cells_{n_obs}.csv'
+    fn_grn = f'grn_{grn_inf_method}_num_cells_{n_obs}.csv'
     grn_path = os.path.join(SAVE_PATH, 'grn_inf', fn_grn)
     grn = pd.read_csv(grn_path, index_col=0)
 
@@ -429,31 +435,32 @@ def scalability_grn_inf():
             function=pyscenic_result_df_to_grn,
             function_params={
                 'pyscenic_result_df': scenic_result,
-                'results_folder': None,
+                'result_folder': None,
             },
             track_gpu=False,
         )
 
         # Save (intermediate) results
         grn_grnboost2 = grn_grnboost2.sort_values(by='importance', ascending=False).reset_index(drop=True)
-        grn_grnboost2.to_csv(os.path.join(SAVE_PATH, f'grn_grnboost2_num_cells_{n}.csv'))
+        grn_grnboost2.to_csv(os.path.join(save_path, f'grn_grnboost2_num_cells_{n}.csv'))
 
-        modules_p = os.path.join(SAVE_PATH, f'modules_num_cells_{n}.pkl')
+        modules_p = os.path.join(save_path, f'modules_num_cells_{n}.pkl')
         with open(modules_p, 'wb') as f:
             pickle.dump(modules, f)
 
-        scenic_result.to_csv(os.path.join(SAVE_PATH, f'scenic_result_num_cells_{n}.csv'))
+        scenic_result.to_csv(os.path.join(save_path, f'scenic_result_num_cells_{n}.csv'))
 
         grn_scenic = grn_scenic.sort_values(by='scenic_weight', ascending=False).reset_index(drop=True)
-        grn_scenic.to_csv(os.path.join(SAVE_PATH, f'grn_scenic_num_cells_{n}.csv'))
+        grn_scenic.to_csv(os.path.join(save_path, f'grn_scenic_num_cells_{n}.csv'))
 
+        # Save scalability results
         res_dfs_sub = [res_df_grnboost2, res_df_modules, res_df_pruning, res_df_scenic_to_grn]
         res_df = pd.concat(res_dfs_sub, axis=0, ignore_index=True)
         res_df['n_cells'] = [n] * 4
         res_df['alg_step'] = ['grnboost2', 'modules', 'pruning', 'scenic_to_grn']
 
         fn_fg = f'grn_inf_fine_grained_num_cells_{n}.csv'
-        res_df.to_csv(os.path.join(SAVE_PATH, fn_fg))
+        res_df.to_csv(os.path.join(SAVE_PATH, INTERM_RES_SUBDIR, fn_fg))
 
         summary_df = (
             res_df
@@ -463,7 +470,7 @@ def scalability_grn_inf():
         )
 
         fn = f'grn_inf_num_cells_{n}.csv'
-        summary_df.to_csv(os.path.join(SAVE_PATH, fn))
+        summary_df.to_csv(os.path.join(SAVE_PATH, INTERM_RES_SUBDIR, fn))
 
 
 def scalability_switchtfi():
@@ -560,7 +567,7 @@ def scalability_switchtfi():
         res_df['alg_step'] = ['align', 'impute', 'weight', 'pvalue', 'prune', 'rank_tfs']
 
         fn_fg = f'switchtfi_fine_grained_{n}.csv'
-        res_df.to_csv(os.path.join(SAVE_PATH, fn_fg))
+        res_df.to_csv(os.path.join(SAVE_PATH, INTERM_RES_SUBDIR, fn_fg))
 
         summary_df = (
             res_df
@@ -570,7 +577,7 @@ def scalability_switchtfi():
         )
 
         fn = f'switchtfi_{n}.csv'
-        summary_df.to_csv(os.path.join(SAVE_PATH, fn))
+        summary_df.to_csv(os.path.join(SAVE_PATH, INTERM_RES_SUBDIR, fn))
 
 
 def scalability_cellrank():
@@ -693,7 +700,7 @@ def scalability_cellrank():
         res_df['alg_step'] = ['rna_velo', 'trans_matrix', 'terminal_states', 'fate_probs', 'driver_genes']
 
         fn_fg = f'cellrank_fine_grained_{n}.csv'
-        res_df.to_csv(os.path.join(SAVE_PATH, fn_fg))
+        res_df.to_csv(os.path.join(SAVE_PATH, INTERM_RES_SUBDIR, fn_fg))
 
         summary_df = (
             res_df
@@ -703,7 +710,7 @@ def scalability_cellrank():
         )
 
         fn = f'cellrank_{n}.csv'
-        summary_df.to_csv(os.path.join(SAVE_PATH, fn))
+        summary_df.to_csv(os.path.join(SAVE_PATH, INTERM_RES_SUBDIR, fn))
 
 
 def scalability_splicejac():
@@ -812,7 +819,7 @@ def scalability_splicejac():
         gpu_cols = ['mem_peak_gpu', 'mem_avg_gpu', 'samples_gpu']
         res_df[gpu_cols] = res_df[gpu_cols].astype('float64')
 
-        res_df.to_csv(os.path.join(SAVE_PATH, f'splicejac_fine_grained_{n}.csv'))
+        res_df.to_csv(os.path.join(SAVE_PATH, INTERM_RES_SUBDIR, f'splicejac_fine_grained_{n}.csv'))
 
         summary_df = (
             res_df
@@ -821,7 +828,7 @@ def scalability_splicejac():
             .sum(min_count=1)
         )
 
-        summary_df.to_csv(os.path.join(SAVE_PATH, f'splicejac_{n}.csv'))
+        summary_df.to_csv(os.path.join(SAVE_PATH, INTERM_RES_SUBDIR, f'splicejac_{n}.csv'))
 
 
 def scalability_drivaer():
@@ -873,7 +880,7 @@ def scalability_drivaer():
         res_df['n_cells'] = [n]
 
         fn = f'drivaer_{n}.csv'
-        res_df.to_csv(os.path.join(SAVE_PATH, fn))
+        res_df.to_csv(os.path.join(SAVE_PATH, INTERM_RES_SUBDIR, fn))
 
 
 def scalability_switchtfi_grn():
@@ -976,7 +983,7 @@ def scalability_switchtfi_grn():
         res_df['alg_step'] = ['align', 'impute', 'weight', 'pvalue', 'prune', 'rank_tfs']
 
         fn_fg = f'switchtfi_fine_grained_grn_size_{n}.csv'
-        res_df.to_csv(os.path.join(SAVE_PATH, fn_fg))
+        res_df.to_csv(os.path.join(SAVE_PATH, INTERM_RES_SUBDIR, fn_fg))
 
         summary_df = (
             res_df
@@ -986,7 +993,7 @@ def scalability_switchtfi_grn():
         )
 
         fn = f'switchtfi_grn_size_{n}.csv'
-        summary_df.to_csv(os.path.join(SAVE_PATH, fn))
+        summary_df.to_csv(os.path.join(SAVE_PATH, INTERM_RES_SUBDIR, fn))
 
         if n_target == num_edges:
             break
@@ -1041,7 +1048,7 @@ def scalability_drivaer_grn():
         res_df['n_cells'] = [n]
 
         fn = f'drivaer_grn_size_{n}.csv'
-        res_df.to_csv(os.path.join(SAVE_PATH, fn))
+        res_df.to_csv(os.path.join(SAVE_PATH, INTERM_RES_SUBDIR, fn))
 
 
 def aggregate_results():
@@ -1064,7 +1071,7 @@ def aggregate_results():
             res_dfs_n = []
             for n in NUM_CELLS:
                 fn = f'{method}{mode_str}_{n}.csv'
-                fp = os.path.join(SAVE_PATH, fn)
+                fp = os.path.join(SAVE_PATH, INTERM_RES_SUBDIR, fn)
                 try:
                     res_df_n = pd.read_csv(fp, index_col=0)
                     res_dfs_n.append(res_df_n)
@@ -1087,7 +1094,7 @@ def aggregate_results():
                 res_dfs_fine_grained_n = []
                 for n in NUM_CELLS:
                     fn = f'{method}_fine_grained{mode_str}_{n}.csv'
-                    fp = os.path.join(SAVE_PATH, fn)
+                    fp = os.path.join(SAVE_PATH, INTERM_RES_SUBDIR, fn)
                     try:
                         res_df_fine_grained_n = pd.read_csv(fp, index_col=0)
                         res_dfs_fine_grained_n.append(res_df_fine_grained_n)
@@ -1121,7 +1128,7 @@ def aggregate_results():
         for n in NUM_EDGES_GRN:
             fn = f'{method}_grn_size_{n}.csv'
             try:
-                res_df_n_edges_n = pd.read_csv(os.path.join(SAVE_PATH, fn), index_col=0)
+                res_df_n_edges_n = pd.read_csv(os.path.join(SAVE_PATH, INTERM_RES_SUBDIR, fn), index_col=0)
                 res_dfs_n_edges.append(res_df_n_edges_n)
             except FileNotFoundError:
                 print(f'File {fn} not found')
