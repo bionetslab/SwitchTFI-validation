@@ -32,6 +32,7 @@ import scipy.sparse as sp
 from pathlib import Path
 from typing import Callable, Dict, Tuple, Union, Any
 
+TEST = False
 
 if Path('/home/woody/iwbn/iwbn107h').is_dir():
     SAVE_PATH = Path('/home/woody/iwbn/iwbn107h/scalability')
@@ -40,8 +41,6 @@ else:
 
 INTERM_RES_SUBDIR = 'intermediate_results'
 os.makedirs(os.path.join(SAVE_PATH, INTERM_RES_SUBDIR), exist_ok=True)
-
-TEST = True
 
 # --- Number of genes always fix
 NUM_GENES = 10000 if not TEST else 300
