@@ -30,7 +30,7 @@ import scanpy as sc
 import scipy.sparse as sp
 
 from pathlib import Path
-from typing import Callable, Dict, Tuple, Union, Literal, Any
+from typing import Callable, Dict, Tuple, Union, Any
 
 
 if Path('/home/woody/iwbn/iwbn107h').is_dir():
@@ -53,6 +53,8 @@ VARY_NUM_CELLS_NUM_EDGES = [0.05, 0.10, 0.5]
 # --- Vary number of edges, vary number of cells (low, medium, high)
 VARY_NUM_EDGES_NUM_EDGES = [100, 500, 1000, 5000, 10000, 50000] if not TEST else [100, 200, 300]
 VARY_NUM_EDGES_NUM_CELLS = [1000, 10000, 50000] if not TEST else [50, 100, 150]
+
+GRN_INF_METHOD_INPUT = 'scenic' if not TEST else 'grnboost2'
 
 
 def get_cpu_memory_mb(process: psutil.Process) -> float:
@@ -334,8 +336,11 @@ def load_data(n_obs: Union[int, None] = None, seed: int = 42) -> sc.AnnData:
 def load_grn(
         n_obs: int,
         n_edges: Union[int, float, None] = None,
-        grn_inf_method: Literal['scenic', 'grnboost2'] = 'scenic'
+        grn_inf_method: str = 'scenic'
 ) -> pd.DataFrame:
+
+    if grn_inf_method not  in {'scenic', 'grnboost2'}:
+        raise ValueError('grn_inf_method must be "scenic" or "grnboost2"')
 
     # Load full GRN
     fn_grn = f'grn_{grn_inf_method}_num_cells_{n_obs}.csv'
@@ -466,7 +471,11 @@ def scalability_grn_inf():
             res_df
             .drop(columns=['alg_step'])
             .groupby('n_cells', as_index=False)
-            .sum(min_count=1)
+            .agg({
+                'wall_time': 'sum',
+                'mem_peak_cpu': 'max', 'mem_avg_cpu': 'mean', 'samples_cpu': 'sum',
+                'mem_peak_gpu': 'max', 'mem_avg_gpu': 'mean', 'samples_gpu': 'sum',
+            })
         )
 
         fn = f'grn_inf_num_cells_{n}.csv'
@@ -482,102 +491,110 @@ def scalability_switchtfi():
     from switchtfi.tf_ranking import rank_tfs
 
     # Run cellrank inference on varying numbers of cells
-    for i, n in enumerate(NUM_CELLS):
+    for num_cells in VARY_NUM_CELLS_NUM_CELLS:
+        for num_edges in VARY_NUM_CELLS_NUM_EDGES:
 
-        # Load the data and do basic processing
-        adata = load_data(n_obs=n)
-        sc.pp.normalize_per_cell(adata)
-        sc.pp.log1p(adata)
+            # Load the data and do basic processing
+            adata = load_data(n_obs=num_cells)
+            sc.pp.normalize_per_cell(adata)
+            sc.pp.log1p(adata)
 
-        # Load the corresponding GRN
-        fn_grn = f'grn_{n}.csv'
-        grn_path = os.path.join(SAVE_PATH, 'grn_inf', fn_grn)
-        grn_num_cells = pd.read_csv(grn_path, index_col=0)
+            # Load the corresponding GRN
+            grn = load_grn(n_obs=num_cells, n_edges=num_edges, grn_inf_method=GRN_INF_METHOD_INPUT)
 
-        # Runs step-wise analysis
-        res_df_align, (adata_aligned, grn_aligned) = scalability_wrapper(
-            function=align_anndata_grn,
-            function_params={'adata': adata, 'grn': grn_num_cells},
-        )
+            # Runs step-wise analysis
+            res_df_align, (adata_aligned, grn_aligned) = scalability_wrapper(
+                function=align_anndata_grn,
+                function_params={'adata': adata, 'grn': grn},
+            )
 
-        res_df_imputation, adata_imputed = scalability_wrapper(
-            function=sce.pp.magic,
-            function_params={
-                'adata': adata_aligned,
-                'name_list': 'all_genes',
-                'knn': 5,
-                'decay': 1,
-                'knn_max': None,
-                't': 1,
-                'n_pca': 100,
-                'solver': 'exact',
-                'knn_dist': 'euclidean',
-                'random_state': 42,
-                'n_jobs': 1,
-                'verbose': True,
-                'copy': True,
-            },
-        )
+            res_df_imputation, adata_imputed = scalability_wrapper(
+                function=sce.pp.magic,
+                function_params={
+                    'adata': adata_aligned,
+                    'name_list': 'all_genes',
+                    'knn': 5,
+                    'decay': 1,
+                    'knn_max': None,
+                    't': 1,
+                    'n_pca': 100,
+                    'solver': 'exact',
+                    'knn_dist': 'euclidean',
+                    'random_state': 42,
+                    'n_jobs': 1,
+                    'verbose': True,
+                    'copy': True,
+                },
+            )
 
-        res_df_weights, grn_weighted = scalability_wrapper(
-            function=calculate_weights,
-            function_params={
-                'adata': adata_imputed,
-                'grn': grn_aligned,
-                'layer_key': None,
-                'n_cell_pruning_params': None,
-                'clustering_obs_key': 'prog_off'
-            },
-        )
+            res_df_weights, grn_weighted = scalability_wrapper(
+                function=calculate_weights,
+                function_params={
+                    'adata': adata_imputed,
+                    'grn': grn_aligned,
+                    'layer_key': None,
+                    'n_cell_pruning_params': None,
+                    'clustering_obs_key': 'prog_off'
+                },
+            )
 
-        res_df_pvalues, grn_pval = scalability_wrapper(
-            function=compute_corrected_pvalues,
-            function_params={
-                'adata': adata_aligned,
-                'grn': grn_weighted,
-                'method': 'wy',
-                'clustering_obs_key': 'prog_off',
-            },
-        )
+            res_df_pvalues, grn_pval = scalability_wrapper(
+                function=compute_corrected_pvalues,
+                function_params={
+                    'adata': adata_aligned,
+                    'grn': grn_weighted,
+                    'method': 'wy',
+                    'clustering_obs_key': 'prog_off',
+                },
+            )
 
-        res_df_pruning, transition_grn = scalability_wrapper(
-            function=remove_insignificant_edges,
-            function_params={
-                'grn': grn_pval,
-                'alpha': 0.05,
-                'p_value_key': 'pvals_wy',
-            },
-        )
+            res_df_pruning, transition_grn = scalability_wrapper(
+                function=remove_insignificant_edges,
+                function_params={
+                    'grn': grn_pval,
+                    'alpha': 0.05,
+                    'p_value_key': 'pvals_wy',
+                },
+            )
 
-        res_df_tf_ranking, ranked_tfs = scalability_wrapper(
-            function=rank_tfs,
-            function_params={
-                'grn': transition_grn,
-                'centrality_measure': 'pagerank',
-            },
-        )
+            res_df_tf_ranking, ranked_tfs = scalability_wrapper(
+                function=rank_tfs,
+                function_params={
+                    'grn': transition_grn,
+                    'centrality_measure': 'pagerank',
+                },
+            )
 
-        res_dfs_sub = [
-            res_df_align, res_df_imputation, res_df_weights, res_df_pvalues, res_df_pruning, res_df_tf_ranking
-        ]
-        res_df = pd.concat(res_dfs_sub, axis=0, ignore_index=True)
+            res_dfs_sub = [
+                res_df_align, res_df_imputation, res_df_weights, res_df_pvalues, res_df_pruning, res_df_tf_ranking
+            ]
+            res_df = pd.concat(res_dfs_sub, axis=0, ignore_index=True)
 
-        res_df['n_cells'] = [n] * 6
+            res_df['n_cells'] = [num_cells] * 6
+            res_df['n_edges_frac'] = [num_edges] * 6
+            res_df['n_edges'] = [grn.shape[0]] * 6
 
-        res_df['alg_step'] = ['align', 'impute', 'weight', 'pvalue', 'prune', 'rank_tfs']
+            res_df['alg_step'] = ['align', 'impute', 'weight', 'pvalue', 'prune', 'rank_tfs']
 
-        fn_fg = f'switchtfi_fine_grained_{n}.csv'
-        res_df.to_csv(os.path.join(SAVE_PATH, INTERM_RES_SUBDIR, fn_fg))
+            num_edges_str = str(num_edges).replace('.', '_')
+            fn_fg = f'switchtfi_fine_grained_num_cells_{num_cells}_num_edges_{num_edges_str}.csv'
+            res_df.to_csv(os.path.join(SAVE_PATH, INTERM_RES_SUBDIR, fn_fg))
 
-        summary_df = (
-            res_df
-            .drop(columns=['alg_step'])
-            .groupby('n_cells', as_index=False)
-            .sum(min_count=1)
-        )
+            summary_df = (
+                res_df
+                .drop(columns=['alg_step'])
+                .groupby('n_cells', as_index=False)
+                .agg({
+                    'wall_time': 'sum',
+                    'mem_peak_cpu': 'max', 'mem_avg_cpu': 'mean', 'samples_cpu': 'sum',
+                    'mem_peak_gpu': 'max', 'mem_avg_gpu': 'mean', 'samples_gpu': 'sum',
+                    'n_edges_frac': 'first',
+                    'n_edges': 'first',
+                })
+            )
 
-        fn = f'switchtfi_{n}.csv'
-        summary_df.to_csv(os.path.join(SAVE_PATH, INTERM_RES_SUBDIR, fn))
+            fn = f'switchtfi_num_cells_{num_cells}_num_edges_{num_edges_str}.csv'
+            summary_df.to_csv(os.path.join(SAVE_PATH, INTERM_RES_SUBDIR, fn))
 
 
 def scalability_cellrank():
@@ -657,10 +674,10 @@ def scalability_cellrank():
     uncover_driver_genes(cr_estimator=estimator_prob)
 
     # Run cellrank inference on varying numbers of cells
-    for i, n in enumerate(NUM_CELLS):
+    for num_cells in VARY_NUM_CELLS_NUM_CELLS:
 
         # Load the data and do basic processing
-        adata = load_data(n_obs=n)
+        adata = load_data(n_obs=num_cells)
         sc.pp.normalize_per_cell(adata)
         sc.pp.log1p(adata)
 
@@ -695,21 +712,25 @@ def scalability_cellrank():
         ]
         res_df = pd.concat(res_dfs_sub, axis=0, ignore_index=True)
 
-        res_df['n_cells'] = [n] * 5
+        res_df['n_cells'] = [num_cells] * 5
 
         res_df['alg_step'] = ['rna_velo', 'trans_matrix', 'terminal_states', 'fate_probs', 'driver_genes']
 
-        fn_fg = f'cellrank_fine_grained_{n}.csv'
+        fn_fg = f'cellrank_fine_grained_num_cells_{num_cells}.csv'
         res_df.to_csv(os.path.join(SAVE_PATH, INTERM_RES_SUBDIR, fn_fg))
 
         summary_df = (
             res_df
             .drop(columns=['alg_step'])
             .groupby('n_cells', as_index=False)
-            .sum(min_count=1)
+            .agg({
+                'wall_time': 'sum',
+                'mem_peak_cpu': 'max', 'mem_avg_cpu': 'mean', 'samples_cpu': 'sum',
+                'mem_peak_gpu': 'max', 'mem_avg_gpu': 'mean', 'samples_gpu': 'sum',
+            })
         )
 
-        fn = f'cellrank_{n}.csv'
+        fn = f'cellrank_num_cells_{num_cells}.csv'
         summary_df.to_csv(os.path.join(SAVE_PATH, INTERM_RES_SUBDIR, fn))
 
 
@@ -756,7 +777,11 @@ def scalability_splicejac():
 
     def infer_splicejac_grn(data: sc.AnnData) -> sc.AnnData:
 
-        sj.tl.estimate_jacobian(data, filter_and_norm=False)  # No further gene filtering here
+        sj.tl.estimate_jacobian(
+            data,
+            n_top_genes=data.shape[1], # Pass to avoid spliceJAC error (default is 20)
+            filter_and_norm=False  # No further gene filtering, already filtered in compute_hvgs_subset()
+        )
 
         return data
 
@@ -779,10 +804,10 @@ def scalability_splicejac():
 
 
     # Run SpliceJAC inference on varying numbers of cells
-    for i, n in enumerate(NUM_CELLS):
+    for num_cells in VARY_NUM_CELLS_NUM_CELLS:
 
         # Load the data and do basic processing
-        adata = load_data(n_obs=n)
+        adata = load_data(n_obs=num_cells)
         sc.pp.normalize_total(adata)
         sc.pp.log1p(adata)
         adata.obs['clusters'] = adata.obs['prog_off'].copy()
@@ -813,29 +838,33 @@ def scalability_splicejac():
         ]
         res_df = pd.concat(res_dfs_sub, axis=0, ignore_index=True)
 
-        res_df['n_cells'] = [n] * 4
+        res_df['n_cells'] = [num_cells] * 4
 
         res_df['alg_step'] = ['hvg_subset', 'rna_velo', 'grn_inf', 'transition']
         gpu_cols = ['mem_peak_gpu', 'mem_avg_gpu', 'samples_gpu']
         res_df[gpu_cols] = res_df[gpu_cols].astype('float64')
 
-        res_df.to_csv(os.path.join(SAVE_PATH, INTERM_RES_SUBDIR, f'splicejac_fine_grained_{n}.csv'))
+        res_df.to_csv(os.path.join(SAVE_PATH, INTERM_RES_SUBDIR, f'splicejac_fine_grained_num_cells_{num_cells}.csv'))
 
         summary_df = (
             res_df
             .drop(columns=['alg_step'])
             .groupby('n_cells', as_index=False)
-            .sum(min_count=1)
+            .agg({
+                'wall_time': 'sum',
+                'mem_peak_cpu': 'max', 'mem_avg_cpu': 'mean', 'samples_cpu': 'sum',
+                'mem_peak_gpu': 'max', 'mem_avg_gpu': 'mean', 'samples_gpu': 'sum',
+            })
         )
 
-        summary_df.to_csv(os.path.join(SAVE_PATH, INTERM_RES_SUBDIR, f'splicejac_{n}.csv'))
+        summary_df.to_csv(os.path.join(SAVE_PATH, INTERM_RES_SUBDIR, f'splicejac_num_cells_{num_cells}.csv'))
 
 
 def scalability_drivaer():
 
     import DrivAER as dv
 
-    from drivaer_workflow import get_tf_target_pdseries
+    from validation.drivaer_workflow import get_tf_target_pdseries
 
     def drivaer_inference(data: sc.AnnData, grn: pd.DataFrame) -> pd.DataFrame:
 
@@ -860,27 +889,29 @@ def scalability_drivaer():
 
 
     # Run DrivAER inference on varying numbers of cells
-    for i, n in enumerate(NUM_CELLS):
+    for num_cells in VARY_NUM_CELLS_NUM_CELLS:
+        for num_edges in VARY_NUM_CELLS_NUM_EDGES:
 
-        # Load the data
-        adata = load_data(n_obs=n)
+            # Load the data
+            adata = load_data(n_obs=num_cells)
 
-        # Load the corresponding GRN
-        grn_path = os.path.join(SAVE_PATH, 'grn_inf', f'grn_{n}.csv')
-        grn_num_cells = pd.read_csv(grn_path, index_col=0)
-        grn_num_cells[['TF', 'target']] = grn_num_cells[['TF', 'target']].astype(str)
+            # Load the corresponding GRN
+            input_grn = load_grn(n_obs=num_cells, n_edges=num_edges, grn_inf_method=GRN_INF_METHOD_INPUT)
 
-        # Run DrivAER analysis
-        res_df, _ = scalability_wrapper(
-            function=drivaer_inference,
-            function_params={'data': adata, 'grn': grn_num_cells},
-            track_gpu=False,
-        )
+            # Run DrivAER analysis
+            res_df, _ = scalability_wrapper(
+                function=drivaer_inference,
+                function_params={'data': adata, 'grn': input_grn},
+                track_gpu=False,
+            )
 
-        res_df['n_cells'] = [n]
+            res_df['n_cells'] = [num_cells, ]
+            res_df['n_edges_frac'] = [num_edges, ]
+            res_df['n_edges'] = [input_grn.shape[0], ]
 
-        fn = f'drivaer_{n}.csv'
-        res_df.to_csv(os.path.join(SAVE_PATH, INTERM_RES_SUBDIR, fn))
+            num_edges_str = str(num_edges).replace('.', '_')
+            fn = f'drivaer_num_cells_{num_cells}_num_edges_{num_edges_str}.csv'
+            res_df.to_csv(os.path.join(SAVE_PATH, INTERM_RES_SUBDIR, fn))
 
 
 def scalability_switchtfi_grn():
@@ -1242,10 +1273,5 @@ if __name__ == '__main__':
         aggregate_results()
 
     print('done')
-
-# Todo: no error # error
-#  - data generation (uploaded to HPC)
-#  - ALL GENES: cellrank, drivaer, switchtfi, splicejac # grn inf (cpu usage is < 32)
-#  - GRN SIZE: switchtfi, drivaer #
 
 
