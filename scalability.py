@@ -273,12 +273,16 @@ def process_data():
     # Download data
     adata = cr.datasets.reprogramming_morris(os.path.join(save_path, 'reprogramming_morris.h5ad'), subset='85k')
 
+    # Filter genes
+    sc.pp.filter_genes(adata, min_cells=20)
+
     # Subset to the top 10,000 hvg genes
     adata_proc = adata.copy()
     sc.pp.normalize_total(adata_proc)
     sc.pp.log1p(adata_proc)
-    sc.pp.highly_variable_genes(adata_proc, n_top_genes=NUM_GENES)
-    adata_hvg = adata[:, adata_proc.var['highly_variable']].copy()
+    sc.pp.highly_variable_genes(adata_proc)
+    top_genes = adata_proc.var['dispersions_norm'].nsmallest(NUM_GENES).index
+    adata_hvg = adata[:, top_genes].copy()
 
     # Add progenitor-offspring annotations based on reprogramming day
     rpd_to_anno = {
