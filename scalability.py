@@ -36,7 +36,7 @@ from typing import Callable, Dict, Tuple, Union, Any
 if Path('/home/woody/iwbn/iwbn107h').is_dir():
     SAVE_PATH = Path('/home/woody/iwbn/iwbn107h/scalability')
 else:
-    SAVE_PATH = Path.cwd().parent / 'results/05_revision/scalability'
+    SAVE_PATH = './results/05_revision/scalability'
 os.makedirs(SAVE_PATH, exist_ok=True)
 
 TEST = True
@@ -204,40 +204,6 @@ def track_memory_cpu(interval=0.1):
     return memory_samples, stop_event, thread
 
 
-# def get_gpu_memory_mb() -> int:
-#     """Get current memory usage for GPU 0 in MB using nvidia-smi."""
-#     try:
-#         output = subprocess.check_output(
-#             ['nvidia-smi', '--query-gpu=memory.used', '--format=csv,nounits,noheader'],
-#             stderr=subprocess.DEVNULL
-#         )
-#         mem = int(output.decode().split('\n')[0].strip())
-#         return mem
-#     except Exception as e:
-#         print(f'GPU memory tracking failed with error:\n{e}')
-#         return 0  # fallback if nvidia-smi fails or no GPU present
-
-
-# def track_memory_gpu(interval=0.1):
-#     """
-#     Tracks GPU 0 memory usage over time in a background thread.
-#     Returns (samples_list, stop_event, thread).
-#     """
-#     memory_samples = [get_gpu_memory_mb()]
-#     stop_event = threading.Event()
-#
-#     def poll():
-#         while not stop_event.is_set():
-#             mem = get_gpu_memory_mb()
-#             memory_samples.append(mem)
-#             stop_event.wait(interval)
-#
-#     thread = threading.Thread(target=poll)
-#     thread.start()
-#
-#     return memory_samples, stop_event, thread
-
-
 def track_memory_gpu(interval=0.1):
     """
     Tracks GPU 0 memory usage over time in a background thread.
@@ -401,17 +367,12 @@ def scalability_grn_inf():
     os.makedirs(save_path, exist_ok=True)
 
     # Define paths to auxiliary files
-    tf_file = Path.cwd().parent / 'data/tf/mus_musculus/allTFs_mm.txt'
+    tf_file = './data/tf/mus_musculus/allTFs_mm.txt'
     db_file = (
-            Path.cwd().parent
-            / 'data/scenic_aux_data/databases/mouse/mm10/mc_v10_clust'
-            / 'mm10_10kbp_up_10kbp_down_full_tx_v10_clust.genes_vs_motifs.rankings.feather'
+            './data/scenic_aux_data/databases/mouse/mm10/mc_v10_clust'
+            '/mm10_10kbp_up_10kbp_down_full_tx_v10_clust.genes_vs_motifs.rankings.feather'
     )
-    anno_file = (
-            Path.cwd().parent
-            / 'data/scenic_aux_data/motif2tf_annotations'
-            / 'motifs-v10nr_clust-nr.mgi-m0.001-o0.0.tbl'
-    )
+    anno_file = './data/scenic_aux_data/motif2tf_annotations/motifs-v10nr_clust-nr.mgi-m0.001-o0.0.tbl'
 
     # Run GRN inference varying numbers of cells
     for i, n in enumerate(VARY_NUM_CELLS_NUM_CELLS):
@@ -513,8 +474,6 @@ def scalability_grn_inf():
 
 def scalability_switchtfi():
 
-    import sys
-    sys.path.append(os.path.abspath('..'))
     import scanpy.external as sce
     from switchtfi.fit import align_anndata_grn
     from switchtfi.weight_fitting import calculate_weights
