@@ -257,8 +257,6 @@ def process_data():
     save_path = SAVE_PATH / 'data'
     os.makedirs(save_path, exist_ok=True)
 
-    print(save_path)
-
     # Check whether data generation was run beforehand
     existing_files = [
         f.name for f in save_path.iterdir() if not (f.name.startswith('.') or f.name == 'reprogramming_morris.h5ad')
@@ -270,15 +268,21 @@ def process_data():
         )
 
     # Download data
-    adata = cr.datasets.reprogramming_morris(os.path.join(save_path, 'reprogramming_morris.h5ad'), subset='full')
+    adata = cr.datasets.reprogramming_morris(os.path.join(save_path, 'reprogramming_morris.h5ad'), subset='85k')
 
     # Subset to the top 10,000 hvg genes
     adata_proc = adata.copy()
     sc.pp.normalize_total(adata)
     sc.pp.log1p(adata_proc)
     sc.pp.highly_variable_genes(adata_proc, n_top_genes=NUM_GENES)
-
     adata_hvg = adata[:, adata_proc.var['highly_variable']].copy()
+
+    # Add progenitor-offspring annotations based on reprogramming day
+    rpd_to_anno = {
+        '0': 'prog', '3': 'prog', '6': 'prog', '9': 'off', '12': 'off', '15': 'off', '21': 'off', '28': 'off'
+    }
+    prog_off_anno = [rpd_to_anno[rpd] for rpd in adata_hvg.obs['reprogramming_day']]
+    adata_hvg.obs['prog_off'] = prog_off_anno
 
     # Save AnnData, individual data matrices and relevant annotations
     adata_hvg.write_h5ad(os.path.join(save_path, 'reprogramming_morris_hvg.h5ad'))
@@ -289,11 +293,10 @@ def process_data():
 
     np.save(os.path.join(save_path, f'cell_names.npy'), adata_hvg.obs_names.to_numpy())
     np.save(os.path.join(save_path, f'gene_names.npy'), adata_hvg.var_names.to_numpy())
+    np.save(os.path.join(save_path, f'prog_off_anno.npy'), adata_hvg.obs['prog_off'].to_numpy())
 
 
 def load_data(n_obs: int, seed: int = 42) -> sc.AnnData:
-
-    # Todo: add prog_off anno loading
 
     save_path = SAVE_PATH / 'data'
 
@@ -307,6 +310,7 @@ def load_data(n_obs: int, seed: int = 42) -> sc.AnnData:
     x_spliced = sp.load_npz(os.path.join(save_path, f'x_spliced.npz')).toarray().astype(np.float32)
     cell_names = np.load(os.path.join(save_path, f'cell_names.npy'), allow_pickle=True)
     gene_names = np.load(os.path.join(save_path, f'gene_names.npy'), allow_pickle=True)
+    prog_off_anno = np.load(os.path.join(save_path, f'prog_off_anno.npy'), allow_pickle=True)
 
     # Create anndata
     adata = sc.AnnData(X=x_spliced)
@@ -314,23 +318,13 @@ def load_data(n_obs: int, seed: int = 42) -> sc.AnnData:
     adata.var_names = gene_names
     adata.layers['unspliced'] = x_unspliced
     adata.layers['spliced'] = x_spliced
+    adata.obs['prog_off'] = prog_off_anno
 
     # Subsample to the desired number of cells
     np.random.seed(seed)
     n_total = adata.n_obs
     idx = np.random.choice(n_total, size=n_obs, replace=False)
     adata_sub = adata[idx, :].copy()
-
-    # Add progenitor offspring annotations
-    if n_obs % 2 != 0:
-        n_prog = n_obs // 2
-        n_off = n_obs - n_prog
-    else:
-        n_prog = int(n_obs / 2)
-        n_off = int(n_obs / 2)
-
-    prog_off_anno = ['prog'] * n_prog + ['off'] * n_off
-    adata_sub.obs['prog_off'] = prog_off_anno
 
     return adata_sub
 
