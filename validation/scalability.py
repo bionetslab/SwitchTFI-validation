@@ -41,14 +41,21 @@ os.makedirs(SAVE_PATH, exist_ok=True)
 
 TEST = True
 
+# --- Number of genes always fix
 NUM_GENES = 10000 if not TEST else 1000
-NUM_CELLS = [100, 500, 1000, 5000, 10000, 50000, 85010] if not TEST else [100, 200, 300]
 
-NUM_CELLS_GRN = 1000 if not TEST else 100
-NUM_EDGES_GRN = [100, 500, 1000, 5000, 10000, 50000] if not TEST else [100, 200, 300]
+# --- Vary number of cells, vary number of edges (GRN: small, medium, large)
+VARY_NUM_CELLS_NUM_CELLS = [100, 500, 1000, 5000, 10000, 50000, 85010] if not TEST else [100, 200, 300]
+VARY_NUM_CELLS_NUM_EDGES = [0.05, 0.10, 0.5]
+
+# --- Vary number of edges, vary number of cells (low, medium, high)
+VARY_NUM_EDGES_NUM_EDGES = [100, 500, 1000, 5000, 10000, 50000] if not TEST else [100, 200, 300]
+VARY_NUM_EDGES_NUM_CELLS = [1000, 10000, 50000] if not TEST else [100, 200, 300]
 
 
 def process_data():
+
+    # Todo: add prog_off_annotations
 
     import cellrank as cr
 
@@ -91,6 +98,8 @@ def process_data():
 
 def load_data(n_obs: int, seed: int = 42) -> sc.AnnData:
 
+    # Todo: add prog_off anno loading
+
     save_path = SAVE_PATH / 'data'
 
     if not (save_path / 'reprogramming_morris_hvg.h5ad').exists():
@@ -129,6 +138,24 @@ def load_data(n_obs: int, seed: int = 42) -> sc.AnnData:
     adata_sub.obs['prog_off'] = prog_off_anno
 
     return adata_sub
+
+
+def load_grn(n_obs: int, n_edges: int | float | None) -> pd.DataFrame:
+
+    # Load full GRN
+    fn_grn = f'grn_scenic_num_cells_{n_obs}.csv'
+    grn_path = os.path.join(SAVE_PATH, 'grn_inf', fn_grn)
+    grn = pd.read_csv(grn_path, index_col=0)
+
+    # Subset GRN
+    if n_edges is not None:
+
+        if isinstance(n_edges, float):
+            n_edges = int(n_edges * grn.shape[0])
+
+        grn = grn.iloc[:n_edges].copy()
+
+    return grn
 
 
 def get_cpu_memory_mb(process: psutil.Process) -> float:
@@ -362,14 +389,32 @@ def scalability_wrapper(
 
 def scalability_grn_inf():
 
+    import pickle
     from arboreto.algo import grnboost2
+
+    from grn_inf.grn_inference import (
+        load_tf_names, check_tf_gene_set_intersection, modules_from_grn, prune_grn, pyscenic_result_df_to_grn
+    )
 
     # Define path where results are saved
     save_path = SAVE_PATH / 'grn_inf'
     os.makedirs(save_path, exist_ok=True)
 
+    # Define paths to auxiliary files
+    tf_file = Path.cwd().parent / 'data/tf/mus_musculus/allTFs_mm.txt'
+    db_file = (
+            Path.cwd().parent
+            / 'data/scenic_aux_data/databases/mouse/mm10/mc_v10_clust'
+            / 'mm10_10kbp_up_10kbp_down_full_tx_v10_clust.genes_vs_motifs.rankings.feather'
+    )
+    anno_file = (
+            Path.cwd().parent
+            / 'data/scenic_aux_data/motif2tf_annotations'
+            / 'motifs-v10nr_clust-nr.mgi-m0.001-o0.0.tbl'
+    )
+
     # Run GRN inference varying numbers of cells
-    for i, n in enumerate(NUM_CELLS):
+    for i, n in enumerate(VARY_NUM_CELLS_NUM_CELLS):
 
         # Load the data and do basic processing
         adata = load_data(n_obs=n)
@@ -379,32 +424,91 @@ def scalability_grn_inf():
 
         adata_df = adata.to_df(layer=None)
 
-        # Define the 1500 first gene names as TFs
-        n_tfs = min(1500, adata_df.shape[0])
-        tf_names = adata.var_names.tolist()[0:n_tfs]
+        # Load the list of TFs
+        tf_names = load_tf_names(path=str(tf_file))
+        check_tf_gene_set_intersection(
+            tf_names=np.array(tf_names),
+            gene_names=adata.var_names.to_numpy(),
+            verbosity=1
+        )
 
-        fn_kwargs = {
+        # Infer a basic GRN with GRNboost2
+        fn_kwargs_grnboost2 = {
             'expression_data': adata_df,
             'gene_names': None,
             'tf_names': tf_names,
             'seed': 42,
             'verbose': True,
         }
-
-        res_df, grn = scalability_wrapper(
+        res_df_grnboost2, grn_grnboost2 = scalability_wrapper(
             function=grnboost2,
-            function_params=fn_kwargs,
+            function_params=fn_kwargs_grnboost2,
             track_gpu=False,
-            res_dir=None,
-            res_filename=None,
         )
 
-        res_df['n_cells'] = [n] * res_df.shape[0]
+        # Derive potential regulons from co-expression modules
+        res_df_modules, modules = scalability_wrapper(
+            function=modules_from_grn,
+            function_params={
+                'adjacencies': grn_grnboost2,
+                'expression_matrix': adata_df,
+                'result_folder': None,
+            },
+            track_gpu=False,
+        )
 
-        res_df.to_csv(os.path.join(SAVE_PATH, f'grn_inf_{n}.csv'))
+        # Prune modules for targets with cis regulatory footprints (RcisTarget)
+        res_df_pruning, scenic_result = scalability_wrapper(
+            function=prune_grn,
+            function_params={
+                'modules': modules,
+                'database_path': db_file,
+                'motif_annotations_path': anno_file,
+                'result_folder': None,
+            },
+            track_gpu=False,
+        )
 
-        fn_grn = f'grn_{n}.csv'
-        grn.to_csv(os.path.join(save_path, fn_grn))
+        # Extract pruned GRN from Scenic results dataframe
+        res_df_scenic_to_grn, grn_scenic = scalability_wrapper(
+            function=pyscenic_result_df_to_grn,
+            function_params={
+                'pyscenic_result_df': scenic_result,
+                'results_folder': None,
+            },
+            track_gpu=False,
+        )
+
+        # Save (intermediate) results
+        grn_grnboost2 = grn_grnboost2.sort_values(by='importance', ascending=False).reset_index(drop=True)
+        grn_grnboost2.to_csv(os.path.join(SAVE_PATH, f'grn_grnboost2_num_cells_{n}.csv'))
+
+        modules_p = os.path.join(SAVE_PATH, f'modules_num_cells_{n}.pkl')
+        with open(modules_p, 'wb') as f:
+            pickle.dump(modules, f)
+
+        scenic_result.to_csv(os.path.join(SAVE_PATH, f'scenic_result_num_cells_{n}.csv'))
+
+        grn_scenic = grn_scenic.sort_values(by='scenic_weight', ascending=False).reset_index(drop=True)
+        grn_scenic.to_csv(os.path.join(SAVE_PATH, f'grn_scenic_num_cells_{n}.csv'))
+
+        res_dfs_sub = [res_df_grnboost2, res_df_modules, res_df_pruning, res_df_scenic_to_grn]
+        res_df = pd.concat(res_dfs_sub, axis=0, ignore_index=True)
+        res_df['n_cells'] = [n] * 4
+        res_df['alg_step'] = ['grnboost2', 'modules', 'pruning', 'scenic_to_grn']
+
+        fn_fg = f'grn_inf_fine_grained_num_cells_{n}.csv'
+        res_df.to_csv(os.path.join(SAVE_PATH, fn_fg))
+
+        summary_df = (
+            res_df
+            .drop(columns=['alg_step'])
+            .groupby('n_cells', as_index=False)
+            .sum(min_count=1)
+        )
+
+        fn = f'grn_inf_num_cells_{n}.csv'
+        summary_df.to_csv(os.path.join(SAVE_PATH, fn))
 
 
 def scalability_switchtfi():
@@ -1152,11 +1256,11 @@ if __name__ == '__main__':
         ):
             raise RuntimeError(f'Run GRN inference before running "{m}"')
 
-    if nc is not None:
-        NUM_CELLS = [nc, ]
+    # if nc is not None:
+    #     NUM_CELLS = [nc, ]
 
-    if ne is not None:
-        NUM_EDGES_GRN = [ne, ]
+    # if ne is not None:
+    #     NUM_EDGES_GRN = [ne, ]
 
     if m == 'data':
         process_data()
