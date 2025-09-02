@@ -56,6 +56,8 @@ VARY_NUM_EDGES_NUM_CELLS = [1000, 10000, 50000] if not TEST else [50, 100, 150]
 
 GRN_INF_METHOD_INPUT = 'scenic' if not TEST else 'grnboost2'
 
+TRACKING_INTERVAL = 0.1
+
 
 def get_cpu_memory_mb(process: psutil.Process) -> float:
     total_mem = 0
@@ -195,9 +197,9 @@ def scalability_wrapper(
 ) -> Tuple[pd.DataFrame, Any]:
 
     # Start memory tracking
-    memory_samples_cpu, stop_event_cpu, tracker_thread_cpu = track_memory_cpu(interval=0.1)
+    memory_samples_cpu, stop_event_cpu, tracker_thread_cpu = track_memory_cpu(interval=TRACKING_INTERVAL)
     if track_gpu:
-        memory_samples_gpu, stop_event_gpu, tracker_thread_gpu = track_memory_gpu(interval=0.1)
+        memory_samples_gpu, stop_event_gpu, tracker_thread_gpu = track_memory_gpu(interval=TRACKING_INTERVAL)
 
     wall_start = time.perf_counter()
 
@@ -916,124 +918,119 @@ def scalability_drivaer():
 
 def scalability_switchtfi_grn():
 
-    import sys
-    sys.path.append(os.path.abspath('..'))
     import scanpy.external as sce
     from switchtfi.fit import align_anndata_grn
     from switchtfi.weight_fitting import calculate_weights
     from switchtfi.pvalue_calculation import compute_corrected_pvalues, remove_insignificant_edges
     from switchtfi.tf_ranking import rank_tfs
 
-    for n in NUM_EDGES_GRN:
+    for num_edges in VARY_NUM_EDGES_NUM_EDGES:
+        for num_cells in VARY_NUM_EDGES_NUM_CELLS:
 
-        # Load the data and do basic processing
-        adata = load_data(n_obs=NUM_CELLS_GRN)
-        sc.pp.normalize_per_cell(adata)
-        sc.pp.log1p(adata)
+            # Load the data and do basic processing
+            adata = load_data(n_obs=num_cells)
+            sc.pp.normalize_per_cell(adata)
+            sc.pp.log1p(adata)
 
-        # Load the corresponding GRN
-        grn_path = os.path.join(SAVE_PATH, 'grn_inf', f'grn_{NUM_CELLS_GRN}.csv')
-        grn = pd.read_csv(grn_path, index_col=0)
+            # Load the corresponding GRN
+            grn = load_grn(n_obs=num_cells, n_edges=num_edges, grn_inf_method=GRN_INF_METHOD_INPUT)
 
-        num_edges = grn.shape[0]
+            # Runs step-wise analysis
+            res_df_align, (adata_aligned, grn_aligned) = scalability_wrapper(
+                function=align_anndata_grn,
+                function_params={'adata': adata, 'grn': grn},
+            )
 
-        n_target = min(n, num_edges)
+            res_df_imputation, adata_imputed = scalability_wrapper(
+                function=sce.pp.magic,
+                function_params={
+                    'adata': adata_aligned,
+                    'name_list': 'all_genes',
+                    'knn': 5,
+                    'decay': 1,
+                    'knn_max': None,
+                    't': 1,
+                    'n_pca': 100,
+                    'solver': 'exact',
+                    'knn_dist': 'euclidean',
+                    'random_state': 42,
+                    'n_jobs': 1,
+                    'verbose': True,
+                    'copy': True,
+                },
+            )
 
-        grn_downsampled = grn.sample(n=n_target, axis=0, random_state=42).reset_index(drop=True)
+            res_df_weights, grn_weighted = scalability_wrapper(
+                function=calculate_weights,
+                function_params={
+                    'adata': adata_imputed,
+                    'grn': grn_aligned,
+                    'layer_key': None,
+                    'n_cell_pruning_params': None,
+                    'clustering_obs_key': 'prog_off'
+                },
+            )
 
-        # Runs step-wise analysis
-        res_df_align, (adata_aligned, grn_aligned) = scalability_wrapper(
-            function=align_anndata_grn,
-            function_params={'adata': adata, 'grn': grn_downsampled},
-        )
+            res_df_pvalues, grn_pval = scalability_wrapper(
+                function=compute_corrected_pvalues,
+                function_params={
+                    'adata': adata_aligned,
+                    'grn': grn_weighted,
+                    'method': 'wy',
+                    'clustering_obs_key': 'prog_off',
+                },
+            )
 
-        res_df_imputation, adata_imputed = scalability_wrapper(
-            function=sce.pp.magic,
-            function_params={
-                'adata': adata_aligned,
-                'name_list': 'all_genes',
-                'knn': 5,
-                'decay': 1,
-                'knn_max': None,
-                't': 1,
-                'n_pca': 100,
-                'solver': 'exact',
-                'knn_dist': 'euclidean',
-                'random_state': 42,
-                'n_jobs': 1,
-                'verbose': True,
-                'copy': True,
-            },
-        )
+            res_df_pruning, transition_grn = scalability_wrapper(
+                function=remove_insignificant_edges,
+                function_params={
+                    'grn': grn_pval,
+                    'alpha': 0.05,
+                    'p_value_key': 'pvals_wy',
+                },
+            )
 
-        res_df_weights, grn_weighted = scalability_wrapper(
-            function=calculate_weights,
-            function_params={
-                'adata': adata_imputed,
-                'grn': grn_aligned,
-                'layer_key': None,
-                'n_cell_pruning_params': None,
-                'clustering_obs_key': 'prog_off'
-            },
-        )
+            res_df_tf_ranking, ranked_tfs = scalability_wrapper(
+                function=rank_tfs,
+                function_params={
+                    'grn': transition_grn,
+                    'centrality_measure': 'pagerank',
+                },
+            )
 
-        res_df_pvalues, grn_pval = scalability_wrapper(
-            function=compute_corrected_pvalues,
-            function_params={
-                'adata': adata_aligned,
-                'grn': grn_weighted,
-                'method': 'wy',
-                'clustering_obs_key': 'prog_off',
-            },
-        )
+            res_dfs_sub = [
+                res_df_align, res_df_imputation, res_df_weights, res_df_pvalues, res_df_pruning, res_df_tf_ranking
+            ]
+            res_df = pd.concat(res_dfs_sub, axis=0, ignore_index=True)
 
-        res_df_pruning, transition_grn = scalability_wrapper(
-            function=remove_insignificant_edges,
-            function_params={
-                'grn': grn_pval,
-                'alpha': 0.05,
-                'p_value_key': 'pvals_wy',
-            },
-        )
+            res_df['n_edges'] = [num_edges] * 6
+            res_df['n_cells'] = [num_cells] * 6
 
-        res_df_tf_ranking, ranked_tfs = scalability_wrapper(
-            function=rank_tfs,
-            function_params={
-                'grn': transition_grn,
-                'centrality_measure': 'pagerank',
-            },
-        )
+            res_df['alg_step'] = ['align', 'impute', 'weight', 'pvalue', 'prune', 'rank_tfs']
 
-        res_dfs_sub = [
-            res_df_align, res_df_imputation, res_df_weights, res_df_pvalues, res_df_pruning, res_df_tf_ranking
-        ]
-        res_df = pd.concat(res_dfs_sub, axis=0, ignore_index=True)
+            fn_fg = f'switchtfi_fine_grained_num_edges_{num_edges}_num_cells_{num_cells}.csv'
+            res_df.to_csv(os.path.join(SAVE_PATH, INTERM_RES_SUBDIR, fn_fg))
 
-        res_df['n_cells'] = [n] * 6
+            summary_df = (
+                res_df
+                .drop(columns=['alg_step'])
+                .groupby('n_cells', as_index=False)
+                .agg({
+                    'wall_time': 'sum',
+                    'mem_peak_cpu': 'max', 'mem_avg_cpu': 'mean', 'samples_cpu': 'sum',
+                    'mem_peak_gpu': 'max', 'mem_avg_gpu': 'mean', 'samples_gpu': 'sum',
+                    'n_edges': 'first',
+                })
+            )
 
-        res_df['alg_step'] = ['align', 'impute', 'weight', 'pvalue', 'prune', 'rank_tfs']
-
-        fn_fg = f'switchtfi_fine_grained_grn_size_{n}.csv'
-        res_df.to_csv(os.path.join(SAVE_PATH, INTERM_RES_SUBDIR, fn_fg))
-
-        summary_df = (
-            res_df
-            .drop(columns=['alg_step'])
-            .groupby('n_cells', as_index=False)
-            .sum(min_count=1)
-        )
-
-        fn = f'switchtfi_grn_size_{n}.csv'
-        summary_df.to_csv(os.path.join(SAVE_PATH, INTERM_RES_SUBDIR, fn))
-
-        if n_target == num_edges:
-            break
+            fn = f'switchtfi_num_edges_{num_edges}_num_cells_{num_cells}.csv'
+            summary_df.to_csv(os.path.join(SAVE_PATH, INTERM_RES_SUBDIR, fn))
 
 
 def scalability_drivaer_grn():
 
     import DrivAER as dv
-    from drivaer_workflow import get_tf_target_pdseries
+    from validation.drivaer_workflow import get_tf_target_pdseries
 
     def drivaer_inference(data: sc.AnnData, grn: pd.DataFrame) -> pd.DataFrame:
         tf_to_target_list = get_tf_target_pdseries(grn=grn, tf_target_keys=('TF', 'target'))
@@ -1055,31 +1052,27 @@ def scalability_drivaer_grn():
 
         return driver_genes
 
-    for n in NUM_EDGES_GRN:
-        # Load the data and do basic processing
-        adata = load_data(n_obs=NUM_CELLS_GRN)
+    for num_edges in VARY_NUM_EDGES_NUM_EDGES:
+        for num_cells in VARY_NUM_EDGES_NUM_CELLS:
 
-        # Load the corresponding GRN
-        grn_path = os.path.join(SAVE_PATH, 'grn_inf', f'grn_{NUM_CELLS_GRN}.csv')
-        grn = pd.read_csv(grn_path, index_col=0)
+            # Load the data and do basic processing
+            adata = load_data(n_obs=num_cells)
 
-        num_edges = grn.shape[0]
+            # Load the corresponding GRN
+            input_grn = load_grn(n_obs=num_cells, n_edges=num_edges, grn_inf_method=GRN_INF_METHOD_INPUT)
 
-        n_target = min(n, num_edges)
+            # Run DrivAER analysis
+            res_df, _ = scalability_wrapper(
+                function=drivaer_inference,
+                function_params={'data': adata, 'grn': input_grn},
+                track_gpu=False,
+            )
 
-        grn_downsampled = grn.sample(n=n_target, axis=0, random_state=42).reset_index(drop=True)
+            res_df['n_edges'] = [num_edges]
+            res_df['n_cells'] = [num_cells]
 
-        # Run DrivAER analysis
-        res_df, _ = scalability_wrapper(
-            function=drivaer_inference,
-            function_params={'data': adata, 'grn': grn_downsampled},
-            track_gpu=False,
-        )
-
-        res_df['n_cells'] = [n]
-
-        fn = f'drivaer_grn_size_{n}.csv'
-        res_df.to_csv(os.path.join(SAVE_PATH, INTERM_RES_SUBDIR, fn))
+            fn = f'drivaer_num_edges_{num_edges}_num_cells_{num_cells}.csv'
+            res_df.to_csv(os.path.join(SAVE_PATH, INTERM_RES_SUBDIR, fn))
 
 
 def aggregate_results():
@@ -1087,104 +1080,153 @@ def aggregate_results():
     save_path = os.path.join(SAVE_PATH, 'aggregated_results')
     os.makedirs(save_path, exist_ok=True)
 
-    modes = ['base', 'subset_genes']
     methods = ['grn_inf', 'switchtfi', 'cellrank', 'splicejac', 'drivaer']
 
-    # Aggregate num_cell results
-    for mode in modes:
+    # Aggregate: --- Vary number of cells, vary number of edges (GRN: small, medium, large)
+    res_dfs = []
+    res_dfs_fine_grained = []
+    for method in methods:
 
-        mode_str = ('_' + mode) if mode != 'base' else ''
+        print('\n###############################################################')
+        print('###### ', method, ' ######')
+        print('###############################################################')
 
         res_dfs_method = []
-        for method in methods:
+        res_dfs_method_fine_grained = []
 
-            # Load the results for the respective method, aggregate and save
-            res_dfs_n = []
-            for n in NUM_CELLS:
-                fn = f'{method}{mode_str}_{n}.csv'
-                fp = os.path.join(SAVE_PATH, INTERM_RES_SUBDIR, fn)
-                try:
-                    res_df_n = pd.read_csv(fp, index_col=0)
-                    res_dfs_n.append(res_df_n)
-                except FileNotFoundError:
-                    print(f'File {fn} not found')
-                    continue
+        if method in {'switchtfi', 'drivaer'}:
+            # These methods vary both num_cells and num_edges
+            for num_cells in VARY_NUM_CELLS_NUM_CELLS:
+                for num_edges in VARY_NUM_CELLS_NUM_EDGES:
 
-            if res_dfs_n:
-                res_df_n = pd.concat(res_dfs_n, axis=0, ignore_index=True).reset_index(drop=True)
-                res_df_n['method'] = method
-                res_dfs_method.append(res_df_n)
-
-                save_fn = f'{method}{mode_str}.csv'
-                res_df_n.to_csv(os.path.join(save_path, save_fn))
-            else:
-                print(f'No results found for method: {method}, mode: {mode_str}, skipping')
-
-            # Load the fine-grained results for the respective method, aggregate and save
-            if method not in {'grn_inf', 'drivaer'}:
-                res_dfs_fine_grained_n = []
-                for n in NUM_CELLS:
-                    fn = f'{method}_fine_grained{mode_str}_{n}.csv'
+                    num_edges_str = str(num_edges).replace('.', '_')
+                    fn = f'{method}_num_cells_{num_cells}_num_edges_{num_edges_str}.csv'
                     fp = os.path.join(SAVE_PATH, INTERM_RES_SUBDIR, fn)
+
                     try:
-                        res_df_fine_grained_n = pd.read_csv(fp, index_col=0)
-                        res_dfs_fine_grained_n.append(res_df_fine_grained_n)
+                        res_df_current = pd.read_csv(fp, index_col=0)
+                        res_dfs_method.append(res_df_current)
                     except FileNotFoundError:
                         print(f'File {fn} not found')
                         continue
 
-                if res_dfs_fine_grained_n:
-                    res_df_fine_grained_method = (
-                        pd.concat(res_dfs_fine_grained_n, axis=0, ignore_index=True)
-                        .reset_index(drop=True)
-                    )
+                    if method == 'switchtfi':
+                        fn_fg = f'{method}_fine_grained_num_cells_{num_cells}_num_edges_{num_edges_str}.csv'
+                        fp_fg = os.path.join(SAVE_PATH, INTERM_RES_SUBDIR, fn_fg)
+                        res_df_current_fine_grained = pd.read_csv(fp_fg, index_col=0)
+                        res_dfs_method_fine_grained.append(res_df_current_fine_grained)
 
-                    mode_str = ('_' + mode) if mode != 'base' else ''
-                    save_fn = f'{method}_fine_grained{mode_str}.csv'
-                    res_df_fine_grained_method.to_csv(os.path.join(save_path, save_fn))
-                else:
-                    print(f'No results found for method: {method}, mode: {mode_str}, skipping')
-
-        res_df_method = pd.concat(res_dfs_method, axis=0, ignore_index=True).reset_index(drop=True)
-        save_fn = f'aggregated_results{mode_str}.csv'
-        res_df_method.to_csv(os.path.join(save_path, save_fn))
-
-    # ### Aggregate GRN size results
-    methods_grn = ['switchtfi', 'drivaer']
-
-    res_dfs_grn_size_method = []
-    for method in methods_grn:
-        res_dfs_n_edges = []
-        res_dfs_fine_grained_n_edges = []
-        for n in NUM_EDGES_GRN:
-            fn = f'{method}_grn_size_{n}.csv'
-            try:
-                res_df_n_edges_n = pd.read_csv(os.path.join(SAVE_PATH, INTERM_RES_SUBDIR, fn), index_col=0)
-                res_dfs_n_edges.append(res_df_n_edges_n)
-            except FileNotFoundError:
-                print(f'File {fn} not found')
-                continue
-
-            if method != 'drivaer':
-                fn_fg = f'{method}_fine_grained_grn_size_{n}.csv'
-                res_df_fine_grained_n_edges_n = pd.read_csv(os.path.join(SAVE_PATH, fn_fg), index_col=0)
-                res_dfs_fine_grained_n_edges.append(res_df_fine_grained_n_edges_n)
-
-        if res_dfs_n_edges:
-            res_df_n_edges = pd.concat(res_dfs_n_edges, axis=0, ignore_index=True)
-            res_df_n_edges['method'] = method
-            res_dfs_grn_size_method.append(res_df_n_edges)
-            res_df_n_edges.to_csv(os.path.join(save_path, f'{method}_grn_size.csv'))
-
-            if res_dfs_fine_grained_n_edges:
-                res_df_fine_grained_n_edges = pd.concat(res_dfs_fine_grained_n_edges, axis=0, ignore_index=True)
-                res_df_fine_grained_n_edges.to_csv(os.path.join(save_path, f'{method}_fine_grained_grn_size.csv'))
         else:
-            print(f'No results found for method: {method}, skipping')
+            # These methods vary only num_cells
+            for num_cells in VARY_NUM_CELLS_NUM_CELLS:
 
-    res_df_grn_size_method = pd.concat(res_dfs_grn_size_method, axis=0, ignore_index=True)
-    res_df_grn_size_method.to_csv(os.path.join(save_path, 'aggregated_results_grn_size.csv'))
+                fn = f'{method}_num_cells_{num_cells}.csv'
+                fp = os.path.join(SAVE_PATH, INTERM_RES_SUBDIR, fn)
 
+                try:
+                    res_df_current = pd.read_csv(fp, index_col=0)
+                    res_dfs_method.append(res_df_current)
+                except FileNotFoundError:
+                    print(f'File {fn} not found')
+                    continue
+
+                fn_fg = f'{method}_fine_grained_num_cells_{num_cells}.csv'
+                fp_fg = os.path.join(SAVE_PATH, INTERM_RES_SUBDIR, fn_fg)
+                res_df_current_fine_grained = pd.read_csv(fp_fg, index_col=0)
+                res_dfs_method_fine_grained.append(res_df_current_fine_grained)
+
+        if res_dfs_method:
+            res_df_method = pd.concat(res_dfs_method, axis=0, ignore_index=True)
+            res_df_method['method'] = method
+            res_dfs.append(res_df_method)
+
+            fn = f'{method}_num_cells_num_edges.csv'
+            res_df_method.to_csv(os.path.join(save_path, fn))
+
+            print(res_df_method)
+
+        if res_dfs_method_fine_grained:
+            res_df_method_fine_grained = pd.concat(res_dfs_method_fine_grained, axis=0, ignore_index=True)
+            res_df_method_fine_grained['method'] = method
+            res_dfs_fine_grained.append(res_df_method_fine_grained)
+
+            fn_fg = f'{method}_fine_grained_num_cells_num_edges.csv'
+            res_df_method_fine_grained.to_csv(os.path.join(save_path, fn_fg))
+
+            print(res_df_method_fine_grained)
+
+
+    res_df = pd.concat(res_dfs, axis=0, ignore_index=True)
+    fn = f'aggregated_results_num_cells_num_edges.csv'
+    res_df.to_csv(os.path.join(save_path, fn))
+
+    res_dfs_fine_grained = pd.concat(res_dfs_fine_grained, axis=0, ignore_index=True)
+    fn_fg = f'aggregated_results_fine_grained_num_cells_num_edges.csv'
+    res_dfs_fine_grained.to_csv(os.path.join(save_path, fn_fg))
+
+    # Aggregate: --- Vary number of edges, vary number of cells (low, medium, high)
+    methods_num_edges = ['switchtfi', 'drivaer']
+
+    res_dfs = []
+    res_dfs_fine_grained = []
+    for method in methods_num_edges:
+
+        print('\n###############################################################')
+        print('###### ', method, ' ######')
+        print('###############################################################')
+
+        res_dfs_method = []
+        res_dfs_method_fine_grained = []
+
+        for num_edges in VARY_NUM_EDGES_NUM_EDGES:
+            for num_cells in VARY_NUM_EDGES_NUM_CELLS:
+
+                fn = f'{method}_num_edges_{num_edges}_num_cells_{num_cells}.csv'
+                fp = os.path.join(SAVE_PATH, INTERM_RES_SUBDIR, fn)
+
+                try:
+                    res_df_current = pd.read_csv(fp, index_col=0)
+                    res_dfs_method.append(res_df_current)
+                except FileNotFoundError:
+                    print(f'File {fn} not found')
+                    continue
+
+                if method != 'drivaer':
+
+                    fn_fg = f'{method}_fine_grained_num_edges_{num_edges}_num_cells_{num_cells}.csv'
+                    fp_fg = os.path.join(SAVE_PATH, INTERM_RES_SUBDIR, fn_fg)
+                    res_df_current_fine_grained = pd.read_csv(fp_fg, index_col=0)
+                    res_dfs_method_fine_grained.append(res_df_current_fine_grained)
+
+        if res_dfs_method:
+
+            res_df_method = pd.concat(res_dfs_method, axis=0, ignore_index=True)
+            res_df_method['method'] = method
+            res_dfs.append(res_df_method)
+
+            fn = f'{method}_num_edges_num_cells.csv'
+            res_df_method.to_csv(os.path.join(save_path, fn))
+
+            print(res_df_method)
+
+        if res_dfs_method_fine_grained:
+
+            res_df_method_fine_grained = pd.concat(res_dfs_method_fine_grained, axis=0, ignore_index=True)
+            res_df_method_fine_grained['method'] = method
+            res_dfs_fine_grained.append(res_df_method_fine_grained)
+
+            fn_fg = f'{method}_fine_grained_num_edges_num_cells.csv'
+            res_df_method_fine_grained.to_csv(os.path.join(save_path, fn_fg))
+
+            print(res_df_method_fine_grained)
+
+    res_df = pd.concat(res_dfs, axis=0, ignore_index=True)
+    fn = f'aggregated_results_num_edges_num_cells.csv'
+    res_df.to_csv(os.path.join(save_path, fn))
+
+    res_dfs_fine_grained = pd.concat(res_dfs_fine_grained, axis=0, ignore_index=True)
+    fn_fg = f'aggregated_results_fine_grained_num_edges_num_cells.csv'
+    res_dfs_fine_grained.to_csv(os.path.join(save_path, fn_fg))
 
 
 if __name__ == '__main__':
