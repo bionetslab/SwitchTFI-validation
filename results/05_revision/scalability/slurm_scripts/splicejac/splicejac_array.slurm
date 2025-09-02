@@ -23,7 +23,7 @@ cd $HOME/SwitchTFI-validation/validation
 source $HOME/SwitchTFI-validation/results/05_revision/scalability/slurm_scripts/params.sh
 
 # Pick entry for this task
-NC=${NUM_CELLS[$SLURM_ARRAY_TASK_ID]}
+NC=${VARY_NUM_CELLS_NUM_CELLS[$SLURM_ARRAY_TASK_ID]}
 
 echo "Running SpliceJAC with $NC cells"
-srun python scalability.py -m splicejac -nc $NC
+srun python scalability.py -m splicejac -vncnc $NC

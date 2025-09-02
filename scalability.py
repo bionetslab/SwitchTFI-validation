@@ -382,10 +382,10 @@ def scalability_grn_inf():
     anno_file = './data/scenic_aux_data/motif2tf_annotations/motifs-v10nr_clust-nr.mgi-m0.001-o0.0.tbl'
 
     # Run GRN inference varying numbers of cells
-    for i, n in enumerate(VARY_NUM_CELLS_NUM_CELLS):
+    for num_cells in VARY_NUM_CELLS_NUM_CELLS:
 
         # Load the data and do basic processing
-        adata = load_data(n_obs=n)
+        adata = load_data(n_obs=num_cells)
         sc.pp.normalize_per_cell(adata)
         sc.pp.log1p(adata)
         sc.pp.scale(adata)
@@ -449,24 +449,24 @@ def scalability_grn_inf():
 
         # Save (intermediate) results
         grn_grnboost2 = grn_grnboost2.sort_values(by='importance', ascending=False).reset_index(drop=True)
-        grn_grnboost2.to_csv(os.path.join(save_path, f'grn_grnboost2_num_cells_{n}.csv'))
+        grn_grnboost2.to_csv(os.path.join(save_path, f'grn_grnboost2_num_cells_{num_cells}.csv'))
 
-        modules_p = os.path.join(save_path, f'modules_num_cells_{n}.pkl')
+        modules_p = os.path.join(save_path, f'modules_num_cells_{num_cells}.pkl')
         with open(modules_p, 'wb') as f:
             pickle.dump(modules, f)
 
-        scenic_result.to_csv(os.path.join(save_path, f'scenic_result_num_cells_{n}.csv'))
+        scenic_result.to_csv(os.path.join(save_path, f'scenic_result_num_cells_{num_cells}.csv'))
 
         grn_scenic = grn_scenic.sort_values(by='scenic_weight', ascending=False).reset_index(drop=True)
-        grn_scenic.to_csv(os.path.join(save_path, f'grn_scenic_num_cells_{n}.csv'))
+        grn_scenic.to_csv(os.path.join(save_path, f'grn_scenic_num_cells_{num_cells}.csv'))
 
         # Save scalability results
         res_dfs_sub = [res_df_grnboost2, res_df_modules, res_df_pruning, res_df_scenic_to_grn]
         res_df = pd.concat(res_dfs_sub, axis=0, ignore_index=True)
-        res_df['n_cells'] = [n] * 4
+        res_df['n_cells'] = [num_cells] * 4
         res_df['alg_step'] = ['grnboost2', 'modules', 'pruning', 'scenic_to_grn']
 
-        fn_fg = f'grn_inf_fine_grained_num_cells_{n}.csv'
+        fn_fg = f'grn_inf_fine_grained_num_cells_{num_cells}.csv'
         res_df.to_csv(os.path.join(SAVE_PATH, INTERM_RES_SUBDIR, fn_fg))
 
         summary_df = (
@@ -480,7 +480,7 @@ def scalability_grn_inf():
             })
         )
 
-        fn = f'grn_inf_num_cells_{n}.csv'
+        fn = f'grn_inf_num_cells_{num_cells}.csv'
         summary_df.to_csv(os.path.join(SAVE_PATH, INTERM_RES_SUBDIR, fn))
 
 
@@ -1252,24 +1252,40 @@ if __name__ == '__main__':
     )
 
     parser.add_argument(
-        '-nc', '--num_cells',
+        '-vncnc', '--vary-num-cells-num-cells',
         type=int,
         default=None,
-        help='Number of cells to include in the analysis. Optional, overwrites the global NUM_CELLS variable.'
+        help='Number of cells to include. Optional, overwrites the global VARY_NUM_CELLS_NUM_CELLS variable.'
     )
 
     parser.add_argument(
-        '-ne', '--num_edges',
+        '-vncne', '--vary-num-cells-num-edges',
+        type=float,
+        default=None,
+        help='Fraction of edges to include. Optional, overwrites the global VARY_NUM_CELLS_NUM_EDGES variable.'
+    )
+
+    parser.add_argument(
+        '-vnene', '--vary-num-edges-num-edges',
         type=int,
         default=None,
-        help='Number of edges to include in the analysis. Optional, overwrites the global NUM_EDGES_GRN variable.'
+        help='Number of edges to include. Optional, overwrites the global VARY_NUM_EDGES_NUM_EDGES variable.'
+    )
+
+    parser.add_argument(
+        '-vnenc', '--vary-num-edges-num-cells',
+        type=int,
+        default=None,
+        help='Number of cells to include. Optional, overwrites the global VARY_NUM_EDGES_NUM_CELLS variable.'
     )
 
     args = parser.parse_args()
 
     m = args.method
-    nc = args.num_cells
-    ne = args.num_edges
+    vncnc = args.vary_num_cells_num_cells
+    vncne = args.vary_num_cells_num_edges
+    vnene = args.vary_num_edges_num_edges
+    vnenc = args.vary_num_edges_num_cells
 
     if m in {'grn_inf', 'switchtfi', 'cellrank', 'splicejac', 'drivaer', 'switchtfi_grn', 'drivaer_grn'}:
         p = SAVE_PATH / 'data'
@@ -1289,11 +1305,17 @@ if __name__ == '__main__':
         ):
             raise RuntimeError(f'Run GRN inference before running "{m}"')
 
-    # if nc is not None:
-    #     NUM_CELLS = [nc, ]
+    if vncnc is not None:
+        VARY_NUM_CELLS_NUM_CELLS = [vncnc, ]
 
-    # if ne is not None:
-    #     NUM_EDGES_GRN = [ne, ]
+    if vncne is not None:
+        VARY_NUM_CELLS_NUM_EDGES = [vncne, ]
+
+    if vnene is not None:
+        VARY_NUM_EDGES_NUM_EDGES = [vnene, ]
+
+    if vnenc is not None:
+        VARY_NUM_EDGES_NUM_CELLS = [vnenc, ]
 
     if m == 'data':
         process_data()

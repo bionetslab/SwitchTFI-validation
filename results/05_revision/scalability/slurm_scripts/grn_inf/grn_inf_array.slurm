@@ -22,8 +22,8 @@ cd $HOME/SwitchTFI-validation/validation
 # Source common parameters file (NUM_CELLS defined here)
 source $HOME/SwitchTFI-validation/results/05_revision/scalability/slurm_scripts/params.sh
 
-# Pick entry for this task
-NC=${NUM_CELLS[$SLURM_ARRAY_TASK_ID]}
+# Pick the entry for this task
+NC=${VARY_NUM_CELLS_NUM_CELLS[$SLURM_ARRAY_TASK_ID]}
 
 echo "Running GRN inference with $NC cells"
-srun python scalability.py -m grn_inf -nc $NC
+srun python scalability.py -m grn_inf -vncnc $NC

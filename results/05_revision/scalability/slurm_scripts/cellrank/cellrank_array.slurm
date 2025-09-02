@@ -19,11 +19,11 @@ conda activate switchtfi_val
 
 cd $HOME/SwitchTFI-validation/validation
 
-# Source common parameters file (NUM_CELLS defined here)
+# Source common parameters file
 source $HOME/SwitchTFI-validation/results/05_revision/scalability/slurm_scripts/params.sh
 
 # Pick the entry for this task
-NC=${NUM_CELLS[$SLURM_ARRAY_TASK_ID]}
+NC=${VARY_NUM_CELLS_NUM_CELLS[$SLURM_ARRAY_TASK_ID]}
 
 echo "Running cellrank with $NC cells"
-srun python scalability.py -m cellrank -nc $NC
+srun python scalability.py -m cellrank -vncnc $NC
