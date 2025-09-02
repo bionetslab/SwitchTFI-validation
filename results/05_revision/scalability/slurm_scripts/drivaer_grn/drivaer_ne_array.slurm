@@ -17,7 +17,7 @@ module purge
 source ~/miniforge3/etc/profile.d/conda.sh
 conda activate switchtfi_drivaer
 
-cd $HOME/SwitchTFI-validation/validation
+cd $HOME/SwitchTFI-validation
 
 # Source common parameters file (NUM_EDGES defined here)
 source $HOME/SwitchTFI-validation/results/05_revision/scalability/slurm_scripts/params.sh

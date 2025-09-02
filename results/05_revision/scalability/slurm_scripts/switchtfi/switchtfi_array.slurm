@@ -17,7 +17,7 @@ module purge
 source ~/miniforge3/etc/profile.d/conda.sh
 conda activate switchtfi_val
 
-cd $HOME/SwitchTFI-validation/validation
+cd $HOME/SwitchTFI-validation
 
 # Source common parameters file (NUM_CELLS defined here)
 source $HOME/SwitchTFI-validation/results/05_revision/scalability/slurm_scripts/params.sh

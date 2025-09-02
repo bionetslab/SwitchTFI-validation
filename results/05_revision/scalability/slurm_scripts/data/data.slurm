@@ -16,6 +16,6 @@ module purge
 source ~/miniforge3/etc/profile.d/conda.sh
 conda activate switchtfi_val
 
-cd $HOME/SwitchTFI-validation/validation
+cd $HOME/SwitchTFI-validation
 
 srun python scalability.py -m data
