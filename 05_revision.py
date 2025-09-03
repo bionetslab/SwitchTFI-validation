@@ -1442,7 +1442,7 @@ def main_tcell_data_exploration():
     import scanpy as sc
 
     data_dir = './results/05_revision/tcell/data'
-    plot_dir = './results/05_revision/tcell/plots/data_exploration'
+    plot_dir = './results/05_revision/tcell/data_exploration'
     os.makedirs(plot_dir, exist_ok=True)
 
     full_dataset_filename = 'ga_an0602_10x_smarta_doc_arm_liver_spleen_d10_d28_mgd_ts_filtered_int_inf_tp_rp_convert.h5ad'
@@ -1722,21 +1722,19 @@ def main_tcell_grn_inference():
     n_grns = 18
     edge_count_threshold = 9
 
+    with_tox = False
+    tox_str = 'wtox' if with_tox else 'notox'
+    tox_genes = ['Tox', 'Tox1', 'Tox2', 'Tox3', 'Tox4']
+
     inference = True
 
     data_p = './results/05_revision/tcell/data'
-    base_res_p = './results/05_revision/tcell/grn'
+    base_res_p = f'./results/05_revision/tcell/grn/{tox_str}'
     os.makedirs(base_res_p, exist_ok=True)
 
     for infection in infections:
         for tissue in tissues:
             for cluster_keys in clusters:
-
-                # Todo
-                # t = (tissue, infection, cluster_keys)
-                # skip = {('spleen', 'acute', '345'), ('spleen', 'acute', '35'), ('spleen', 'chronic', '345')}
-                # if t in skip:
-                #     continue
 
                 # Load data
                 id_str = f'{tissue}_{time}_{infection}_{cluster_keys}'
@@ -1752,6 +1750,7 @@ def main_tcell_grn_inference():
 
                         pyscenic_pipeline(
                             adata=tdata,
+                            additional_tfs=tox_genes if with_tox else None,
                             layer_key='unit_variance',
                             tf_file=tf_file,
                             result_folder=res_p,
@@ -1876,7 +1875,11 @@ def main_tcell_grn_exploration():
     infection = 'acute'
     clusters = ['345', '35']
 
-    grn_p = './results/05_revision/tcell/grn'
+    with_tox = True
+    tox_str = 'wtox' if with_tox else 'notox'
+    tox_genes = ['Tox', 'Tox2', 'Tox3', 'Tox4']
+
+    grn_p = f'./results/05_revision/tcell/grn/{tox_str}'
 
     method_to_weight_key = {'grnboost2': 'importance', 'scenic': 'scenic_weight'}
 
@@ -1912,6 +1915,12 @@ def main_tcell_grn_exploration():
 
                 # print(f'# GRN:\n{grn}')
 
+                if with_tox:
+                    tox_tf_counts = grn['TF'].value_counts().reindex(tox_genes, fill_value=0)
+                    tox_target_counts = grn['target'].value_counts().reindex(tox_genes, fill_value=0)
+                    print(f'# Tox TFs:\n{tox_tf_counts}')
+                    print(f'# Tox targets:\n{tox_target_counts}')
+
 
 def main_tcell_switchtfi():
 
@@ -1927,9 +1936,15 @@ def main_tcell_switchtfi():
     infection = 'acute'
     clusters = ['345', '35']
 
-    data_p = './data/anndata/tcell'
-    grn_p = './results/01_grn_inf/tcell'
-    base_res_p = './results/02_switchtfi/tcell'
+    with_tox = True
+    tox_str = 'wtox' if with_tox else 'notox'
+
+    grn_inf_method = 'scenic'  # grnboost2, scenic
+    support_threshold = 9 if grn_inf_method == 'scenic' else 18
+
+    data_p = './results/05_revision/tcell/data'
+    grn_p = f'./results/05_revision/tcell/grn/{tox_str}'
+    base_res_p = f'./results/05_revision/tcell/switchtfi/{tox_str}'
 
     for tissue in tissues:
         for cluster_keys in clusters:
@@ -1941,11 +1956,14 @@ def main_tcell_switchtfi():
             tdata = sc.read_h5ad(filepath)
 
             # Load the precomputed GRN
-            grn_path = os.path.join(grn_p, id_str, 'edge_count_threshold_9_scenic_aggregated_grn.csv')
-            grn = pd.read_csv(grn_path, index_col=0).reset_index()
+            grn_path = os.path.join(grn_p, id_str, f'{grn_inf_method}_aggregated_grn.csv')
+            grn = pd.read_csv(grn_path, index_col=0)
+
+            # Subset based on support
+            grn = grn[grn['support'] >= support_threshold].copy()
 
             # Create results directory
-            res_p = os.path.join(base_res_p, 'grnboost2', id_str)  # Todo
+            res_p = os.path.join(base_res_p, id_str, grn_inf_method)
             os.makedirs(res_p, exist_ok=True)
 
             transition_grn, ranked_tfs_pagerank = fit_model(
@@ -2314,35 +2332,13 @@ if __name__ == '__main__':
 
     # main_tcell_data_processing()
 
-    main_tcell_grn_inference()
+    # main_tcell_grn_inference()
 
-    # Todo: change paths ...
     # main_tcell_grn_exploration()
 
-    # main_tcell_switchtfi()
-    # Todo: end todo
+    main_tcell_switchtfi()
 
     # main_tcell_explore_results()
-
-
-    load = False
-    if load:
-        import os
-        import scanpy as sc
-        import cellrank as cr
-
-        data_dir = './data_dummy'
-        os.makedirs(data_dir, exist_ok=True)
-
-        adata = cr.datasets.reprogramming_morris(os.path.join(data_dir, 'reprogramming_morris.h5ad'), subset='full')
-        print(f'# ### Reprogramming Morris: {adata.n_obs} cells, {adata.n_vars} genes')
-        print(adata)
-        # print(adata.X)
-        print(type(adata.X))
-        print(type(adata.X[0, 0]))
-        print(adata.obs['pseudotime'])
-        print(adata.obs['timecourse'])
-        print(adata.obs['cell_type'])
 
 
     print('done')
