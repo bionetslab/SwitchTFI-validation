@@ -1,21 +1,4 @@
 
-
-# Todo:
-#  - Comparison strategy:
-#    - Define grid of n_cells
-#    - Fix n_genes to sensible value, e.g. 10000 (typical number of genes that remain after peprocessing)
-#    - For each n_cells run grn_inf, cellrank, spliceJAC, DrivAER, SwitchTFI
-#      (for DrivAER, SwitchTFI use GRN inferred for this n_cells)
-#    - SpliceJAC can only be run on # cells in cluster many genes -> run cellrank, DrivAER, SwitchTFI also on this many genes
-#    - Additional study: SwitchTFI, DrivAER scales in n-edges (GRN-size), pick fixed number of cells (e.g. 10000) and remove random edges
-#  - Run everything on HPC
-
-# Todo: three comparisons
-#  (1) Vary number of cells, fix number of genes (except for spliceJAC), use output GRNs
-#  (2) Vary number of cells and number of genes (for comparison to spliceJAC)
-#  (3) Compare SwitchTFI and DrivAER on GRNs of different size for fixed n cells and n genes
-
-
 import os
 import argparse
 import time
