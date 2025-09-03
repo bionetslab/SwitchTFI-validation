@@ -735,12 +735,7 @@ def scalability_splicejac():
         num_genes = min(data.shape[1], int(min_cluster_size * 0.9))
 
         # Compute highly variable genes
-        sc.pp.highly_variable_genes(
-            data,
-            # n_top_genes=num_genes,
-            # min_disp=0, max_disp=np.inf,
-            # min_mean=0, max_mean=np.inf,
-        )
+        sc.pp.highly_variable_genes(data)
 
         # Select exactly top num_genes by dispersion
         ranked = data.var.sort_values('dispersions_norm', ascending=False)
@@ -751,24 +746,12 @@ def scalability_splicejac():
         return data_hvg
 
 
-    def compute_rna_velocity(data: sc.AnnData) -> sc.AnnData:
-
-        # Compute velocities
-        scv.tl.velocity(data)
-        scv.tl.velocity_graph(data)
-
-        data.uns['neighbors']['distances'] = data.obsp['distances']
-        data.uns['neighbors']['connectivities'] = data.obsp['connectivities']
-
-        return data
-
-
     def infer_splicejac_grn(data: sc.AnnData) -> sc.AnnData:
 
         sj.tl.estimate_jacobian(
             data,
             n_top_genes=data.shape[1], # Pass to avoid spliceJAC error (default is 20)
-            filter_and_norm=False  # No further gene filtering, already filtered in compute_hvgs_subset()
+            filter_and_norm=False  # No further gene filtering
         )
 
         return data
@@ -796,24 +779,20 @@ def scalability_splicejac():
 
         # Load the data and do basic processing
         adata = load_data(n_obs=num_cells)
+        scv.pp.filter_genes(adata, min_shared_counts=20)
         sc.pp.normalize_total(adata)
         sc.pp.log1p(adata)
         adata.obs['clusters'] = adata.obs['prog_off'].copy()
 
         # Runs step-wise analysis
-        res_df_hvg, adata_hvg_subset = scalability_wrapper(
+        res_df_hvg, adata_hvg = scalability_wrapper(
             function=compute_hvgs_subset,
             function_params={'data': adata},
         )
 
-        res_df_rna_velo, adata_rna_velo = scalability_wrapper(
-            function=compute_rna_velocity,
-            function_params={'data': adata_hvg_subset},
-        )
-
         res_df_grn_inf, adata_grn = scalability_wrapper(
             function=infer_splicejac_grn,
-            function_params={'data': adata_rna_velo},
+            function_params={'data': adata_hvg},
         )
 
         res_df_transition, _ = scalability_wrapper(
@@ -822,13 +801,13 @@ def scalability_splicejac():
         )
 
         res_dfs_sub = [
-            res_df_hvg, res_df_rna_velo, res_df_grn_inf, res_df_transition
+            res_df_hvg, res_df_grn_inf, res_df_transition
         ]
         res_df = pd.concat(res_dfs_sub, axis=0, ignore_index=True)
 
-        res_df['n_cells'] = [num_cells] * 4
+        res_df['n_cells'] = [num_cells] * 3
 
-        res_df['alg_step'] = ['hvg_subset', 'rna_velo', 'grn_inf', 'transition']
+        res_df['alg_step'] = ['hvg_subset', 'grn_inf', 'transition']
         gpu_cols = ['mem_peak_gpu', 'mem_avg_gpu', 'samples_gpu']
         res_df[gpu_cols] = res_df[gpu_cols].astype('float64')
 
