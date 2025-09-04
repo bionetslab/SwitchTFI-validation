@@ -2313,8 +2313,253 @@ def main_tcell_explore_results():
                     fig.savefig(os.path.join(save_path_de_current, f'volcanoe_{group_str}.png'), dpi=fig.dpi, bbox_inches="tight", pad_inches=0.05)
 
 
+def main_tcell_de_analysis():
 
-def main_tcell_de_plots():
+    import os
+    import anndata2ri
+
+    import pandas as pd
+    import scanpy as sc
+    import rpy2.robjects as ro
+
+    from typing import Tuple, Any
+    from rpy2.robjects import pandas2ri, default_converter
+    from rpy2.robjects.conversion import localconverter
+    from scipy.sparse import issparse
+
+    # Build a converter that knows about AnnData and Pandas
+    converter = default_converter + anndata2ri.converter + pandas2ri.converter
+
+
+    def zinbwave_edger(
+            adata, group_key: str,
+            contrast: Tuple[Any, Any],
+            epsilon: float = 1e12,
+            k: int = 0,
+            n_cores: int = 1
+    ) -> pd.DataFrame:
+        """
+        Run zinbwave with observational weights and test groups with edgeR.
+
+        Parameters
+        ----------
+        adata : AnnData
+            AnnData object with raw counts in .X and metadata in .obs
+        group_key : str
+            Column in adata.obs defining the groups (factor)
+        contrast : Tuple[Any, Any]
+            Contrast for test (contrast[0] vs contrast[1] = test group vs reference group)
+        epsilon : float
+            Penalty parameter for zinbwave.
+            (https://www.bioconductor.org/packages/release/bioc/vignettes/zinbwave/inst/doc/intro.html:
+            "Our evaluations have shown that a value of epsilon=1e12 gives good performance across a range of datasets,
+            although this number is still arbitrary.")
+        k : int
+            Number of latent factors for zinbwave.
+            (https://doi.org/10.1186/s13059-018-1406-4:
+            To compute the weights for differential expression analysis, ZINB-WaVE was fitted with intercept and
+            cell-type covariate in X, V=1 J , K=0 for W, common dispersion, and ε=1012. (Fig. 6)
+            The observational weights were computed with the number of unknown covariates K=0, i.e.,
+            no latent variables were inferred.)
+        n_cores : int
+            Number of cores to use, -1 uses all available
+
+        Returns
+        -------
+        Pandas DataFrame with DE results (logFC, logCPM, LR, PValue, FDR)
+        """
+
+        # Set number of cores to use
+        n_available_cores = len(os.sched_getaffinity(0))
+        if n_cores == -1:
+            n_cores = n_available_cores
+        else:
+            n_cores = min(n_cores, n_available_cores)
+
+        # Minimal AnnData for R
+        x = adata.X.copy()
+        if issparse(x):
+            x = x.toarray()
+        adata_input = sc.AnnData(x)
+        adata_input.var_names = adata.var_names.copy()
+        adata_input.obs_names = adata.obs_names.copy()
+        adata_input.obs[group_key] = adata.obs[group_key].copy()
+
+        # Add annotations such that alphabetical order reflects contrast
+        # group_anno = [f'0_{lbl}' if lbl == contrast[0] else f'1_{lbl}' for lbl in adata.obs[group_key]]
+        # adata_input.obs[group_key] = group_anno
+
+        # Put AnnData into R as a SingleCellExperiment
+        with localconverter(converter):
+            ro.globalenv['sce'] = adata_input
+        ro.globalenv['group_key'] = group_key
+        ro.globalenv['zinb_epsilon'] = epsilon
+        ro.globalenv['zinb_K'] = k
+        ro.globalenv['n_cores'] = n_cores
+        ro.globalenv['ref_level'] = str(contrast[1])  # baseline
+        ro.globalenv['test_level'] = str(contrast[0])  # test
+
+        ro.r('''
+        suppressPackageStartupMessages({
+            library(SingleCellExperiment)
+            library(zinbwave)
+            library(edgeR)
+            library(BiocParallel)
+        })
+
+        # Ensure group column is factor
+        colData(sce)$group <- as.factor(colData(sce)[[group_key]])
+        colData(sce)$group <- relevel(colData(sce)$group, ref=ref_level)
+
+        message("# ### Running zinbwave with ", n_cores, " cores ...")
+
+        # Run zinbwave with weights
+        sce_zinb <- zinbwave(
+            sce, 
+            K=zinb_K, 
+            epsilon=zinb_epsilon, 
+            observationalWeights=TRUE,
+            BPPARAM=MulticoreParam(n_cores)
+        )
+
+        print("# ### edgeR ..." )
+
+        # edgeR pipeline with weights
+        weights <- assay(sce_zinb, "weights")
+        dge <- DGEList(assay(sce_zinb))
+        dge <- calcNormFactors(dge)  # Normalization
+
+        design <- model.matrix(~group, data=colData(sce_zinb))
+        dge$weights <- weights
+        dge <- estimateDisp(dge, design)  # Estimate dispersion parameters
+        fit <- glmFit(dge, design)  # Fit generalized linear model
+        
+        lrt <- glmWeightedF(fit, coef=2)  # Likelihood ration test
+        res <- topTags(lrt, n=Inf)$table
+        ''')
+
+        # Convert R DataFrame back to pandas
+        with localconverter(converter):
+            de_res_df = ro.conversion.rpy2py(ro.r('res'))
+
+        return de_res_df
+
+
+    # Load the full data set
+    data_p = './results/05_revision/tcell/data/'
+    fn_all_data = 'ga_an0602_10x_smarta_doc_arm_liver_spleen_d10_d28_mgd_ts_filtered_int_inf_tp_rp_convert.h5ad'
+    tdata = sc.read_h5ad(os.path.join(data_p, fn_all_data))
+
+    # Relabel cluster labels from 0-9 to 1-10
+    new_labels = [int(label + 1) for label in tdata.obs['cluster']]
+    tdata.obs['cluster'] = new_labels
+
+    # Set raw counts as main data matrix
+    tdata.X = tdata.raw.X.copy()
+    tdata.raw = None
+
+    # Subset to TFs
+    tf_file = './data/tf/mus_musculus/allTFs_mm.txt'
+    with open(tf_file) as file:
+        all_tfs = [line.strip() for line in file.readlines()]
+    tf_bool = tdata.var_names.isin(all_tfs)
+    tdata = tdata[:, tf_bool].copy()
+
+    tissues = ['spleen', 'liver']
+    clusters = ['345', '35']
+    time = 'd10'
+
+    time_name_to_label = {'d10': 0, 'd28': 1}
+    tissue_name_to_label = {'spleen': 0, 'liver': 1}
+    infection_name_to_label = {'chronic': 0, 'acute': 1}
+    cluster_key_to_progenitor_labels = {'345': [3, 4], '35': [3, ]}
+    cluster_key_to_cluster_labels = {'345': [3, 4], '35': [3, ]}
+
+    # Add semantic annotations
+    infection_label_to_name = {0: 'chronic', 1: 'acute'}
+    tdata.obs['infection_name'] = [infection_label_to_name[lbl] for lbl in tdata.obs['infection']]
+
+    # Subset data to time point d10
+    keep_bool_time = (tdata.obs['time'] == time_name_to_label[time])
+    tdata = tdata[keep_bool_time, :].copy()
+
+    save_path_base = './results/05_revision/tcell/de_analysis'
+    os.makedirs(save_path_base, exist_ok=True)
+
+    # ### --- DE analysis --- ### #
+    # ### Chronic vs acute in progenitors
+    contrasts = ['cva', 'avc']
+    for tissue in tissues:
+        for cluster_key in clusters:
+            for contrast in contrasts:
+                print(f'# ###### {tissue}, {cluster_key}, {contrast} ###### #')
+
+                # Subset data to tissue and progenitors
+                keep_bool_tissue = (tdata.obs['tissue'] == tissue_name_to_label[tissue])
+                keep_bool_progenitor = tdata.obs['cluster'].isin(cluster_key_to_progenitor_labels[cluster_key])
+                keep_bool = keep_bool_tissue & keep_bool_progenitor
+                tdata_sub = tdata[keep_bool, :].copy()
+
+                # Filter genes with low counts
+                sc.pp.filter_genes(tdata_sub, min_cells=5)
+                sc.pp.filter_genes(tdata_sub, min_counts=5)
+
+                # Create contrast tuple
+                if contrast == 'cva':
+                    ct = ('chronic', 'acute')
+                else:
+                    ct = ('acute', 'chronic')
+
+                res_df = zinbwave_edger(
+                    adata=tdata_sub, contrast=ct, group_key='infection_name', n_cores=-1
+                )
+
+                print(res_df)
+
+                id_str = f'{tissue}_{time}_{cluster_key}_{contrast}'
+                res_df.to_csv(os.path.join(save_path_base, f'{id_str}.csv'))
+
+
+
+    # ### Progenitor vs offspring in acute
+    contrasts = ['pvo', 'ovp']
+    for tissue in tissues:
+        for cluster_key in clusters:
+            for contrast in contrasts:
+                print(f'# ###### {tissue}, {cluster_key}, {contrast} ###### #')
+
+                # Subset data to tissue, acute, and cluster
+                keep_bool_tissue = (tdata.obs['tissue'] == tissue_name_to_label[tissue])
+                keep_bool_cluster = tdata.obs['cluster'].isin(cluster_key_to_cluster_labels[cluster_key])
+                keep_bool_acute = (tdata.obs['infection'] == infection_name_to_label['acute'])
+                keep_bool = keep_bool_tissue & keep_bool_cluster & keep_bool_acute
+                tdata_sub = tdata[keep_bool, :].copy()
+
+                # Filter genes with low counts
+                sc.pp.filter_genes(tdata_sub, min_cells=5)
+                sc.pp.filter_genes(tdata_sub, min_counts=5)
+
+                # Add progenitor-offspring annotations
+                cluster_label_to_prog_off_anno = {3: 'prog', 4: 'prog', 5: 'off'}
+                tdata_sub.obs['prog_off'] = [cluster_label_to_prog_off_anno[lbl] for lbl in tdata_sub.obs['cluster']]
+
+                # Create contrast tuple
+                if contrast == 'pvo':
+                    ct = ('prog', 'off')
+                else:
+                    ct = ('off', 'prog')
+
+                res_df = zinbwave_edger(
+                    adata=tdata_sub, contrast=ct, group_key='prog_off', n_cores=-1
+                )
+
+                print(res_df)
+
+                id_str = f'{tissue}_{time}_{cluster_key}_acute_{contrast}'
+                res_df.to_csv(os.path.join(save_path_base, f'{id_str}.csv'))
+
+
+def main_tcell_de_plots_wilcoxon():
 
     import os
 
@@ -2343,12 +2588,19 @@ def main_tcell_de_plots():
     data_p = './results/05_revision/tcell/data/'
     res_p_base_switchtfi = './results/05_revision/tcell/switchtfi'
 
-    save_path_base = './results/05_revision/tcell/de_plots'
+    save_path_base = './results/05_revision/tcell/de_plots_wilcoxon'
 
     # Load the full data set
     fn_all_data = 'ga_an0602_10x_smarta_doc_arm_liver_spleen_d10_d28_mgd_ts_filtered_int_inf_tp_rp_convert.h5ad'
     tdata = sc.read_h5ad(os.path.join(data_p, fn_all_data))
     tdata.raw = None
+
+    # Subset to TFs
+    tf_file = './data/tf/mus_musculus/allTFs_mm.txt'
+    with open(tf_file) as file:
+        all_tfs = [line.strip() for line in file.readlines()]
+    tf_bool = tdata.var_names.isin(all_tfs)
+    tdata = tdata[:, tf_bool].copy()
 
     # Relabel cluster labels from 0-9 to 1-10
     new_labels = [int(label + 1) for label in tdata.obs['cluster']]
@@ -2461,14 +2713,15 @@ def main_tcell_de_plots():
                         de_results[f'-log10({pvalue_str})'] = -np.log10(de_results[pvalue_str].astype('float') + eps)
 
                         pval_thresh = 0.05
+                        lfc_thresh = 1.0
                         de_results['color'] = 'grey'
                         sig_bool_neg = (
-                                (de_results['logfoldchanges'] < -1.5) &
+                                (de_results['logfoldchanges'] < -lfc_thresh) &
                                 (de_results[pvalue_str] < pval_thresh)
                         )
                         de_results.loc[sig_bool_neg, 'color'] = 'blue'
                         sig_bool_pos = (
-                                (de_results['logfoldchanges'] > 1.5) &
+                                (de_results['logfoldchanges'] > lfc_thresh) &
                                 (de_results[pvalue_str] < pval_thresh)
                         )
                         de_results.loc[sig_bool_pos, 'color'] = 'green'
@@ -2499,8 +2752,8 @@ def main_tcell_de_plots():
                             arrowprops=dict(arrowstyle='-', color='red', lw=linewidth_tf)
                         )
 
-                        ax.axvline(-1.5, color='black', linestyle='--', linewidth=linewidth_axlines)
-                        ax.axvline(1.5, color='black', linestyle='--', linewidth=linewidth_axlines)
+                        ax.axvline(-lfc_thresh, color='black', linestyle='--', linewidth=linewidth_axlines)
+                        ax.axvline(lfc_thresh, color='black', linestyle='--', linewidth=linewidth_axlines)
                         ax.axhline(-np.log10(pval_thresh), color='black', linestyle='--', linewidth=linewidth_axlines)
 
                         ax.set_xlabel('log2 FC', fontsize=fontsize_axlabels)
@@ -2591,7 +2844,7 @@ def main_tcell_de_plots():
                                 if pval < 1e-3:
                                     pval_str = f'{p_label}={pval:.1e}'
                                 else:
-                                    pval_str = f'{p_label}={pval:.3f}'
+                                    pval_str = f'{p_label}=\n{pval:.3f}'
                                 new_labels.append(f'{lbl}\n{pval_str}')
                             else:
                                 new_labels.append(lbl)
@@ -2655,6 +2908,8 @@ if __name__ == '__main__':
 
     # main_tcell_explore_results()
 
-    main_tcell_de_plots()
+    main_tcell_de_analysis()
+
+    # main_tcell_de_plots()
 
     print('done')
