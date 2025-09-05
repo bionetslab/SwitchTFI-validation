@@ -2473,7 +2473,7 @@ def main_tcell_de_analysis():
     tissue_name_to_label = {'spleen': 0, 'liver': 1}
     infection_name_to_label = {'chronic': 0, 'acute': 1}
     cluster_key_to_progenitor_labels = {'345': [3, 4], '35': [3, ]}
-    cluster_key_to_cluster_labels = {'345': [3, 4], '35': [3, ]}
+    cluster_key_to_cluster_labels = {'345': [3, 4, 5], '35': [3, 5]}
 
     # Add semantic annotations
     infection_label_to_name = {0: 'chronic', 1: 'acute'}
@@ -2520,7 +2520,6 @@ def main_tcell_de_analysis():
                 res_df.to_csv(os.path.join(save_path_base, f'{id_str}.csv'))
 
 
-
     # ### Progenitor vs offspring in acute
     contrasts = ['pvo', 'ovp']
     for tissue in tissues:
@@ -2558,6 +2557,10 @@ def main_tcell_de_analysis():
                 id_str = f'{tissue}_{time}_{cluster_key}_acute_{contrast}'
                 res_df.to_csv(os.path.join(save_path_base, f'{id_str}.csv'))
 
+
+def main_tcell_de_plots():
+
+    pass
 
 def main_tcell_de_plots_wilcoxon():
 
