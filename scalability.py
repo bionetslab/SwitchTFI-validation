@@ -623,14 +623,16 @@ def scalability_cellrank():
 
         gpcca.compute_schur()
 
-        # Cannot use arbitrary annotations since CellRank will crash
-        # gpcca.compute_macrostates(cluster_key='prog_off', n_states=2)
-        # gpcca.set_initial_states(states='prog')
-        # gpcca.set_terminal_states(states='off')
-
-        gpcca.compute_macrostates()
-        gpcca.predict_initial_states(allow_overlap=True)
-        gpcca.predict_terminal_states(allow_overlap=True)
+        use_cluster_info = True
+        if use_cluster_info:
+            gpcca.compute_macrostates(cluster_key='prog_off', n_states=2)
+            gpcca.set_initial_states(states='prog')
+            gpcca.set_terminal_states(states='off')
+        else:
+            # Cannot use cluster annotations since CellRank will crash
+            gpcca.compute_macrostates()
+            gpcca.predict_initial_states(allow_overlap=True)
+            gpcca.predict_terminal_states(allow_overlap=True)
 
         return gpcca
 
