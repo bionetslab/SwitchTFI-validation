@@ -2589,7 +2589,7 @@ def main_tcell_de_plots():
     res_p_base_de = './results/05_revision/tcell/de_analysis'
     save_path_base = './results/05_revision/tcell/de_plots'
 
-    plot_1 = False
+    plot_1 = True
     plot_2 = True
 
     if plot_1:
@@ -2758,7 +2758,7 @@ def main_tcell_de_plots():
                             ax.xaxis.set_tick_params(labelsize=tick_label_fontsize)
                             ax.yaxis.set_tick_params(labelsize=tick_label_fontsize)
 
-                        # Violin
+                        # Expression
                         for subplot_key, tdata_sub, de_results, group_key, title in zip(
                                 ['B', 'D'],
                                 [tdata_sub_1, tdata_sub_2],
@@ -2782,7 +2782,7 @@ def main_tcell_de_plots():
 
                             ax = axd[subplot_key]
 
-                            plot_types = {'boxen', }  # 'violin', 'strip', 'box', 'boxen'
+                            plot_types = {'box', }  # 'violin', 'strip', 'box', 'boxen'
 
                             if 'violin' in plot_types:
                                 sns.violinplot(
@@ -2967,8 +2967,6 @@ def main_tcell_de_plots():
                         save_path = os.path.join(save_path_base, tox_str, id_str, grn_inf_method)
                         fig.savefig(os.path.join(save_path, f'de_hist_plot.png'), dpi=fig.dpi)
                         plt.close(fig)
-
-
 
 
 def main_tcell_de_plots_wilcoxon():
@@ -3294,6 +3292,329 @@ def main_tcell_de_plots_wilcoxon():
                         plt.close(fig)
 
 
+def main_tcell_plot_figure():
+
+    import os
+    
+    import numpy as np
+    import pandas as pd
+    import matplotlib.pyplot as plt
+    import matplotlib.transforms as mtransforms
+    import seaborn as sns
+    import scanpy as sc
+
+    from matplotlib.lines import Line2D
+    from matplotlib.gridspec import GridSpec, GridSpecFromSubplotSpec
+    from adjustText import adjust_text
+    from scipy.stats import hypergeom
+
+    # Create directory for results
+    res_dir = './results/05_revision/tcell/figure'
+    os.makedirs(res_dir, exist_ok=True)
+
+    # Set parameters
+    tissues = ['Spleen', 'Liver']
+
+    tissue_to_id = {'Spleen': 0, 'Liver': 1}
+
+
+    preliminary = False
+    standard_preprocessing = True
+
+    if preliminary:
+
+        # Load the full data set
+        data_p = './results/05_revision/tcell/data/'
+        fn_all_data = 'ga_an0602_10x_smarta_doc_arm_liver_spleen_d10_d28_mgd_ts_filtered_int_inf_tp_rp_convert.h5ad'
+        tdata = sc.read_h5ad(os.path.join(data_p, fn_all_data))
+
+        # Relabel cluster labels from 0-9 to 1-10
+        new_labels = [int(label + 1) for label in tdata.obs['cluster']]
+        tdata.obs['cluster'] = new_labels
+
+        # Subset cells to time point d10 and clusters 3, 5
+        keep_bool_time = (tdata.obs['time'] == 0)  # day 10
+        keep_bool_cluster = tdata.obs['cluster'].isin([3, 5])
+        keep_bool = keep_bool_time & keep_bool_cluster
+        tdata = tdata[keep_bool, :].copy()
+
+        # Add semantic annotations
+        infection_label_to_name = {0: 'Chronic', 1: 'Acute'}
+        tdata.obs['infection_name'] = [infection_label_to_name[lbl] for lbl in tdata.obs['infection']]
+
+        for tissue in tissues:
+
+            # Subset to tissue
+            keep_bool_tissue = tdata.obs['tissue'] == tissue_to_id[tissue]
+            tdata_sub = tdata[keep_bool_tissue, :].copy()
+
+            if standard_preprocessing:
+                # Use raw and do basic preprocessing
+                tdata_sub.X = tdata_sub.raw.X.copy()
+                sc.pp.filter_genes(tdata_sub, min_cells=20)
+                sc.pp.normalize_total(tdata_sub)
+                sc.pp.log1p(tdata_sub)
+
+            # Compute UMAP
+            sc.pp.pca(tdata_sub)
+            sc.pp.neighbors(tdata_sub, n_neighbors=30)
+            sc.tl.umap(tdata_sub)
+            sc.tl.diffmap(tdata_sub)
+
+            # Save for later plotting
+            tdata_sub.raw = None  # Avoid error
+            fn = f'd10_35_{tissue}_tdata_with_umap.h5ad'
+            tdata_sub.write_h5ad(os.path.join(res_dir, fn))
+
+
+    # --- Plotting ---
+    fig = plt.figure(figsize=(8, 6), dpi=300)
+
+    # Outer 2×3 grid
+    outer = GridSpec(2, 3, figure=fig, height_ratios=[1, 1], width_ratios=[1, 1, 1])
+
+    # A.1 / A.2 (nested)
+    gsA = GridSpecFromSubplotSpec(2, 1, subplot_spec=outer[0, 0], hspace=0.05)
+    axA1 = fig.add_subplot(gsA[0, 0])
+    axA2 = fig.add_subplot(gsA[1, 0])
+
+    # B, C
+    axB = fig.add_subplot(outer[0, 1])
+    axC = fig.add_subplot(outer[0, 2])
+
+    # D.1 / D.2 (nested)
+    gsD = GridSpecFromSubplotSpec(2, 1, subplot_spec=outer[1, 0], hspace=0.05)
+    axD1 = fig.add_subplot(gsD[0, 0])
+    axD2 = fig.add_subplot(gsD[1, 0])
+
+    # E, F
+    axE = fig.add_subplot(outer[1, 1])
+    axF = fig.add_subplot(outer[1, 2])
+
+    # Dict like subplot_mosaic
+    axd = {
+        'A.1': axA1,
+        'A.2': axA2,
+        'B': axB,
+        'C': axC,
+        'D.1': axD1,
+        'D.2': axD2,
+        'E': axE,
+        'F': axF,
+    }
+
+    # --- UMAP or Diffusion map
+    dim_red = 'UMAP'  # 'UMAP', 'DiffMap'
+    cluster_ids = [3, 5]
+    for tissue, subplot_keys in zip(tissues, [['A.1', 'A.2'], ['D.1', 'D.2']]):
+
+        # Load the data
+        fn = f'd10_35_{tissue}_tdata_with_umap.h5ad'
+        tdata_plot = sc.read_h5ad(os.path.join(res_dir, fn))
+
+        # Define color scheme
+        palette = sns.color_palette('Set2', n_colors=2)
+        cluster_id_to_color = dict(zip(cluster_ids, palette))
+
+        for subplot_key, grey_label in zip(subplot_keys, ['Chronic', 'Acute']):
+
+            # Create df for plotting
+            dim_red_key = 'X_umap' if dim_red == 'UMAP' else 'X_diffmap'
+            plot_df = pd.DataFrame(tdata_plot.obsm[dim_red_key][:, 0: 2].copy(), columns=[f'{dim_red}1', f'{dim_red}2'])
+            plot_df['cluster'] = tdata_plot.obs['cluster'].tolist().copy()
+            plot_df['infection'] = tdata_plot.obs['infection_name'].tolist().copy()
+
+            plot_df['colors'] = [
+                'lightgrey' if inf == grey_label else cluster_id_to_color.get(cid, 'lightgrey')
+                for cid, inf in zip(plot_df['cluster'], plot_df['infection'])
+            ]
+
+            # Get subplot axes
+            ax = axd[subplot_key]
+
+            # Scatterplot
+            ax.scatter(
+                plot_df[f'{dim_red}1'],
+                plot_df[f'{dim_red}2'],
+                c=plot_df['colors'],
+                s=1.0,
+            )
+
+            # Style axes
+            ax.set_xlabel(f'{dim_red}1')
+            ax.set_ylabel(f'{dim_red}2')
+            ax.set_xticks([])
+            ax.set_yticks([])
+
+            # Add legend
+            legend_markersize = 6
+            legend_fontsize = 8
+            handles = [
+                Line2D([0], [0], marker='o', color='w', markerfacecolor=cluster_id_to_color[cid],
+                       markersize=legend_markersize, label=f'Cluster {cid}')
+                for cid in cluster_ids
+            ]
+            handles += [
+                Line2D([0], [0], marker='o', color='w', markerfacecolor='lightgrey',
+                       markersize=legend_markersize, label=grey_label)
+            ]
+            ax.legend(handles=handles, fontsize=legend_fontsize)
+
+    # Set titles
+    axd['A.1'].set_title(tissues[0])
+    axd['D.1'].set_title(tissues[1])
+
+
+    # --- Vulcano
+    res_p_base_switchtfi = './results/05_revision/tcell/switchtfi'
+    res_p_base_de = './results/05_revision/tcell/de_analysis'
+
+    pvalue_column = 'FDR'  # PValue, FDR
+    lfc_column = 'logFC'
+
+    pval_thresh = 0.05
+    lfc_thresh = 0.5
+
+    for tissue, subplot_key in zip(tissues, ['B', 'E']):
+
+        # Load SwitchTFI results
+        res_p_switchtfi = os.path.join(res_p_base_switchtfi, 'notox', f'{tissue.lower()}_d10_acute_35', 'scenic')
+        ranked_tfs_pr = pd.read_csv(os.path.join(res_p_switchtfi, 'ranked_tfs.csv'), index_col=0)
+        tfs = ranked_tfs_pr['gene'].tolist()
+
+        # Load DE results
+        res_p_de = os.path.join(res_p_base_de, f'{tissue.lower()}_d10_35_cva.csv')
+        res_df_de = pd.read_csv(res_p_de, index_col=0)
+        res_df_de['TF'] = res_df_de.index.copy()
+
+        # Avoid log(0) error
+        eps = 1e-300
+        res_df_de[f'-log10({pvalue_column})'] = -np.log10(res_df_de[pvalue_column].astype('float') + eps)
+        
+        # Add color columns
+        res_df_de['color'] = 'grey'
+        sig_bool_neg = (
+                (res_df_de[lfc_column] < -lfc_thresh) &
+                (res_df_de[pvalue_column] < pval_thresh)
+        )
+        res_df_de.loc[sig_bool_neg, 'color'] = 'blue'
+        sig_bool_pos = (
+                (res_df_de[lfc_column] > lfc_thresh) &
+                (res_df_de[pvalue_column] < pval_thresh)
+        )
+        res_df_de.loc[sig_bool_pos, 'color'] = 'green'
+
+        # Plot
+        ax = axd[subplot_key]
+
+        sns.scatterplot(
+            data=res_df_de,
+            x=lfc_column,
+            y=f'-log10({pvalue_column})',
+            s=6.0,
+            hue='color',
+            palette={'grey': 'grey', 'blue': 'blue', 'green': 'green'},
+            legend=False,
+            ax=ax
+        )
+
+        # Add driver TF annotations
+        texts = []
+        for tf in tfs:
+            sub = res_df_de.loc[res_df_de['TF'] == tf]
+            if not sub.empty:
+                x = sub[lfc_column].to_numpy()[0]
+                y = sub[f'-log10({pvalue_column})'].to_numpy()[0]
+
+                ax.scatter(x, y, color='red', s=3.0, zorder=3)
+                texts.append(ax.text(x, y, tf, ha='right', va='bottom'))
+
+        adjust_text(
+            texts, ax=ax, expand=(3.0, 3.0),
+            arrowprops=dict(arrowstyle='-', color='red', lw=0.5)
+        )
+
+        linewidth_axlines = 1.0
+        ax.axvline(-lfc_thresh, color='black', linestyle='--', linewidth=linewidth_axlines)
+        ax.axvline(lfc_thresh, color='black', linestyle='--', linewidth=linewidth_axlines)
+        ax.axhline(-np.log10(pval_thresh), color='black', linestyle='--', linewidth=linewidth_axlines)
+
+        ax.set_xlabel('log2 FC')
+        ax.set_ylabel(f'-log10(P-val adj)')
+
+        ax.set_title(tissue)
+
+
+
+    # --- Geometric distribution
+    significance_threshold = 0.05
+    for tissue, subplot_key in zip(tissues, ['C', 'F']):
+
+        # Load SwitchTFI results
+        res_p_switchtfi = os.path.join(res_p_base_switchtfi, 'notox', f'{tissue.lower()}_d10_acute_35', 'scenic')
+        ranked_tfs_pr = pd.read_csv(os.path.join(res_p_switchtfi, 'ranked_tfs.csv'), index_col=0)
+        tfs = ranked_tfs_pr['gene'].tolist()
+
+        # Load DE results
+        res_p_de = os.path.join(res_p_base_de, f'{tissue.lower()}_d10_35_cva.csv')
+        res_df_de = pd.read_csv(res_p_de, index_col=0)
+        res_df_de['TF'] = res_df_de.index.copy()
+
+        # Define parameters of the hypergeometric distribution
+        num_de_driver_tfs = (res_df_de.loc[tfs, pvalue_column] <= significance_threshold).sum()
+        total = res_df_de.shape[0]  # M
+        num_de = (res_df_de[pvalue_column] <= significance_threshold).sum()  # n
+        num_draws = len(tfs)  # N
+
+        pval_exact = 1 - hypergeom.cdf(num_de_driver_tfs - 1, total, num_de, num_draws)
+
+        # support
+        x = np.arange(0, num_draws + 1)
+        pmf = hypergeom.pmf(x, total, num_de, num_draws)
+
+        ax = axd[subplot_key]
+
+        M = total  # population size
+        n = num_de  # number of "successes" in population
+        N = num_draws  # number of draws
+        k_obs = num_de_driver_tfs
+
+        x = np.arange(0, N + 1)
+        pmf = hypergeom.pmf(x, M, n, N)
+
+        # line through all PMF values
+        ax.plot(x, pmf, linestyle='-', color='black', lw=1, zorder=1)
+
+        # open circle markers (white fill, black edge) drawn on top
+        ax.plot(x, pmf, marker='o', markersize=5,
+                mfc='white', mec='black', linestyle='None', zorder=2)
+
+        # highlight observed value
+        ax.plot(k_obs, hypergeom.pmf(k_obs, M, n, N),
+                marker='o', markersize=6,
+                mfc='red', mec='black', linestyle='None', zorder=3,
+                label=f"Observed = {k_obs}")
+
+        mask = x >= k_obs
+        ax.fill_between(x[mask], 0, pmf[mask],
+                        color="red", alpha=0.3,
+                        label=f"p = {pval_exact:.2e}")
+
+        ax.legend()
+
+
+
+    # Annotate subplot mosaic tiles with labels
+    for label, ax in axd.items():
+        trans = mtransforms.ScaledTranslation(-25 / 72, 7 / 72, fig.dpi_scale_trans)
+        ax.text(0.0, 0.95, label, transform=ax.transAxes + trans,
+                fontsize=12, va='bottom', fontfamily='sans-serif', fontweight='bold')
+
+    fig.tight_layout()
+    fig.savefig(os.path.join(res_dir, f'fig.png'), dpi=fig.dpi)
+
+
+
 if __name__ == '__main__':
 
     # main_no_imputation_results()
@@ -3322,6 +3643,8 @@ if __name__ == '__main__':
 
     # main_tcell_de_analysis()
 
-    main_tcell_de_plots()
+    # main_tcell_de_plots()
+
+    main_tcell_plot_figure()
 
     print('done')
