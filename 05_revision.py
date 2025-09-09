@@ -2327,7 +2327,7 @@ def main_tcell_plot_figure():
     from adjustText import adjust_text
     from scipy.stats import hypergeom
 
-    sp = False
+    sp = True
     sp_str = '_sp'
 
     # Create directory for results
@@ -2339,8 +2339,12 @@ def main_tcell_plot_figure():
 
     tissue_to_id = {'Spleen': 0, 'Liver': 1}
 
-    preliminary = False
+    preliminary = True
     standard_preprocessing = True
+
+    keep_cluster_ids = [1, 2, 3, 4, 5]
+
+    dim_red = 'UMAP'  # 'UMAP', 'DiffMap'
 
     if preliminary:
 
@@ -2354,8 +2358,8 @@ def main_tcell_plot_figure():
         tdata.obs['cluster'] = new_labels
 
         # Subset cells to time point d10 and clusters 3, 5
+        keep_bool_cluster = tdata.obs['cluster'].isin(keep_cluster_ids)
         keep_bool_time = (tdata.obs['time'] == 0)  # day 10
-        keep_bool_cluster = tdata.obs['cluster'].isin([3, 5])
         keep_bool = keep_bool_time & keep_bool_cluster
         tdata = tdata[keep_bool, :].copy()
 
@@ -2378,7 +2382,7 @@ def main_tcell_plot_figure():
 
             # Compute UMAP
             sc.pp.pca(tdata_sub)
-            sc.pp.neighbors(tdata_sub, n_neighbors=30)
+            sc.pp.neighbors(tdata_sub, n_neighbors=100)
             sc.tl.umap(tdata_sub)
             sc.tl.diffmap(tdata_sub)
 
@@ -2424,8 +2428,6 @@ def main_tcell_plot_figure():
     }
 
     # --- UMAP or Diffusion map
-    dim_red = 'UMAP'  # 'UMAP', 'DiffMap'
-    cluster_ids = [3, 5]
     fontsize_cluster_anno = 8
     for tissue, subplot_keys in zip(tissues, [['A.1', 'A.2'], ['D.1', 'D.2']]):
 
@@ -2434,8 +2436,8 @@ def main_tcell_plot_figure():
         tdata_plot = sc.read_h5ad(os.path.join(res_dir, fn))
 
         # Define color scheme
-        palette = sns.color_palette('Set2', n_colors=2)
-        cluster_id_to_color = dict(zip(cluster_ids, palette))
+        palette = sns.color_palette('Set2', n_colors=len(keep_cluster_ids))
+        cluster_id_to_color = dict(zip(keep_cluster_ids, palette))
 
         for subplot_key, grey_label in zip(subplot_keys, ['Chronic', 'Acute']):
 
@@ -2469,7 +2471,7 @@ def main_tcell_plot_figure():
 
             # Add cluster annotations
             texts = []
-            for cid in cluster_ids:
+            for cid in keep_cluster_ids:
 
                 cluster_points = plot_df[
                     (plot_df['cluster'] == cid) & (plot_df['infection'] != grey_label)
@@ -2479,7 +2481,7 @@ def main_tcell_plot_figure():
                 y_med = cluster_points[f'{dim_red}2'].median()
 
                 text = ax.text(
-                    x_med, y_med, f'Cluster {cid}',
+                    x_med, y_med, f'{cid}',
                     fontsize=fontsize_cluster_anno,
                     color='black',
                     ha='center', va='center',
@@ -3776,7 +3778,7 @@ if __name__ == '__main__':
 
     # main_tcell_data_processing()
 
-    main_tcell_grn_inference()
+    # main_tcell_grn_inference()
 
     # main_tcell_grn_exploration()
 
