@@ -269,7 +269,7 @@ def process_data():
 
     # Add progenitor-offspring annotations based on reprogramming day
     rpd_to_anno = {
-        '0': 'prog', '3': 'prog', '6': 'prog', '9': 'off', '12': 'off', '15': 'off', '21': 'off', '28': 'off'
+        '0': 'prog', '3': 'prog', '6': 'off', '9': 'off', '12': 'off', '15': 'off', '21': 'off', '28': 'off'
     }
     prog_off_anno = [rpd_to_anno[rpd] for rpd in adata_hvg.obs['reprogramming_day']]
     adata_hvg.obs['prog_off'] = prog_off_anno
