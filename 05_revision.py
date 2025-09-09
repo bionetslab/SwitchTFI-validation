@@ -1434,6 +1434,398 @@ def main_revised_regulon_plot():
     plt.savefig(os.path.join(save_p, 'hypothesis_gen_ybx1_revised.png'), dpi=fig.dpi)
 
 
+def main_scalability_compute_edge_fraction():
+
+    import os
+    import glob
+
+    import pandas as pd
+
+    from statistics import median, mean
+
+
+    def aggregate_grns(grns: list[pd.DataFrame]) -> pd.DataFrame:
+
+        # Add auxiliary id column
+        grns_id = []
+        for i, grn in enumerate(grns):
+            grn['grn_id'] = i
+            grns_id.append(grn)
+
+        # Concatenate GRNs
+        stacked = pd.concat(grns_id, ignore_index=True)
+
+        # Aggregate
+        aggregated_grn = (
+            stacked
+            .groupby(['TF', 'target'], as_index=False)
+            .agg(
+                scenic_weight=('scenic_weight', 'mean'),
+                support=('grn_id', 'nunique')
+            )
+        )
+
+        return aggregated_grn
+
+
+    res_p = './results/01_grn_inf'
+
+    datasets = ['alpha', 'beta', 'ery']
+
+    dataset_to_subdir = {
+        'alpha': 'endocrine/alpha',
+        'beta': 'endocrine/beta',
+        'ery': 'hematopoiesis'
+    }
+
+
+    for dataset in datasets:
+
+        grn_files = sorted(glob.glob(os.path.join(res_p, dataset_to_subdir[dataset]) + '/*_pruned_grn.csv'))
+
+        grn_list = []
+        for fn in grn_files:
+            grn = pd.read_csv(fn, index_col=0)
+            grn_list.append(grn)
+
+        # Aggregate
+        grn_agg = aggregate_grns(grns=grn_list)
+
+        # Get total number of edges
+        # total_edges = grn_agg.shape[0]
+        num_edges_per_grn = [grn.shape[0] for grn in grn_list]
+
+        median_num_edges = int(median(num_edges_per_grn))
+
+        # Threshold
+        thresholds = [3, 9, 18]
+        num_edges_at_threshold = []
+        for threshold in thresholds:
+            grn_thres = grn_agg[grn_agg['support'] >= threshold]
+            num_edges_at_threshold.append(grn_thres.shape[0])
+
+        fracs = [n / median_num_edges for n in num_edges_at_threshold]
+
+        print((
+            f'# ### {dataset}:'
+            f'\n# Median num edges per GRN: {median_num_edges}'
+            f'\n# Thresholds: {thresholds}'
+            f'\n# Totals: {num_edges_at_threshold}'
+            f'\n# Fractions: {fracs}'
+        ))
+
+    # => small = 25 %, medium = 50 %, large = 75 %
+
+
+def main_scalability_plot_figure():
+
+    import os
+    import pandas as pd
+    import matplotlib.pyplot as plt
+    import seaborn as sns
+    import matplotlib.ticker as ticker
+    import matplotlib.transforms as mtransforms
+
+    test = False
+
+    vary_num_cells_num_edges = [0.25, 0.5, 0.75]
+    vary_num_edges_num_cells = [1000, 10000, 50000] if not test else [50, 100, 150]
+
+    save_p = './results/05_revision/scalability/plots'
+    os.makedirs(save_p, exist_ok=True)
+
+    res_p = './results/05_revision/scalability/aggregated_results'
+
+    res_df_n_cells_n_edges = pd.read_csv(os.path.join(res_p, 'aggregated_results_num_cells_num_edges.csv'), index_col=0)
+    res_df_n_edges_n_cells = pd.read_csv(os.path.join(res_p, 'aggregated_results_num_edges_num_cells.csv'), index_col=0)
+
+    # print(res_df_n_cells_n_edges)
+    # print(res_df_n_edges_n_cells)
+
+    method_to_method_name = {
+        'cellrank': 'CellRank', 'splicejac': 'spliceJAC', 'drivaer': 'DrivAER',
+        'switchtfi': 'SwitchTFI', 'grn_inf': 'SCENIC'
+    }
+    res_df_n_cells_n_edges['method'] = res_df_n_cells_n_edges['method'].map(method_to_method_name)
+    res_df_n_edges_n_cells['method'] = res_df_n_edges_n_cells['method'].map(method_to_method_name)
+
+    methods = ['CellRank', 'spliceJAC', 'DrivAER', 'SwitchTFI', 'SCENIC']
+    colors = ['#1f77b4', '#ff7f0e', '#2ca02c', '#d62728', '#9467bd']
+    method_to_color = dict(zip(methods, colors))
+
+    def seconds_to_human(x: float, dummy=None) -> str:
+        x = int(x)
+        if x < 60:
+            return f'{x}s'
+        elif x < 3600:
+            minutes, seconds = divmod(x, 60)
+            if seconds == 0:
+                return f'{minutes}m'
+            return f'{minutes}m {seconds}s'
+        else:
+            hours, remainder = divmod(x, 3600)
+            minutes = int(round(remainder / 60))  # round to nearest minute
+            if minutes == 0:
+                return f'{hours}h'
+            return f'{hours}h {minutes}m'
+
+    def mem_formatter(x, dummy=None):
+        if x >= 1024:
+            out = x / 1024
+            if out % 1 == 0:
+                out = int(out)
+            return f'{out} GB'
+        return f'{int(x)} MB'
+
+    fig = plt.figure(figsize=(8, 9), constrained_layout=True, dpi=300)  # (8, 7)
+    axd = fig.subplot_mosaic(
+        '''
+        ABX
+        CDE
+        FGH
+        IJK
+        LMN
+        '''
+    )
+
+    # GRN inf plots
+    for subplot_key, mode in zip(list('AB'), ['wall_time', 'memory']):
+
+        # Subset dataframe
+        keep_bool = (res_df_n_cells_n_edges['method'] == 'SCENIC')
+        res_df_sub = res_df_n_cells_n_edges[keep_bool].copy()
+
+        ax = axd[subplot_key]
+        sns.lineplot(
+            data=res_df_sub,
+            x='n_cells',
+            y='wall_time',
+            hue='method',
+            palette=method_to_color,
+            marker='o',
+            ax=ax
+        )
+
+        # Style axis
+        ax.set_xscale('log', base=10)
+        ax.xaxis.set_major_locator(ticker.LogLocator(base=10.0, subs=[1.0], numticks=10))
+        ax.xaxis.set_minor_locator(ticker.LogLocator(base=10.0, subs=range(2, 10), numticks=10))
+
+        ax.set_xlabel('Number of Cells')
+
+        if mode == 'wall_time':
+            ax.set_yscale('log', base=60)
+            ax.yaxis.set_major_formatter(ticker.FuncFormatter(seconds_to_human))
+            ax.yaxis.set_minor_locator(ticker.LogLocator(base=60, subs=[], numticks=10))
+            ax.yaxis.set_major_locator(ticker.LogLocator(base=60, subs=[0.5, 1.0], numticks=10))
+            extra_major = [2 * 3600, 6 * 3600, 12 * 3600, 18 * 3600, 24 * 3600]
+            ax.yaxis.set_major_locator(ticker.FixedLocator(
+                list(ax.yaxis.get_major_locator()()) + extra_major
+            ))
+            ax.set_ylabel('Wall time')
+        else:
+            ax.set_yscale('log', base=2)
+            ax.yaxis.set_major_formatter(ticker.FuncFormatter(mem_formatter))
+            ax.set_ylabel('Peak Memory')
+
+
+    # Runtime plots
+    for subplot_key, num_edges, title in zip(
+            list('CDE'),
+            vary_num_cells_num_edges,
+            ['GRN size: small', 'GRN size: medium', 'GRN size: large']
+    ):
+
+        # Subset dataframe
+        keep_bool = (
+                (res_df_n_cells_n_edges['method'] != 'SCENIC')
+                & (
+                        (res_df_n_cells_n_edges['n_edges_frac'] == num_edges)
+                        | res_df_n_cells_n_edges['n_edges_frac'].isna()
+                )
+        )
+        res_df_sub = res_df_n_cells_n_edges[keep_bool].copy()
+
+        ax = axd[subplot_key]
+        sns.lineplot(
+            data=res_df_sub,
+            x='n_cells',
+            y='wall_time',
+            hue='method',
+            palette=method_to_color,
+            marker='o',
+            ax=ax
+        )
+
+        # Style axis
+        ax.set_xscale('log', base=10)
+        ax.xaxis.set_major_locator(ticker.LogLocator(base=10.0, subs=[1.0], numticks=10))
+        ax.xaxis.set_minor_locator(ticker.LogLocator(base=10.0, subs=range(2, 10), numticks=10))
+
+        ax.set_yscale('log', base=60)
+        ax.yaxis.set_major_formatter(ticker.FuncFormatter(seconds_to_human))
+        ax.yaxis.set_minor_locator(ticker.LogLocator(base=60, subs=[], numticks=10))
+        ax.yaxis.set_major_locator(ticker.LogLocator(base=60, subs=[0.5, 1.0], numticks=10))
+        extra_major = [2 * 3600, 6 * 3600, 12 * 3600, 18 * 3600, 24 * 3600]
+        ax.yaxis.set_major_locator(ticker.FixedLocator(
+            list(ax.yaxis.get_major_locator()()) + extra_major
+        ))
+
+        ax.set_xlabel('Number of Cells')
+        ax.set_ylabel('Wall time')
+
+        ax.set_title(title)
+
+
+    for subplot_key, num_cells, title in zip(
+            list('FGH'),
+            vary_num_edges_num_cells,
+            ['No. of Cells: 1000', 'No. of Cells: 10000', 'No. of Cells: 50000']
+    ):
+
+        # Subset dataframe
+        keep_bool = (
+                (res_df_n_edges_n_cells['method'] != 'SCENIC')
+                & (res_df_n_edges_n_cells['n_cells'] == num_cells)
+        )
+        res_df_sub = res_df_n_edges_n_cells[keep_bool].copy()
+
+        ax = axd[subplot_key]
+        sns.lineplot(
+            data=res_df_sub,
+            x='n_edges',
+            y='wall_time',
+            hue='method',
+            palette=method_to_color,
+            marker='o',
+            ax=ax
+        )
+
+        # Style axis
+        ax.set_xscale('log', base=10)
+        ax.xaxis.set_major_locator(ticker.LogLocator(base=10.0, subs=[1.0], numticks=10))
+        ax.xaxis.set_minor_locator(ticker.LogLocator(base=10.0, subs=range(2, 10), numticks=10))
+
+        ax.set_yscale('log', base=60)
+        ax.yaxis.set_major_formatter(ticker.FuncFormatter(seconds_to_human))
+        ax.yaxis.set_minor_locator(ticker.LogLocator(base=60, subs=[], numticks=10))
+        ax.yaxis.set_major_locator(ticker.LogLocator(base=60, subs=[0.5, 1.0], numticks=10))
+        extra_major = [2*3600, 6*3600, 12*3600, 18*3600, 24*3600]
+        ax.yaxis.set_major_locator(ticker.FixedLocator(
+            list(ax.yaxis.get_major_locator()()) + extra_major
+        ))
+
+        ax.set_xlabel('Number of Edges')
+        ax.set_ylabel('Wall time')
+
+        ax.set_title(title)
+
+
+    # Memory plots
+    for subplot_key, num_edges, title in zip(
+            list('IJK'),
+            vary_num_cells_num_edges,
+            ['GRN size: small', 'GRN size: medium', 'GRN size: large']
+    ):
+        # Subset dataframe
+        keep_bool = (
+                (res_df_n_cells_n_edges['method'] != 'SCENIC')
+                & (
+                        (res_df_n_cells_n_edges['n_edges_frac'] == num_edges)
+                        | res_df_n_cells_n_edges['n_edges_frac'].isna()
+                )
+        )
+        res_df_sub = res_df_n_cells_n_edges[keep_bool].copy()
+
+        ax = axd[subplot_key]
+        sns.lineplot(
+            data=res_df_sub,
+            x='n_cells',
+            y='mem_peak_cpu',
+            hue='method',
+            palette=method_to_color,
+            marker='o',
+            ax=ax
+        )
+
+        ax.set_xscale('log', base=10)
+        ax.xaxis.set_major_locator(ticker.LogLocator(base=10.0, subs=[1.0], numticks=10))
+        ax.xaxis.set_minor_locator(ticker.LogLocator(base=10.0, subs=range(2, 10), numticks=10))
+        ax.set_yscale('log', base=2)
+        ax.yaxis.set_major_formatter(ticker.FuncFormatter(mem_formatter))
+        ax.set_xlabel('Number of Cells')
+        ax.set_ylabel('Peak Memory')
+
+        ax.set_title(title)
+
+    for subplot_key, num_cells, title in zip(
+            list('LMN'),
+            vary_num_edges_num_cells,
+            ['No. of Cells: 1000', 'No. of Cells: 10000', 'No. of Cells: 50000']
+    ):
+        # Subset dataframe
+        keep_bool = (
+            (res_df_n_edges_n_cells['method'] != 'SCENIC')
+            & (res_df_n_edges_n_cells['n_cells'] == num_cells)
+        )
+        res_df_sub = res_df_n_edges_n_cells[keep_bool].copy()
+
+        ax = axd[subplot_key]
+        sns.lineplot(
+            data=res_df_sub,
+            x='n_edges',
+            y='mem_peak_cpu',
+            hue='method',
+            palette=method_to_color,
+            marker='o',
+            ax=ax
+        )
+
+        ax.set_xscale('log', base=10)
+        ax.set_yscale('log', base=2)
+        ax.yaxis.set_major_formatter(ticker.FuncFormatter(mem_formatter))
+
+        ax.set_xlabel('Number of Edges')
+        ax.set_ylabel('Peak Memory')
+
+        ax.set_title(title)
+
+    # for key, ax in axd.items():
+    #     ax.legend_.set_title(None)
+
+    # Add legend
+    for key, ax in axd.items():
+        if key not in {'X', 'A', 'B'}:
+            ax.get_legend().remove()
+
+    handles0, labels0 = axd['A'].get_legend_handles_labels()
+    handles1, labels1 = axd['C'].get_legend_handles_labels()
+    handles = handles0 + handles1
+    labels = labels0 + labels1
+    axd['X'].axis('off')
+    axd['X'].legend(
+        handles, labels,
+        loc='center',
+        ncol=1,
+        frameon=True
+    )
+
+    # y_label_panels = {'A', 'B', 'C', 'F', 'I', 'L'}
+
+    for label, ax in axd.items():
+
+        # if label not in y_label_panels:
+        #     ax.set_ylabel('')
+
+        if label != 'X':
+            trans = mtransforms.ScaledTranslation(-20 / 72, 7 / 72, fig.dpi_scale_trans)
+            ax.text(0.0, 0.95, label, transform=ax.transAxes + trans,
+                    fontsize=12, va='bottom', fontfamily='sans-serif', fontweight='bold')
+
+
+    plt.savefig(os.path.join(save_p, 'scalability.png'))
+
+
 def main_tcell_data_exploration():
 
     import os
@@ -3773,6 +4165,10 @@ if __name__ == '__main__':
     # main_additional_tf_target_scatter_plots()
 
     # main_revised_regulon_plot()
+
+    # main_scalability_compute_edge_fraction()
+
+    # main_scalability_plot_figure()
 
     # main_tcell_data_exploration()
 
