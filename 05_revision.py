@@ -809,10 +809,8 @@ def main_targets_enrichment_analysis():
     datasets = ['Beta', 'Alpha', 'Erythrocytes']
     centrality_measures = ['pagerank', 'outdeg']
 
-    cm_to_cm_name = {'pagerank': 'PR', 'outdeg': 'OD'}
-
-    num_top_tfs_list = [10]
-    num_top_targets_list = [1, 2, 5, 10]
+    num_top_tfs_list = [10, 10000]
+    num_top_targets_list = [1, 2, 5, 10, 10000]
 
     sort_by = 'weight'  # 'weight', 'score'
 
@@ -877,7 +875,7 @@ def main_targets_enrichment_analysis():
 
                     for n_target in num_top_targets_list:
 
-                        if (n_tf == 5 and n_target == 1) or (n_tf == 10 and n_target == 10):
+                        if (n_tf == 5 and n_target == 1) or (n_tf == 10 and n_target == 10) or (n_tf == 10000 and n_target != 10000):
                             continue
 
                         top_targets = get_top_targets(
@@ -892,6 +890,71 @@ def main_targets_enrichment_analysis():
                         with open(os.path.join(save_path_targets, fn), 'w') as f:
                             for t in top_targets:
                                 f.write(t + '\n')
+
+
+def main_targets_enrichment_plots():
+
+    # Results for top 10 TFs by PR and respectively the top 5 targets by weight
+
+    import os
+
+    import pandas as pd
+    import matplotlib.pyplot as plt
+    import matplotlib.transforms as mtransforms
+
+    from validation.plotting import plot_enrichr_results
+
+    res_dir = './results/05_revision/enrichment_analysis_targets'
+    datasets = ['Beta', 'Alpha', 'Erythrocytes']
+
+    dataset_to_dataset_shorthand = {'Beta': 'beta', 'Alpha': 'alpha', 'Erythrocytes': 'ery'}
+
+    fig = plt.figure(figsize=(8, 6), constrained_layout=True, dpi=300)
+    axd = fig.subplot_mosaic(
+        '''
+        A
+        B
+        C
+        '''
+    )
+
+    for subplot_key, dataset in zip(list('ABC'), datasets):
+
+        res_p_gobp = os.path.join(
+            res_dir,
+            'enrichr_results',
+            f'{dataset_to_dataset_shorthand[dataset]}_top10_tfs_top5_targets_GO_Biological_Process_2023_table.txt'
+        )
+        res_p_reactome = os.path.join(
+            res_dir,
+            'enrichr_results',
+            f'{dataset_to_dataset_shorthand[dataset]}_top10_tfs_top5_targets_Reactome_2022_table.txt'
+        )
+        res_gobp = pd.read_csv(res_p_gobp, delimiter='\t')
+        res_reactome = pd.read_csv(res_p_reactome, delimiter='\t')
+
+        plot_enrichr_results(
+            res_dfs=[res_gobp, res_reactome],
+            x='Adjusted P-value',
+            top_k=[6, 6],
+            reference_db_names=['GO_Biological_Process_2023', 'Reactome_2022'],
+            term_fontsize=8,
+            axs=axd[subplot_key],
+        )
+
+        axd[subplot_key].set_title(dataset)
+
+    # Annotate subplot mosaic tiles with labels
+    for label, ax in axd.items():
+        trans = mtransforms.ScaledTranslation(-20 / 72, 7 / 72, fig.dpi_scale_trans)
+        ax.text(0.0, 1.0, label, transform=ax.transAxes + trans,
+                fontsize=None, va='bottom', fontfamily='sans-serif', fontweight='bold')
+
+    fig.savefig(os.path.join(res_dir, 'enrichr_results_targets.png'), dpi=fig.dpi)
+
+
+
+    # Todo
 
 
 def main_tf_ranking_similarity():
@@ -2010,7 +2073,7 @@ def main_tcell_data_processing():
     import scanpy.external as scex
 
     from scipy.stats import median_abs_deviation
-    
+
     sp = True
     sp_str = '_sp'
 
@@ -2731,7 +2794,7 @@ def main_tcell_plot_figure():
 
     tissue_to_id = {'Spleen': 0, 'Liver': 1}
 
-    preliminary = True
+    preliminary = False
     standard_preprocessing = True
 
     keep_cluster_ids = [1, 2, 3, 4, 5]
@@ -2774,7 +2837,7 @@ def main_tcell_plot_figure():
 
             # Compute UMAP
             sc.pp.pca(tdata_sub)
-            sc.pp.neighbors(tdata_sub, n_neighbors=100)
+            sc.pp.neighbors(tdata_sub, n_neighbors=5)
             sc.tl.umap(tdata_sub)
             sc.tl.diffmap(tdata_sub)
 
@@ -2880,8 +2943,9 @@ def main_tcell_plot_figure():
                     path_effects=[pe.withStroke(linewidth=1.0, foreground='white')]
                 )
 
-                if grey_label == 'Acute':
-                    texts.append(text)
+                # if grey_label == 'Acute':
+                #     texts.append(text)
+                texts.append(text)
 
             if texts:
                 adjust_text(texts, ax=ax)
@@ -2970,6 +3034,7 @@ def main_tcell_plot_figure():
                     x, y, tf,
                     ha='right', va='bottom',
                     fontsize=fontsize_tf_anno,
+                    zorder=4,
                     path_effects=[pe.withStroke(linewidth=1.0, foreground='white')]
                 ))
 
@@ -4159,6 +4224,8 @@ if __name__ == '__main__':
     # main_tf_ranking_similarity_old()
 
     # main_targets_enrichment_analysis()
+
+    main_targets_enrichment_plots()
 
     # main_tf_ranking_similarity()
 
