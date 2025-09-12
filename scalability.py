@@ -30,7 +30,7 @@ NUM_GENES = 10000 if not TEST else 300
 
 # --- Vary number of cells, vary number of edges (GRN: small, medium, large)
 VARY_NUM_CELLS_NUM_CELLS = [100, 500, 1000, 5000, 10000, 50000, 85010] if not TEST else [50, 100, 150]
-VARY_NUM_CELLS_NUM_EDGES = [0.05, 0.10, 0.5]
+VARY_NUM_CELLS_NUM_EDGES = [0.25, 0.5, 0.75]
 
 # --- Vary number of edges, vary number of cells (low, medium, high)
 VARY_NUM_EDGES_NUM_EDGES = [100, 500, 1000, 5000, 10000, 50000] if not TEST else [100, 200, 300]
