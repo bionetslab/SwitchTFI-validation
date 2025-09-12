@@ -1583,6 +1583,7 @@ def main_scalability_compute_edge_fraction():
 def main_scalability_plot_figure():
 
     import os
+    import numpy as np
     import pandas as pd
     import matplotlib.pyplot as plt
     import seaborn as sns
@@ -1635,10 +1636,17 @@ def main_scalability_plot_figure():
     def mem_formatter(x, dummy=None):
         if x >= 1024:
             out = x / 1024
+            out = np.round(out, 1)
             if out % 1 == 0:
                 out = int(out)
             return f'{out} GB'
         return f'{int(x)} MB'
+
+    axtick_fontsize = 8
+    plt.rcParams['xtick.labelsize'] = axtick_fontsize
+    plt.rcParams['ytick.labelsize'] = axtick_fontsize
+
+    hue_order = ['CellRank', 'spliceJAC', 'DrivAER', 'SwitchTFI']
 
     fig = plt.figure(figsize=(8, 9), constrained_layout=True, dpi=300)  # (8, 7)
     axd = fig.subplot_mosaic(
@@ -1652,7 +1660,7 @@ def main_scalability_plot_figure():
     )
 
     # GRN inf plots
-    for subplot_key, mode in zip(list('AB'), ['wall_time', 'memory']):
+    for subplot_key, mode in zip(list('AB'), ['wall_time', 'mem_peak_cpu']):
 
         # Subset dataframe
         keep_bool = (res_df_n_cells_n_edges['method'] == 'SCENIC')
@@ -1662,7 +1670,7 @@ def main_scalability_plot_figure():
         sns.lineplot(
             data=res_df_sub,
             x='n_cells',
-            y='wall_time',
+            y=mode,
             hue='method',
             palette=method_to_color,
             marker='o',
@@ -1687,8 +1695,20 @@ def main_scalability_plot_figure():
             ))
             ax.set_ylabel('Wall time')
         else:
+            ymin = res_df_sub[mode].min()
+            ymax = res_df_sub[mode].max()
             ax.set_yscale('log', base=2)
+
+            locator = ticker.LogLocator(base=2.0, subs=[1.0], numticks=100)
+            ticks = list(locator.tick_values(ymin, ymax))
+            ticks = sorted(set(ticks + [ymin, ymax]))
+
+            ax.yaxis.set_major_locator(ticker.FixedLocator(ticks))
             ax.yaxis.set_major_formatter(ticker.FuncFormatter(mem_formatter))
+
+            # ax.yaxis.set_major_locator(ticker.LogLocator(base=2.0, subs=[1.0], numticks=10))
+            # ax.yaxis.set_major_formatter(ticker.FuncFormatter(mem_formatter))
+
             ax.set_ylabel('Peak Memory')
 
 
@@ -1715,6 +1735,7 @@ def main_scalability_plot_figure():
             x='n_cells',
             y='wall_time',
             hue='method',
+            hue_order=hue_order,
             palette=method_to_color,
             marker='o',
             ax=ax
@@ -1728,11 +1749,18 @@ def main_scalability_plot_figure():
         ax.set_yscale('log', base=60)
         ax.yaxis.set_major_formatter(ticker.FuncFormatter(seconds_to_human))
         ax.yaxis.set_minor_locator(ticker.LogLocator(base=60, subs=[], numticks=10))
-        ax.yaxis.set_major_locator(ticker.LogLocator(base=60, subs=[0.5, 1.0], numticks=10))
-        extra_major = [2 * 3600, 6 * 3600, 12 * 3600, 18 * 3600, 24 * 3600]
-        ax.yaxis.set_major_locator(ticker.FixedLocator(
-            list(ax.yaxis.get_major_locator()()) + extra_major
-        ))
+
+        # ax.yaxis.set_major_locator(ticker.LogLocator(base=60, subs=[0.5, 1.0], numticks=10))
+        # extra_major = [2 * 3600, 6 * 3600, 12 * 3600, 18 * 3600, 24 * 3600]
+        # ax.yaxis.set_major_locator(ticker.FixedLocator(list(ax.yaxis.get_major_locator()()) + extra_major))
+
+        if subplot_key == 'C':
+            major_ticks = [60, 30 * 60, 3600, 6 * 3600]
+        elif subplot_key == 'D':
+            major_ticks = [60, 30 * 60, 3600, 3 * 3600, 12 * 3600]
+        else:  # E
+            major_ticks = [60, 30 * 60, 3600, 6 * 3600, 18 * 3600]
+        ax.yaxis.set_major_locator(ticker.FixedLocator(major_ticks))
 
         ax.set_xlabel('Number of Cells')
         ax.set_ylabel('Wall time')
@@ -1759,6 +1787,7 @@ def main_scalability_plot_figure():
             x='n_edges',
             y='wall_time',
             hue='method',
+            hue_order=hue_order,
             palette=method_to_color,
             marker='o',
             ax=ax
@@ -1806,6 +1835,7 @@ def main_scalability_plot_figure():
             x='n_cells',
             y='mem_peak_cpu',
             hue='method',
+            hue_order=hue_order,
             palette=method_to_color,
             marker='o',
             ax=ax
@@ -1815,6 +1845,7 @@ def main_scalability_plot_figure():
         ax.xaxis.set_major_locator(ticker.LogLocator(base=10.0, subs=[1.0], numticks=10))
         ax.xaxis.set_minor_locator(ticker.LogLocator(base=10.0, subs=range(2, 10), numticks=10))
         ax.set_yscale('log', base=2)
+        ax.yaxis.set_major_locator(ticker.LogLocator(base=2.0, subs=[1.0], numticks=10))
         ax.yaxis.set_major_formatter(ticker.FuncFormatter(mem_formatter))
         ax.set_xlabel('Number of Cells')
         ax.set_ylabel('Peak Memory')
@@ -1839,6 +1870,7 @@ def main_scalability_plot_figure():
             x='n_edges',
             y='mem_peak_cpu',
             hue='method',
+            hue_order=hue_order,
             palette=method_to_color,
             marker='o',
             ax=ax
@@ -1846,6 +1878,7 @@ def main_scalability_plot_figure():
 
         ax.set_xscale('log', base=10)
         ax.set_yscale('log', base=2)
+        ax.yaxis.set_major_locator(ticker.LogLocator(base=2.0, subs=[1.0], numticks=10))
         ax.yaxis.set_major_formatter(ticker.FuncFormatter(mem_formatter))
 
         ax.set_xlabel('Number of Edges')
@@ -1858,11 +1891,13 @@ def main_scalability_plot_figure():
 
     # Add legend
     for key, ax in axd.items():
-        if key not in {'X', 'A', 'B'}:
+        if key != 'X':
             ax.get_legend().remove()
+        ax.grid(True, which='both', axis='y', color='lightgrey', linestyle='-', linewidth=0.5)
+        ax.set_axisbelow(True)
 
     handles0, labels0 = axd['A'].get_legend_handles_labels()
-    handles1, labels1 = axd['C'].get_legend_handles_labels()
+    handles1, labels1 = axd['D'].get_legend_handles_labels()
     handles = handles0 + handles1
     labels = labels0 + labels1
     axd['X'].axis('off')
@@ -2074,7 +2109,7 @@ def main_tcell_data_processing():
 
     from scipy.stats import median_abs_deviation
 
-    sp = True
+    sp = False
     sp_str = '_sp'
 
     data_dir = f'./results/05_revision/tcell{sp_str if sp else ""}/data'
@@ -2082,9 +2117,13 @@ def main_tcell_data_processing():
     tissues = ['spleen', 'liver']
     time = 'd10'
     infections = ['chronic', 'acute']
-    clusters = [[3, 4, 5], [3, 5]]
+    clusters = [[1, 3], [3, 4, 5], [3, 5]]
 
-    cluster_ids_to_prog_off_labels = {3: 'prog', 4: 'prog', 5: 'off'}
+    cluster_ids_to_prog_off_labels = [
+        {1: 'prog', 3: 'off'},
+        {3: 'prog', 4: 'prog', 5: 'off'},
+        {3: 'prog', 4: 'prog', 5: 'off'}
+    ]
 
     time_name_to_label = {'d10': 0, 'd28': 1}
     tissue_name_to_label = {'spleen': 0, 'liver': 1}
@@ -2109,7 +2148,7 @@ def main_tcell_data_processing():
 
     for tissue in tissues:
         for infection in infections:
-            for cluster_keys in clusters:
+            for cluster_keys, cid_to_pol in zip(clusters, cluster_ids_to_prog_off_labels):
 
                 # Subset to populations of interest
                 keep_bool_time = tdata.obs['time'] == time_name_to_label[time]
@@ -2123,7 +2162,7 @@ def main_tcell_data_processing():
 
                 # Add progenitor-offspring annotations
                 cluster_labels = tdata_subset.obs['cluster'].tolist()
-                prog_off_anno = [cluster_ids_to_prog_off_labels[cluster] for cluster in cluster_labels]
+                prog_off_anno = [cid_to_pol[cluster] for cluster in cluster_labels]
                 tdata_subset.obs['prog_off'] = prog_off_anno
 
                 if sp:
@@ -2249,7 +2288,7 @@ def main_tcell_grn_inference():
     tissues = ['spleen', 'liver']
     time = 'd10'
     infections = ['acute', 'chronic']
-    clusters = ['345', '35']
+    clusters = ['13', ]  # ['345', '35']  # Todo
     n_grns = 18
     edge_count_threshold = 9
 
@@ -2471,7 +2510,7 @@ def main_tcell_switchtfi():
     tissues = ['spleen', 'liver']
     time = 'd10'
     infection = 'acute'
-    clusters = ['345', '35']
+    clusters = ['13', ]  # ['345', '35'] Todo
 
     with_tox = False
     tox_str = 'wtox' if with_tox else 'notox'
@@ -2676,14 +2715,19 @@ def main_tcell_de_analysis():
     tdata = tdata[:, tf_bool].copy()
 
     tissues = ['spleen', 'liver']
-    clusters = ['345', '35']
+    clusters = ['13', ]  # ['345', '35']  # Todo
     time = 'd10'
 
     time_name_to_label = {'d10': 0, 'd28': 1}
     tissue_name_to_label = {'spleen': 0, 'liver': 1}
     infection_name_to_label = {'chronic': 0, 'acute': 1}
-    cluster_key_to_progenitor_labels = {'345': [3, 4], '35': [3, ]}
-    cluster_key_to_cluster_labels = {'345': [3, 4, 5], '35': [3, 5]}
+    cluster_key_to_progenitor_labels = {'13': [1, ], '345': [3, 4], '35': [3, ]}
+    cluster_key_to_cluster_labels = {'13': [1, 3], '345': [3, 4, 5], '35': [3, 5]}
+    cluster_key_to_cid_to_pol = {
+        '13': {1: 'prog', 3: 'off'},
+        '35': {3: 'prog', 5: 'off'},
+        '345': {3: 'prog', 4: 'prog', 5: 'off'}
+    }
 
     # Add semantic annotations
     infection_label_to_name = {0: 'chronic', 1: 'acute'}
@@ -2748,8 +2792,8 @@ def main_tcell_de_analysis():
                 sc.pp.filter_genes(tdata_sub, min_counts=5)
 
                 # Add progenitor-offspring annotations
-                cluster_label_to_prog_off_anno = {3: 'prog', 4: 'prog', 5: 'off'}
-                tdata_sub.obs['prog_off'] = [cluster_label_to_prog_off_anno[lbl] for lbl in tdata_sub.obs['cluster']]
+                cid_to_pol = cluster_key_to_cid_to_pol[cluster_key]
+                tdata_sub.obs['prog_off'] = [cid_to_pol[cid] for cid in tdata_sub.obs['cluster']]
 
                 # Create contrast tuple
                 if contrast == 'pvo':
@@ -3051,7 +3095,7 @@ def main_tcell_plot_figure():
         ax.axvline(lfc_thresh, color='black', linestyle='--', linewidth=linewidth_axlines)
         ax.axhline(-np.log10(pval_thresh), color='black', linestyle='--', linewidth=linewidth_axlines)
 
-        ax.set_xlabel('log2 FC')
+        ax.set_xlabel('log2 FC chronic vs acute')
         ax.set_ylabel(f'-log10(P-val adj)')
 
         ax.set_title(tissue)
@@ -3163,6 +3207,8 @@ def main_tcell_de_plots():
     from adjustText import adjust_text
     from scipy.stats import hypergeom
 
+    from switchtfi.plotting import plot_regulon
+
     sp = True
     sp_str = '_sp'
 
@@ -3185,7 +3231,7 @@ def main_tcell_de_plots():
     save_path_base = f'./results/05_revision/tcell{sp_str if sp else ""}/de_plots'
 
     plot_1 = True
-    plot_2 = True
+    plot_2 = False
 
     if plot_1:
         # Load the full data set
@@ -3224,6 +3270,7 @@ def main_tcell_de_plots():
                         # Load SwitchTFI results
                         res_p_switchtfi = os.path.join(res_p_base_switchtfi, tox_str, id_str, grn_inf_method)
                         try:
+                            grn = pd.read_csv(os.path.join(res_p_switchtfi, 'grn.csv'), index_col=0)
                             ranked_tfs_pr = pd.read_csv(os.path.join(res_p_switchtfi, 'ranked_tfs.csv'), index_col=0)
                             tfs = ranked_tfs_pr['gene'].tolist()
                         except FileNotFoundError:
@@ -3277,7 +3324,7 @@ def main_tcell_de_plots():
                         linewidth_axlines = 1.0
                         fontsize_axlabels = 14
                         fontsize_title = 16
-                        tick_label_fontsize = 12
+                        tick_label_fontsize = 6
 
                         fig = plt.figure(figsize=(12, 9), constrained_layout=True, dpi=300)
                         axd = fig.subplot_mosaic(
@@ -3460,6 +3507,23 @@ def main_tcell_de_plots():
 
                         fig.savefig(os.path.join(save_path, f'de_plot.png'), dpi=fig.dpi)
                         plt.close(fig)
+
+                        # For each TF plot its regulon
+                        for tf in tfs:
+                            fig, ax = plt.subplots(dpi=300)
+                            plot_regulon(
+                                grn=grn,
+                                tf=tf,
+                                top_k=30,
+                                sort_by='score',
+                                ax=ax
+                            )
+                            fig.tight_layout()
+                            fig.savefig(
+                                os.path.join(save_path, f'regulon_{tf}.png'),
+                                bbox_inches='tight', pad_inches=0.0, dpi=fig.dpi
+                            )
+                            plt.close(fig)
 
 
     if plot_2:
@@ -4225,7 +4289,7 @@ if __name__ == '__main__':
 
     # main_targets_enrichment_analysis()
 
-    main_targets_enrichment_plots()
+    # main_targets_enrichment_plots()
 
     # main_tf_ranking_similarity()
 
@@ -4245,7 +4309,7 @@ if __name__ == '__main__':
 
     # main_tcell_grn_exploration()
 
-    # main_tcell_switchtfi()
+    main_tcell_switchtfi()
 
     # main_tcell_de_analysis()
 
