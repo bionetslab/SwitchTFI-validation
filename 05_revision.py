@@ -3214,7 +3214,7 @@ def main_tcell_de_plots():
 
     tissues = ['spleen', 'liver']
     time = 'd10'
-    clusters = ['345', '35']
+    clusters = ['13', '345', '35']
     tox_strs = ['notox', 'wtox']
     grn_inf_methods = ['scenic', 'grnboost2']
 
@@ -3230,404 +3230,296 @@ def main_tcell_de_plots():
     res_p_base_de = f'./results/05_revision/tcell{sp_str if sp else ""}/de_analysis'
     save_path_base = f'./results/05_revision/tcell{sp_str if sp else ""}/de_plots'
 
-    plot_1 = True
-    plot_2 = False
+    # Load the full data set
+    data_p = f'./results/05_revision/tcell{sp_str if sp else ""}/data/'
+    fn_all_data = 'ga_an0602_10x_smarta_doc_arm_liver_spleen_d10_d28_mgd_ts_filtered_int_inf_tp_rp_convert.h5ad'
+    tdata = sc.read_h5ad(os.path.join(data_p, fn_all_data))
 
-    if plot_1:
-        # Load the full data set
-        data_p = f'./results/05_revision/tcell{sp_str if sp else ""}/data/'
-        fn_all_data = 'ga_an0602_10x_smarta_doc_arm_liver_spleen_d10_d28_mgd_ts_filtered_int_inf_tp_rp_convert.h5ad'
-        tdata = sc.read_h5ad(os.path.join(data_p, fn_all_data))
+    # Subset to TFs
+    tf_file = './data/tf/mus_musculus/allTFs_mm.txt'
+    with open(tf_file) as file:
+        all_tfs = [line.strip() for line in file.readlines()]
+    tf_bool = tdata.var_names.isin(all_tfs)
+    tdata = tdata[:, tf_bool].copy()
 
-        # Subset to TFs
-        tf_file = './data/tf/mus_musculus/allTFs_mm.txt'
-        with open(tf_file) as file:
-            all_tfs = [line.strip() for line in file.readlines()]
-        tf_bool = tdata.var_names.isin(all_tfs)
-        tdata = tdata[:, tf_bool].copy()
+    # Relabel cluster labels from 0-9 to 1-10
+    new_labels = [int(label + 1) for label in tdata.obs['cluster']]
+    tdata.obs['cluster'] = new_labels
 
-        # Relabel cluster labels from 0-9 to 1-10
-        new_labels = [int(label + 1) for label in tdata.obs['cluster']]
-        tdata.obs['cluster'] = new_labels
+    # Add semantic annotations
+    infection_label_to_name = {0: 'chronic', 1: 'acute'}
+    tdata.obs['infection_name'] = [infection_label_to_name[lbl] for lbl in tdata.obs['infection']]
 
-        # Add semantic annotations
-        infection_label_to_name = {0: 'chronic', 1: 'acute'}
-        tdata.obs['infection_name'] = [infection_label_to_name[lbl] for lbl in tdata.obs['infection']]
-
-        # Subset data to time point d10
-        keep_bool_time = (tdata.obs['time'] == time_name_to_label[time])
-        tdata = tdata[keep_bool_time, :].copy()
+    # Subset data to time point d10
+    keep_bool_time = (tdata.obs['time'] == time_name_to_label[time])
+    tdata = tdata[keep_bool_time, :].copy()
 
 
-        for tox_str in tox_strs:
-            for grn_inf_method in grn_inf_methods:
-                for tissue in tissues:
-                    for cluster_keys in clusters:
+    for tox_str in tox_strs:
+        for grn_inf_method in grn_inf_methods:
+            for tissue in tissues:
+                for cluster_keys in clusters:
 
-                        # Set identifier
-                        id_str = f'{tissue}_{time}_acute_{cluster_keys}'
+                    # Set identifier
+                    id_str = f'{tissue}_{time}_acute_{cluster_keys}'
 
-                        # Load SwitchTFI results
-                        res_p_switchtfi = os.path.join(res_p_base_switchtfi, tox_str, id_str, grn_inf_method)
-                        try:
-                            grn = pd.read_csv(os.path.join(res_p_switchtfi, 'grn.csv'), index_col=0)
-                            ranked_tfs_pr = pd.read_csv(os.path.join(res_p_switchtfi, 'ranked_tfs.csv'), index_col=0)
-                            tfs = ranked_tfs_pr['gene'].tolist()
-                        except FileNotFoundError:
-                            print(f'No results found for: {res_p_switchtfi}, skipping')
-                            continue
+                    # Load SwitchTFI results
+                    res_p_switchtfi = os.path.join(res_p_base_switchtfi, tox_str, id_str, grn_inf_method)
+                    try:
+                        grn = pd.read_csv(os.path.join(res_p_switchtfi, 'grn.csv'), index_col=0)
+                        ranked_tfs_pr = pd.read_csv(os.path.join(res_p_switchtfi, 'ranked_tfs.csv'), index_col=0)
+                        tfs = ranked_tfs_pr['gene'].tolist()
+                    except FileNotFoundError:
+                        print(f'No results found for: {res_p_switchtfi}, skipping')
+                        continue
 
-                        # Generate dir for results
-                        save_path = os.path.join(save_path_base, tox_str, id_str, grn_inf_method)
-                        os.makedirs(save_path, exist_ok=True)
+                    # Generate dir for results
+                    save_path = os.path.join(save_path_base, tox_str, id_str, grn_inf_method)
+                    os.makedirs(save_path, exist_ok=True)
 
-                        # Subset data to tissue
-                        keep_bool_tissue = tdata.obs['tissue'] == tissue_name_to_label[tissue]
-                        tdata_sub = tdata[keep_bool_tissue, :].copy()
+                    # Subset data to tissue
+                    keep_bool_tissue = tdata.obs['tissue'] == tissue_name_to_label[tissue]
+                    tdata_sub = tdata[keep_bool_tissue, :].copy()
 
-                        # --- (1) DE chronic vs acute in progenitors
-                        # Subset data to progenitors
-                        prog_clusters = [3, 4] if cluster_keys == '345' else [3, ]
-                        keep_bool_progenitor = tdata_sub.obs['cluster'].isin(prog_clusters)
-                        tdata_sub_1 = tdata_sub[keep_bool_progenitor, :].copy()
+                    # --- (1) DE chronic vs acute in progenitors
+                    # Subset data to progenitors
+                    prog_clusters = [3, 4] if cluster_keys == '345' else [3, ]
+                    keep_bool_progenitor = tdata_sub.obs['cluster'].isin(prog_clusters)
+                    tdata_sub_1 = tdata_sub[keep_bool_progenitor, :].copy()
 
-                        # Add semantic annotations
-                        tdata_sub_1.obs['infection_name'] = tdata_sub_1.obs['infection'].map({0: 'chronic', 1: 'acute'})
+                    # Add semantic annotations
+                    tdata_sub_1.obs['infection_name'] = tdata_sub_1.obs['infection'].map({0: 'chronic', 1: 'acute'})
 
-                        # Load DE results
-                        fn_de_1 = f'{tissue}_{time}_{cluster_keys}_cva.csv'
-                        res_df_de_1 = pd.read_csv(os.path.join(res_p_base_de, fn_de_1), index_col=0)
-                        res_df_de_1['TF'] = res_df_de_1.index.copy()
+                    # Load DE results
+                    fn_de_1 = f'{tissue}_{time}_{cluster_keys}_cva.csv'
+                    res_df_de_1 = pd.read_csv(os.path.join(res_p_base_de, fn_de_1), index_col=0)
+                    res_df_de_1['TF'] = res_df_de_1.index.copy()
 
-                        # --- (2) DE prog vs. off in acute
-                        # Subset data to clusters 3, 4, 5 and acute
-                        cluster_list = [3, 4, 5] if cluster_keys == '345' else [3, 5]
-                        keep_bool_cluster = tdata_sub.obs['cluster'].isin(cluster_list)
-                        keep_bool_acute = (tdata_sub.obs['infection'] == infection_name_to_label['acute'])
-                        keep_bool_cluster_acute = keep_bool_cluster & keep_bool_acute
-                        tdata_sub_2 = tdata_sub[keep_bool_cluster_acute, :].copy()
+                    # --- (2) DE prog vs. off in acute
+                    # Subset data to clusters 3, 4, 5 and acute
+                    cluster_list = [3, 4, 5] if cluster_keys == '345' else [3, 5]
+                    keep_bool_cluster = tdata_sub.obs['cluster'].isin(cluster_list)
+                    keep_bool_acute = (tdata_sub.obs['infection'] == infection_name_to_label['acute'])
+                    keep_bool_cluster_acute = keep_bool_cluster & keep_bool_acute
+                    tdata_sub_2 = tdata_sub[keep_bool_cluster_acute, :].copy()
 
-                        # Add progenitor-offspring annotations
-                        tdata_sub_2.obs['prog_off'] = tdata_sub_2.obs['cluster'].map({3: 'prog', 4: 'prog', 5: 'off'})
+                    # Add progenitor-offspring annotations
+                    tdata_sub_2.obs['prog_off'] = tdata_sub_2.obs['cluster'].map({3: 'prog', 4: 'prog', 5: 'off'})
 
-                        # Load DE results
-                        fn_de_2 = f'{tissue}_{time}_{cluster_keys}_acute_pvo.csv'
-                        res_df_de_2 = pd.read_csv(os.path.join(res_p_base_de, fn_de_2), index_col=0)
-                        res_df_de_2['TF'] = res_df_de_2.index.copy()
+                    # Load DE results
+                    fn_de_2 = f'{tissue}_{time}_{cluster_keys}_acute_pvo.csv'
+                    res_df_de_2 = pd.read_csv(os.path.join(res_p_base_de, fn_de_2), index_col=0)
+                    res_df_de_2['TF'] = res_df_de_2.index.copy()
 
 
-                        # Plot
-                        point_size = 12
-                        point_size_tf = 6
-                        fontsize_tf = 12
-                        linewidth_tf = 1.0
-                        linewidth_axlines = 1.0
-                        fontsize_axlabels = 14
-                        fontsize_title = 16
-                        tick_label_fontsize = 6
+                    # Plot
+                    point_size = 12
+                    point_size_tf = 6
+                    fontsize_tf = 12
+                    linewidth_tf = 1.0
+                    linewidth_axlines = 1.0
+                    fontsize_axlabels = 14
+                    fontsize_title = 16
+                    tick_label_fontsize = 6
 
-                        fig = plt.figure(figsize=(12, 9), constrained_layout=True, dpi=300)
-                        axd = fig.subplot_mosaic(
-                            '''
-                            AB
-                            CD
-                            '''
+                    fig = plt.figure(figsize=(12, 9), constrained_layout=True, dpi=300)
+                    axd = fig.subplot_mosaic(
+                        '''
+                        AB
+                        CD
+                        '''
+                    )
+
+                    # Volcano
+                    for subplot_key, de_results, title in zip(
+                            ['A', 'C'],
+                            [res_df_de_1, res_df_de_2],
+                            [f'Chronic vs. Acute | Progenitors ({cluster_keys})', 'Prog vs. Off | Acute']
+                    ):
+
+                        ax = axd[subplot_key]
+
+                        de_results = de_results[de_results[lfc_column].abs() <= 10].copy()
+
+                        eps = 1e-300
+                        de_results[f'-log10({pvalue_column})'] = -np.log10(de_results[pvalue_column].astype('float') + eps)
+
+                        pval_thresh = 0.05
+                        lfc_thresh = 0.5
+                        de_results['color'] = 'grey'
+                        sig_bool_neg = (
+                                (de_results[lfc_column] < -lfc_thresh) &
+                                (de_results[pvalue_column] < pval_thresh)
+                        )
+                        de_results.loc[sig_bool_neg, 'color'] = 'blue'
+                        sig_bool_pos = (
+                                (de_results[lfc_column] > lfc_thresh) &
+                                (de_results[pvalue_column] < pval_thresh)
+                        )
+                        de_results.loc[sig_bool_pos, 'color'] = 'green'
+
+                        sns.scatterplot(
+                            data=de_results,
+                            x=lfc_column,
+                            y=f'-log10({pvalue_column})',
+                            s=point_size,
+                            hue='color',
+                            palette={'grey': 'grey', 'blue': 'blue', 'green': 'green'},
+                            legend=False,
+                            ax=ax
                         )
 
-                        # Volcano
-                        for subplot_key, de_results, title in zip(
-                                ['A', 'C'],
-                                [res_df_de_1, res_df_de_2],
-                                [f'Chronic vs. Acute | Progenitors ({cluster_keys})', 'Prog vs. Off | Acute']
-                        ):
-
-                            ax = axd[subplot_key]
-
-                            de_results = de_results[de_results[lfc_column].abs() <= 10].copy()
-
-                            eps = 1e-300
-                            de_results[f'-log10({pvalue_column})'] = -np.log10(de_results[pvalue_column].astype('float') + eps)
-
-                            pval_thresh = 0.05
-                            lfc_thresh = 0.5
-                            de_results['color'] = 'grey'
-                            sig_bool_neg = (
-                                    (de_results[lfc_column] < -lfc_thresh) &
-                                    (de_results[pvalue_column] < pval_thresh)
-                            )
-                            de_results.loc[sig_bool_neg, 'color'] = 'blue'
-                            sig_bool_pos = (
-                                    (de_results[lfc_column] > lfc_thresh) &
-                                    (de_results[pvalue_column] < pval_thresh)
-                            )
-                            de_results.loc[sig_bool_pos, 'color'] = 'green'
-
-                            sns.scatterplot(
-                                data=de_results,
-                                x=lfc_column,
-                                y=f'-log10({pvalue_column})',
-                                s=point_size,
-                                hue='color',
-                                palette={'grey': 'grey', 'blue': 'blue', 'green': 'green'},
-                                legend=False,
-                                ax=ax
-                            )
-
-                            texts = []
-                            for tf in tfs:
-                                sub = de_results.loc[de_results['TF'] == tf]
-                                if not sub.empty:
-                                    x = sub[lfc_column].to_numpy()[0]
-                                    y = sub[f'-log10({pvalue_column})'].to_numpy()[0]
-
-                                    ax.scatter(x, y, color='red', s=point_size_tf, zorder=3)
-                                    texts.append(ax.text(x, y, tf, fontsize=fontsize_tf, ha='right', va='bottom'))
-
-                            adjust_text(
-                                texts, ax=ax, expand=(3.0, 3.0),
-                                arrowprops=dict(arrowstyle='-', color='red', lw=linewidth_tf)
-                            )
-
-                            ax.axvline(-lfc_thresh, color='black', linestyle='--', linewidth=linewidth_axlines)
-                            ax.axvline(lfc_thresh, color='black', linestyle='--', linewidth=linewidth_axlines)
-                            ax.axhline(-np.log10(pval_thresh), color='black', linestyle='--', linewidth=linewidth_axlines)
-
-                            ax.set_xlabel('log2 FC', fontsize=fontsize_axlabels)
-                            ax.set_ylabel(f'-log10(p_adj)', fontsize=fontsize_axlabels)
-
-                            ax.set_title(title, fontsize=fontsize_title)
-
-                            ax.xaxis.set_tick_params(labelsize=tick_label_fontsize)
-                            ax.yaxis.set_tick_params(labelsize=tick_label_fontsize)
-
-                        # Expression
-                        for subplot_key, tdata_sub, de_results, group_key, title in zip(
-                                ['B', 'D'],
-                                [tdata_sub_1, tdata_sub_2],
-                                [res_df_de_1, res_df_de_2],
-                                ['infection_name', 'prog_off'],
-                                [f'Chronic vs. Acute | Progenitors ({cluster_keys})', 'Prog vs. Off | Acute']
-                        ):
-
-                            plot_df = (
-                                tdata_sub[:, tfs].to_df()
-                                .join(tdata_sub.obs[group_key])
-                                .melt(id_vars=group_key, var_name='TF', value_name='Expression')
-                            )
-
-                            if group_key == 'prog_off':
-                                hue_order = ['prog', 'off']
-                            elif group_key == 'infection_name':
-                                hue_order = ['chronic', 'acute']
-                            else:
-                                hue_order = None
-
-                            ax = axd[subplot_key]
-
-                            plot_types = {'box', }  # 'violin', 'strip', 'box', 'boxen'
-
-                            if 'violin' in plot_types:
-                                sns.violinplot(
-                                    data=plot_df,
-                                    x='TF',
-                                    y='Expression',
-                                    hue=group_key,
-                                    hue_order=hue_order,
-                                    split=True,
-                                    inner='quart',
-                                    cut=0,
-                                    density_norm='width',
-                                    ax=ax,
-                                )
-
-                            if 'strip' in plot_types:
-                                sns.stripplot(
-                                    data=plot_df,
-                                    x='TF',
-                                    y='Expression',
-                                    hue=group_key,
-                                    hue_order=hue_order,
-                                    dodge=True,
-                                    size=2,
-                                    ax=ax
-                                )
-
-                            if 'box' in plot_types:
-                                sns.boxplot(
-                                    data=plot_df,
-                                    x='TF',
-                                    y='Expression',
-                                    hue=group_key,
-                                    hue_order=hue_order,
-                                    ax=ax,
-                                    showcaps=True,
-                                )
-
-                            if 'boxen' in plot_types:
-                                sns.boxenplot(
-                                    data=plot_df,
-                                    x='TF',
-                                    y='Expression',
-                                    hue=group_key,
-                                    hue_order=hue_order,
-                                    linewidth=3.0,
-                                    ax=ax
-                                )
-
-                            fig.canvas.draw()
-                            tf_to_pval = dict(zip(de_results['TF'], de_results[pvalue_column]))
-                            tick_positions = ax.get_xticks()
-                            tick_labels = [tick_label.get_text() for tick_label in ax.get_xticklabels()]
-                            new_labels = []
-                            for lbl in tick_labels:
-                                if lbl in tf_to_pval:
-                                    pval = tf_to_pval[lbl]
-                                    p_label = 'p_adj' if pvalue_column == 'FDR' else 'p'
-                                    if pval < 1e-3:
-                                        pval_str = f'{p_label}=\n{pval:.1e}'
-                                    else:
-                                        pval_str = f'{p_label}=\n{pval:.3f}'
-                                    new_labels.append(f'{lbl}\n{pval_str}')
-                                else:
-                                    new_labels.append(lbl)
-
-                            ax.set_xticks(tick_positions)
-                            ax.set_xticklabels(new_labels)
-
-                            ax.set_xlabel('')
-                            ax.set_ylabel('Expression', fontsize=fontsize_axlabels)
-
-                            ax.set_title(title, fontsize=fontsize_title)
-
-                            tick_label_fontsize_x = (
-                                8 if tissue == 'liver' and cluster_keys == '35' else tick_label_fontsize
-                            )
-                            ax.xaxis.set_tick_params(labelsize=tick_label_fontsize_x)
-                            ax.yaxis.set_tick_params(labelsize=tick_label_fontsize)
-
-                        fig.savefig(os.path.join(save_path, f'de_plot.png'), dpi=fig.dpi)
-                        plt.close(fig)
-
-                        # For each TF plot its regulon
+                        texts = []
                         for tf in tfs:
-                            fig, ax = plt.subplots(dpi=300)
-                            plot_regulon(
-                                grn=grn,
-                                tf=tf,
-                                top_k=30,
-                                sort_by='score',
-                                ax=ax
-                            )
-                            fig.tight_layout()
-                            fig.savefig(
-                                os.path.join(save_path, f'regulon_{tf}.png'),
-                                bbox_inches='tight', pad_inches=0.0, dpi=fig.dpi
-                            )
-                            plt.close(fig)
+                            sub = de_results.loc[de_results['TF'] == tf]
+                            if not sub.empty:
+                                x = sub[lfc_column].to_numpy()[0]
+                                y = sub[f'-log10({pvalue_column})'].to_numpy()[0]
 
+                                ax.scatter(x, y, color='red', s=point_size_tf, zorder=3)
+                                texts.append(ax.text(x, y, tf, fontsize=fontsize_tf, ha='right', va='bottom'))
 
-    if plot_2:
-        # --- Permutation experiment
-        significance_threshold = 0.05
-        num_permutations = 10000
-        for tox_str in tox_strs:
-            for grn_inf_method in grn_inf_methods:
-                for tissue in tissues:
-                    for cluster_keys in clusters:
-
-                        # Set identifier
-                        id_str = f'{tissue}_{time}_acute_{cluster_keys}'
-
-                        # Load SwitchTFI results
-                        res_p_switchtfi = os.path.join(res_p_base_switchtfi, tox_str, id_str, grn_inf_method)
-                        try:
-                            ranked_tfs_pr = pd.read_csv(os.path.join(res_p_switchtfi, 'ranked_tfs.csv'), index_col=0)
-                            tfs = ranked_tfs_pr['gene'].tolist()
-                        except FileNotFoundError:
-                            print(f'No results found for: {res_p_switchtfi}, skipping')
-                            continue
-
-
-                        # --- (1) DE chronic vs acute in progenitors
-                        # Load DE results
-                        fn_de_1 = f'{tissue}_{time}_{cluster_keys}_cva.csv'
-                        res_df_de_1 = pd.read_csv(os.path.join(res_p_base_de, fn_de_1), index_col=0)
-                        res_df_de_1['TF'] = res_df_de_1.index.copy()
-
-                        # --- (2) DE prog vs. off in acute
-                        # Load DE results
-                        fn_de_2 = f'{tissue}_{time}_{cluster_keys}_acute_pvo.csv'
-                        res_df_de_2 = pd.read_csv(os.path.join(res_p_base_de, fn_de_2), index_col=0)
-                        res_df_de_2['TF'] = res_df_de_2.index.copy()
-
-                        fig = plt.figure(figsize=(8, 4), constrained_layout=True, dpi=300)
-                        axd = fig.subplot_mosaic(
-                            '''
-                            AB
-                            '''
+                        adjust_text(
+                            texts, ax=ax, expand=(3.0, 3.0),
+                            arrowprops=dict(arrowstyle='-', color='red', lw=linewidth_tf)
                         )
 
-                        for subplot_key, res_df_de, title, color in zip(
-                                ['A', 'B'],
-                                [res_df_de_1, res_df_de_2],
-                                [f'Chronic vs. Acute | Progenitors ({cluster_keys})', 'Prog vs. Off | Acute'],
-                                ['cornflowerblue', 'mediumaquamarine']
-                        ):
+                        ax.axvline(-lfc_thresh, color='black', linestyle='--', linewidth=linewidth_axlines)
+                        ax.axvline(lfc_thresh, color='black', linestyle='--', linewidth=linewidth_axlines)
+                        ax.axhline(-np.log10(pval_thresh), color='black', linestyle='--', linewidth=linewidth_axlines)
 
-                            # Sample random TFs
-                            num_tfs_to_sample = len(tfs)
-                            num_de_tfs_in_sampled_set = []
-                            for i in range(num_permutations):
-                                sampled = res_df_de[pvalue_column].sample(
-                                    n=num_tfs_to_sample,
-                                    replace=False,
-                                    random_state=i
-                                )
-                                num_de = (sampled <= significance_threshold).sum()
-                                num_de_tfs_in_sampled_set.append(num_de)
+                        ax.set_xlabel('log2 FC', fontsize=fontsize_axlabels)
+                        ax.set_ylabel(f'-log10(p_adj)', fontsize=fontsize_axlabels)
 
-                            # Compute empirical p-value
-                            num_de_tfs = (res_df_de.loc[tfs, pvalue_column] <= significance_threshold).sum()
-                            count = sum(1 if c >= num_de_tfs else 0 for c in num_de_tfs_in_sampled_set)
-                            pval_emp = (count + 1) / (num_permutations + 1)
+                        ax.set_title(title, fontsize=fontsize_title)
 
-                            # Compute exact p-value
-                            total = res_df_de.shape[0]
-                            num_draws = num_tfs_to_sample
-                            num_de_tfs_total = (res_df_de[pvalue_column] <= significance_threshold).sum()
-                            pval_exact = 1 - hypergeom.cdf(num_de_tfs - 1, total, num_de_tfs_total, num_draws)
+                        ax.xaxis.set_tick_params(labelsize=tick_label_fontsize)
+                        ax.yaxis.set_tick_params(labelsize=tick_label_fontsize)
 
-                            ax = axd[subplot_key]
+                    # Expression
+                    for subplot_key, tdata_sub, de_results, group_key, title in zip(
+                            ['B', 'D'],
+                            [tdata_sub_1, tdata_sub_2],
+                            [res_df_de_1, res_df_de_2],
+                            ['infection_name', 'prog_off'],
+                            [f'Chronic vs. Acute | Progenitors ({cluster_keys})', 'Prog vs. Off | Acute']
+                    ):
 
-                            values, counts = np.unique(num_de_tfs_in_sampled_set, return_counts=True)
+                        plot_df = (
+                            tdata_sub[:, tfs].to_df()
+                            .join(tdata_sub.obs[group_key])
+                            .melt(id_vars=group_key, var_name='TF', value_name='Expression')
+                        )
 
-                            ax.bar(values, counts, color=color, edgecolor='grey', linewidth=0.2)
+                        if group_key == 'prog_off':
+                            hue_order = ['prog', 'off']
+                        elif group_key == 'infection_name':
+                            hue_order = ['chronic', 'acute']
+                        else:
+                            hue_order = None
 
-                            def format_pval(p: float, decimals: int = 4):
-                                """Format p-value in fixed-point if >= 1e-6, else scientific notation."""
-                                if p >= 10 ** -decimals:
-                                    return f"{p:.{decimals}f}"
-                                else:
-                                    return f"{p:.2e}"
+                        ax = axd[subplot_key]
 
-                            legend_label = (
-                                f'Observed count,'
-                                f'\np-value emp.: {format_pval(pval_emp)},'
-                                f'\np-value hypergeom.: {format_pval(pval_exact)}'
+                        plot_types = {'box', }  # 'violin', 'strip', 'box', 'boxen'
+
+                        if 'violin' in plot_types:
+                            sns.violinplot(
+                                data=plot_df,
+                                x='TF',
+                                y='Expression',
+                                hue=group_key,
+                                hue_order=hue_order,
+                                split=True,
+                                inner='quart',
+                                cut=0,
+                                density_norm='width',
+                                ax=ax,
                             )
-                            print(legend_label)
-                            ax.axvline(num_de_tfs, color='red', linestyle='-', linewidth=1.0, label=legend_label)
 
-                            ax.set_xlabel(f'Num. DE TFs out of {num_tfs_to_sample}')
-                            ax.set_ylabel(fr'Count (total: $n$ = {num_permutations})')
-                            ax.set_title(title)
-                            ax.legend()
+                        if 'strip' in plot_types:
+                            sns.stripplot(
+                                data=plot_df,
+                                x='TF',
+                                y='Expression',
+                                hue=group_key,
+                                hue_order=hue_order,
+                                dodge=True,
+                                size=2,
+                                ax=ax
+                            )
 
-                        save_path = os.path.join(save_path_base, tox_str, id_str, grn_inf_method)
-                        fig.savefig(os.path.join(save_path, f'de_hist_plot.png'), dpi=fig.dpi)
+                        if 'box' in plot_types:
+                            sns.boxplot(
+                                data=plot_df,
+                                x='TF',
+                                y='Expression',
+                                hue=group_key,
+                                hue_order=hue_order,
+                                ax=ax,
+                                showcaps=True,
+                            )
+
+                        if 'boxen' in plot_types:
+                            sns.boxenplot(
+                                data=plot_df,
+                                x='TF',
+                                y='Expression',
+                                hue=group_key,
+                                hue_order=hue_order,
+                                linewidth=3.0,
+                                ax=ax
+                            )
+
+                        fig.canvas.draw()
+                        tf_to_pval = dict(zip(de_results['TF'], de_results[pvalue_column]))
+                        tick_positions = ax.get_xticks()
+                        tick_labels = [tick_label.get_text() for tick_label in ax.get_xticklabels()]
+                        new_labels = []
+                        for lbl in tick_labels:
+                            if lbl in tf_to_pval:
+                                pval = tf_to_pval[lbl]
+                                p_label = 'p_adj' if pvalue_column == 'FDR' else 'p'
+                                if pval < 1e-3:
+                                    pval_str = f'{p_label}=\n{pval:.1e}'
+                                else:
+                                    pval_str = f'{p_label}=\n{pval:.3f}'
+                                new_labels.append(f'{lbl}\n{pval_str}')
+                            else:
+                                new_labels.append(lbl)
+
+                        ax.set_xticks(tick_positions)
+                        ax.set_xticklabels(new_labels)
+
+                        ax.set_xlabel('')
+                        ax.set_ylabel('Expression', fontsize=fontsize_axlabels)
+
+                        ax.set_title(title, fontsize=fontsize_title)
+
+                        tick_label_fontsize_x = (
+                            8 if tissue == 'liver' and cluster_keys == '35' else tick_label_fontsize
+                        )
+                        ax.xaxis.set_tick_params(labelsize=tick_label_fontsize_x)
+                        ax.yaxis.set_tick_params(labelsize=tick_label_fontsize)
+
+                    fig.savefig(os.path.join(save_path, f'de_plot.png'), dpi=fig.dpi)
+                    plt.close(fig)
+
+                    # For each TF plot its regulon
+                    for tf in tfs:
+                        fig, ax = plt.subplots(dpi=300)
+                        plot_regulon(
+                            grn=grn,
+                            tf=tf,
+                            top_k=30,
+                            sort_by='score',
+                            ax=ax
+                        )
+                        fig.tight_layout()
+                        fig.savefig(
+                            os.path.join(save_path, f'regulon_{tf}.png'),
+                            bbox_inches='tight', pad_inches=0.0, dpi=fig.dpi
+                        )
                         plt.close(fig)
-
-
 
 
 def main_tcell_explore_results():
@@ -3957,328 +3849,6 @@ def main_tcell_explore_results():
                     fig.savefig(os.path.join(save_path_de_current, f'volcanoe_{group_str}.png'), dpi=fig.dpi, bbox_inches="tight", pad_inches=0.05)
 
 
-def main_tcell_de_plots_wilcoxon():
-
-    import os
-
-    import numpy as np
-    import pandas as pd
-    import matplotlib.pyplot as plt
-    import seaborn as sns
-    import scanpy as sc
-
-    from adjustText import adjust_text
-    from switchtfi.plotting import plot_regulon
-
-    tissues = ['spleen', 'liver']
-    time = 'd10'
-    infection = 'acute'
-    clusters = ['345', '35']
-    tox_strs = ['notox', 'wtox']
-    grn_inf_methods = ['scenic', 'grnboost2']
-
-    time_name_to_label = {'d10': 0, 'd28': 1}
-    tissue_name_to_label = {'spleen': 0, 'liver': 1}
-    infection_name_to_label = {'chronic': 0, 'acute': 1}
-
-    pvalue_str = 'pvals_adj'  # pvals, pvals_adj
-
-    data_p = './results/05_revision/tcell/data/'
-    res_p_base_switchtfi = './results/05_revision/tcell/switchtfi'
-
-    save_path_base = './results/05_revision/tcell/de_plots_wilcoxon'
-
-    # Load the full data set
-    fn_all_data = 'ga_an0602_10x_smarta_doc_arm_liver_spleen_d10_d28_mgd_ts_filtered_int_inf_tp_rp_convert.h5ad'
-    tdata = sc.read_h5ad(os.path.join(data_p, fn_all_data))
-    tdata.raw = None
-
-    # Subset to TFs
-    tf_file = './data/tf/mus_musculus/allTFs_mm.txt'
-    with open(tf_file) as file:
-        all_tfs = [line.strip() for line in file.readlines()]
-    tf_bool = tdata.var_names.isin(all_tfs)
-    tdata = tdata[:, tf_bool].copy()
-
-    # Relabel cluster labels from 0-9 to 1-10
-    new_labels = [int(label + 1) for label in tdata.obs['cluster']]
-    tdata.obs['cluster'] = new_labels
-
-    sc.pp.filter_genes(tdata, min_cells=20)
-    sc.pp.normalize_total(tdata)
-    sc.pp.log1p(tdata)
-
-    # ### --- First look at results (number of driver TFs, transition GRN size, scatter plots ...) --- ### #
-    for tox_str in tox_strs:
-        for grn_inf_method in grn_inf_methods:
-            for tissue in tissues:
-                for cluster_keys in clusters:
-
-                    # Load SwitchTFI results
-                    id_str = f'{tissue}_{time}_{infection}_{cluster_keys}'
-                    res_p_switchtfi = os.path.join(res_p_base_switchtfi, tox_str, id_str, grn_inf_method)
-
-                    try:
-                        grn = pd.read_csv(os.path.join(res_p_switchtfi, 'grn.csv'), index_col=0)
-                        ranked_tfs_pr = pd.read_csv(os.path.join(res_p_switchtfi, 'ranked_tfs.csv'), index_col=0)
-                        ranked_tfs_od = pd.read_csv(os.path.join(res_p_switchtfi, 'outdegree_ranked_tfs.csv'), index_col=0)
-
-                    except FileNotFoundError:
-                        print(f'No results found for: {res_p_switchtfi}, skipping')
-                        continue
-
-                    save_path = os.path.join(save_path_base, tox_str, id_str, grn_inf_method)
-                    os.makedirs(save_path, exist_ok=True)
-
-                    tfs = ranked_tfs_pr['gene'].tolist()
-
-                    # Plot volcano + split violin for:
-                    #  (1) DE chronic vs acute in progenitors
-                    #  (2) DE prog vs. off in acute
-
-                    keep_bool_time = tdata.obs['time'] == time_name_to_label[time]
-                    keep_bool_tissue = tdata.obs['tissue'] == tissue_name_to_label[tissue]
-
-                    # (1) DE chronic vs acute in progenitors
-                    prog_clusters = [3, 4] if cluster_keys == '345' else [3, ]
-                    keep_bool_progenitor = tdata.obs['cluster'].isin(prog_clusters)
-                    keep_bool_1 = keep_bool_time & keep_bool_tissue & keep_bool_progenitor
-                    tdata_sub_1 = tdata[keep_bool_1, :].copy()
-
-                    tdata_sub_1.obs['infection_name'] = tdata_sub_1.obs['infection'].map({0: 'chronic', 1: 'acute'})
-
-                    sc.tl.rank_genes_groups(
-                        tdata_sub_1,
-                        groupby='infection_name',
-                        method='wilcoxon',
-                    )
-
-                    de_results_1 = sc.get.rank_genes_groups_df(tdata_sub_1, group='chronic')
-                    de_results_1_tfs = de_results_1[de_results_1['names'].isin(tfs)]
-                    de_results_1.to_csv(os.path.join(save_path, f'de_results_cva.csv'))
-                    de_results_1_tfs.to_csv(os.path.join(save_path, f'de_results_cva_tfs.csv'))
-
-                    # (2) DE prog vs. off in acute
-                    cluster_list = [3, 4, 5] if cluster_keys == '345' else [3, 5]
-                    keep_bool_clusters = tdata.obs['cluster'].isin(cluster_list)
-                    keep_bool_acute = (tdata.obs['infection'] == infection_name_to_label['acute'])
-                    keep_bool_2 = keep_bool_time & keep_bool_tissue & keep_bool_clusters & keep_bool_acute
-                    tdata_sub_2 = tdata[keep_bool_2, :].copy()
-
-                    tdata_sub_2.obs['prog_off'] = tdata_sub_2.obs['cluster'].map({3: 'prog', 4: 'prog', 5: 'off'})
-
-                    sc.tl.rank_genes_groups(
-                        tdata_sub_2,
-                        groupby='prog_off',
-                        method='wilcoxon',
-                    )
-
-                    de_results_2 = sc.get.rank_genes_groups_df(tdata_sub_2, group='prog')
-                    de_results_2_tfs = de_results_2[de_results_2['names'].isin(tfs)]
-                    de_results_2.to_csv(os.path.join(save_path, f'de_results_pvo.csv'))
-                    de_results_2_tfs.to_csv(os.path.join(save_path, f'de_results_pvo_tfs.csv'))
-
-                    # Plot
-                    point_size = 12
-                    point_size_tf = 6
-                    fontsize_tf = 12
-                    linewidth_tf = 1.0
-                    linewidth_axlines = 1.0
-                    fontsize_axlabels = 14
-                    fontsize_title = 16
-                    tick_label_fontsize = 12
-
-                    fig = plt.figure(figsize=(12, 9), constrained_layout=True, dpi=300)
-                    axd = fig.subplot_mosaic(
-                        '''
-                        AB
-                        CD
-                        '''
-                    )
-
-                    # Volcano
-                    for subplot_key, de_results, title in zip(
-                            ['A', 'C'],
-                            [de_results_1, de_results_2],
-                            [f'Chronic vs. Acute | Progenitors ({cluster_keys})', 'Prog vs. Off | Acute']
-                    ):
-
-                        ax = axd[subplot_key]
-
-                        de_results = de_results[de_results['logfoldchanges'].abs() <= 10].copy()
-
-                        eps = 1e-300
-                        de_results[f'-log10({pvalue_str})'] = -np.log10(de_results[pvalue_str].astype('float') + eps)
-
-                        pval_thresh = 0.05
-                        lfc_thresh = 1.0
-                        de_results['color'] = 'grey'
-                        sig_bool_neg = (
-                                (de_results['logfoldchanges'] < -lfc_thresh) &
-                                (de_results[pvalue_str] < pval_thresh)
-                        )
-                        de_results.loc[sig_bool_neg, 'color'] = 'blue'
-                        sig_bool_pos = (
-                                (de_results['logfoldchanges'] > lfc_thresh) &
-                                (de_results[pvalue_str] < pval_thresh)
-                        )
-                        de_results.loc[sig_bool_pos, 'color'] = 'green'
-
-                        sns.scatterplot(
-                            data=de_results,
-                            x='logfoldchanges',
-                            y=f'-log10({pvalue_str})',
-                            s=point_size,
-                            hue='color',
-                            palette={'grey': 'grey', 'blue': 'blue', 'green': 'green'},
-                            legend=False,
-                            ax=ax
-                        )
-
-                        texts = []
-                        for tf in tfs:
-                            sub = de_results.loc[de_results['names'] == tf]
-                            if not sub.empty:
-                                x = sub['logfoldchanges'].to_numpy()[0]
-                                y = sub[f'-log10({pvalue_str})'].to_numpy()[0]
-
-                                ax.scatter(x, y, color='red', s=point_size_tf, zorder=3)
-                                texts.append(ax.text(x, y, tf, fontsize=fontsize_tf, ha='right', va='bottom'))
-
-                        adjust_text(
-                            texts, ax=ax, expand=(3.0, 3.0),
-                            arrowprops=dict(arrowstyle='-', color='red', lw=linewidth_tf)
-                        )
-
-                        ax.axvline(-lfc_thresh, color='black', linestyle='--', linewidth=linewidth_axlines)
-                        ax.axvline(lfc_thresh, color='black', linestyle='--', linewidth=linewidth_axlines)
-                        ax.axhline(-np.log10(pval_thresh), color='black', linestyle='--', linewidth=linewidth_axlines)
-
-                        ax.set_xlabel('log2 FC', fontsize=fontsize_axlabels)
-                        ax.set_ylabel(f'-log10({pvalue_str})', fontsize=fontsize_axlabels)
-
-                        ax.set_title(title, fontsize=fontsize_title)
-
-                        ax.xaxis.set_tick_params(labelsize=tick_label_fontsize)
-                        ax.yaxis.set_tick_params(labelsize=tick_label_fontsize)
-
-                    # Violin
-                    for subplot_key, tdata_sub, de_results, group_key, title in zip(
-                            ['B', 'D'],
-                            [tdata_sub_1, tdata_sub_2],
-                            [de_results_1, de_results_2],
-                            ['infection_name', 'prog_off'],
-                            [f'Chronic vs. Acute | Progenitors ({cluster_keys})', 'Prog vs. Off | Acute']
-                    ):
-
-                        plot_df = (
-                            tdata_sub[:, tfs].to_df()
-                            .join(tdata_sub.obs[group_key])
-                            .melt(id_vars=group_key, var_name='TF', value_name='Expression')
-                        )
-
-                        if group_key == 'prog_off':
-                            hue_order = ['prog', 'off']
-                        elif group_key == 'infection_name':
-                            hue_order = ['chronic', 'acute']
-                        else:
-                            hue_order = None
-
-                        ax = axd[subplot_key]
-
-                        '''sns.violinplot(
-                            data=plot_df,
-                            x='TF',
-                            y='Expression',
-                            hue=group_key,
-                            hue_order=hue_order,
-                            split=True,
-                            inner='quart',
-                            cut=0,
-                            density_norm='width',
-                            ax=ax,
-                        )
-
-                        sns.stripplot(
-                            data=plot_df,
-                            x='TF',
-                            y='Expression',
-                            hue=group_key,
-                            hue_order=hue_order,
-                            dodge=True,
-                            size=2,
-                            ax=ax
-                        )'''
-
-                        '''sns.boxplot(
-                            data=plot_df,
-                            x='TF',
-                            y='Expression',
-                            hue=group_key,
-                            hue_order=hue_order,
-                            ax=ax,
-                            showcaps=True,
-                        )'''
-
-                        sns.boxenplot(
-                            data=plot_df,
-                            x='TF',
-                            y='Expression',
-                            hue=group_key,
-                            hue_order=hue_order,
-                            linewidth=3.0,
-                            ax=ax
-                        )
-
-                        fig.canvas.draw()
-                        tf_to_pval = dict(zip(de_results['names'], de_results[pvalue_str]))
-                        tick_positions = ax.get_xticks()
-                        tick_labels = [tick_label.get_text() for tick_label in ax.get_xticklabels()]
-                        new_labels = []
-                        for lbl in tick_labels:
-                            if lbl in tf_to_pval:
-                                pval = tf_to_pval[lbl]
-                                p_label = 'p_adj' if pvalue_str == 'pvals_adj' else 'p'
-                                if pval < 1e-3:
-                                    pval_str = f'{p_label}={pval:.1e}'
-                                else:
-                                    pval_str = f'{p_label}=\n{pval:.3f}'
-                                new_labels.append(f'{lbl}\n{pval_str}')
-                            else:
-                                new_labels.append(lbl)
-
-                        ax.set_xticks(tick_positions)
-                        ax.set_xticklabels(new_labels)
-
-                        ax.set_xlabel('')
-                        ax.set_ylabel('Expression', fontsize=fontsize_axlabels)
-
-                        ax.set_title(title, fontsize=fontsize_title)
-
-                        ax.xaxis.set_tick_params(labelsize=tick_label_fontsize)
-                        ax.yaxis.set_tick_params(labelsize=tick_label_fontsize)
-
-
-                    fig.savefig(os.path.join(save_path, f'de_plot.png'), dpi=fig.dpi)
-                    plt.close(fig)
-
-                    # For each TF plot its regulon
-                    for tf in tfs:
-                        fig, ax = plt.subplots(dpi=300)
-                        plot_regulon(
-                            grn=grn,
-                            tf=tf,
-                            top_k=30,
-                            sort_by='score',
-                            ax=ax
-                        )
-                        fig.tight_layout()
-                        fig.savefig(
-                            os.path.join(save_path, f'regulon_{tf}.png'),
-                            bbox_inches='tight', pad_inches=0.0, dpi=fig.dpi
-                        )
-                        plt.close(fig)
-
 
 
 if __name__ == '__main__':
@@ -4309,16 +3879,14 @@ if __name__ == '__main__':
 
     # main_tcell_grn_exploration()
 
-    main_tcell_switchtfi()
+    # main_tcell_switchtfi()
 
     # main_tcell_de_analysis()
 
-    # main_tcell_de_plots()
+    main_tcell_de_plots()
 
     # main_tcell_plot_figure()
 
     # main_tcell_explore_results()
-
-    # main_tcell_de_plots_wilcoxon()
 
     print('done')
