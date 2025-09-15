@@ -169,6 +169,8 @@ cython_debug/
 *.png
 *.svg
 *.pkl
+*.error
+
 
 # Exclude GRN inference output files
 *_auc_matrix.csv
