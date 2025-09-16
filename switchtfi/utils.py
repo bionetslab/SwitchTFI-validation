@@ -157,7 +157,7 @@ def align_anndata_grn(
     Args:
         adata (sc.AnnData): The input AnnData object containing gene expression data.
         grn (pd.DataFrame): The GRN DataFrame containing TF-target gene pairs.
-        tf_target_keys (Tuple[str, str]): Column names for TFs and targets in the GRN. Defaults to ('TF', 'target').
+        tf_target_keys (Tuple[str, str]): Column names for TFs and targets in the GRN. Defaults to ``('TF', 'target')``.
     Returns:
         Tuple[sc.AnnData, pd.DataFrame]: The aligned AnnData and DataFrame.
     """
